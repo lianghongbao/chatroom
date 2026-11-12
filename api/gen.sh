@@ -103,6 +103,6 @@ protoc \
 	--go_out=paths=source_relative:api \
 	--go-grpc_out=paths=source_relative:api \
 	--go-http_out=paths=source_relative:api \
-	--openapi_out=api \
+	--openapi_out="api/${DOMAIN}/service" \
 	--openapi_opt=fq_schema_naming=true,default_response=false \
 	"${PROTOS[@]/#/api/${DOMAIN}/service/}"

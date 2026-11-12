@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        v6.33.3
-// source: internal/conf/conf.proto
+// source: conversation/service/internal/conf/conf.proto
 
 package conf
 
@@ -36,7 +36,7 @@ type Bootstrap struct {
 
 func (x *Bootstrap) Reset() {
 	*x = Bootstrap{}
-	mi := &file_internal_conf_conf_proto_msgTypes[0]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +48,7 @@ func (x *Bootstrap) String() string {
 func (*Bootstrap) ProtoMessage() {}
 
 func (x *Bootstrap) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[0]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +61,7 @@ func (x *Bootstrap) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Bootstrap.ProtoReflect.Descriptor instead.
 func (*Bootstrap) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{0}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Bootstrap) GetServer() *Server {
@@ -108,7 +108,7 @@ type Registry struct {
 
 func (x *Registry) Reset() {
 	*x = Registry{}
-	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -120,7 +120,7 @@ func (x *Registry) String() string {
 func (*Registry) ProtoMessage() {}
 
 func (x *Registry) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -133,7 +133,7 @@ func (x *Registry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Registry.ProtoReflect.Descriptor instead.
 func (*Registry) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Registry) GetNacos() *Registry_Nacos {
@@ -153,7 +153,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -165,7 +165,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -178,7 +178,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -205,7 +205,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +217,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +230,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -275,7 +275,7 @@ type Auth struct {
 
 func (x *Auth) Reset() {
 	*x = Auth{}
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -287,7 +287,7 @@ func (x *Auth) String() string {
 func (*Auth) ProtoMessage() {}
 
 func (x *Auth) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -300,7 +300,7 @@ func (x *Auth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Auth.ProtoReflect.Descriptor instead.
 func (*Auth) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Auth) GetJwtSecret() string {
@@ -388,7 +388,7 @@ type Observability struct {
 
 func (x *Observability) Reset() {
 	*x = Observability{}
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -400,7 +400,7 @@ func (x *Observability) String() string {
 func (*Observability) ProtoMessage() {}
 
 func (x *Observability) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -413,7 +413,7 @@ func (x *Observability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observability.ProtoReflect.Descriptor instead.
 func (*Observability) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Observability) GetMetricsAddr() string {
@@ -463,7 +463,7 @@ type Registry_Nacos struct {
 
 func (x *Registry_Nacos) Reset() {
 	*x = Registry_Nacos{}
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +475,7 @@ func (x *Registry_Nacos) String() string {
 func (*Registry_Nacos) ProtoMessage() {}
 
 func (x *Registry_Nacos) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +488,7 @@ func (x *Registry_Nacos) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Registry_Nacos.ProtoReflect.Descriptor instead.
 func (*Registry_Nacos) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1, 0}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{1, 0}
 }
 
 func (x *Registry_Nacos) GetServerAddresses() []string {
@@ -565,7 +565,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +577,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +590,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -625,7 +625,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -637,7 +637,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -650,7 +650,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 1}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{2, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -691,7 +691,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -703,7 +703,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -716,7 +716,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
 }
 
 func (x *Data_Database) GetDriver() string {
@@ -759,7 +759,7 @@ type Data_Redis struct {
 
 func (x *Data_Redis) Reset() {
 	*x = Data_Redis{}
-	mi := &file_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -771,7 +771,7 @@ func (x *Data_Redis) String() string {
 func (*Data_Redis) ProtoMessage() {}
 
 func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_conversation_service_internal_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -784,7 +784,7 @@ func (x *Data_Redis) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Redis.ProtoReflect.Descriptor instead.
 func (*Data_Redis) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+	return file_conversation_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
 }
 
 func (x *Data_Redis) GetNetwork() string {
@@ -815,11 +815,11 @@ func (x *Data_Redis) GetWriteTimeout() *durationpb.Duration {
 	return nil
 }
 
-var File_internal_conf_conf_proto protoreflect.FileDescriptor
+var File_conversation_service_internal_conf_conf_proto protoreflect.FileDescriptor
 
-const file_internal_conf_conf_proto_rawDesc = "" +
+const file_conversation_service_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
-	"\x18internal/conf/conf.proto\x12\x1achatroom.conversation.conf\x1a\x1egoogle/protobuf/duration.proto\"\xc6\x02\n" +
+	"-conversation/service/internal/conf/conf.proto\x12\x1achatroom.conversation.conf\x1a\x1egoogle/protobuf/duration.proto\"\xc6\x02\n" +
 	"\tBootstrap\x12:\n" +
 	"\x06server\x18\x01 \x01(\v2\".chatroom.conversation.conf.ServerR\x06server\x124\n" +
 	"\x04data\x18\x02 \x01(\v2 .chatroom.conversation.conf.DataR\x04data\x124\n" +
@@ -882,19 +882,19 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x12unauth_sample_rate\x18\x04 \x01(\x01R\x10unauthSampleRateB6Z4chatroom/app/conversation/service/internal/conf;confb\x06proto3"
 
 var (
-	file_internal_conf_conf_proto_rawDescOnce sync.Once
-	file_internal_conf_conf_proto_rawDescData []byte
+	file_conversation_service_internal_conf_conf_proto_rawDescOnce sync.Once
+	file_conversation_service_internal_conf_conf_proto_rawDescData []byte
 )
 
-func file_internal_conf_conf_proto_rawDescGZIP() []byte {
-	file_internal_conf_conf_proto_rawDescOnce.Do(func() {
-		file_internal_conf_conf_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)))
+func file_conversation_service_internal_conf_conf_proto_rawDescGZIP() []byte {
+	file_conversation_service_internal_conf_conf_proto_rawDescOnce.Do(func() {
+		file_conversation_service_internal_conf_conf_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_conversation_service_internal_conf_conf_proto_rawDesc), len(file_conversation_service_internal_conf_conf_proto_rawDesc)))
 	})
-	return file_internal_conf_conf_proto_rawDescData
+	return file_conversation_service_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
-var file_internal_conf_conf_proto_goTypes = []any{
+var file_conversation_service_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_conversation_service_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: chatroom.conversation.conf.Bootstrap
 	(*Registry)(nil),            // 1: chatroom.conversation.conf.Registry
 	(*Server)(nil),              // 2: chatroom.conversation.conf.Server
@@ -908,7 +908,7 @@ var file_internal_conf_conf_proto_goTypes = []any{
 	(*Data_Redis)(nil),          // 10: chatroom.conversation.conf.Data.Redis
 	(*durationpb.Duration)(nil), // 11: google.protobuf.Duration
 }
-var file_internal_conf_conf_proto_depIdxs = []int32{
+var file_conversation_service_internal_conf_conf_proto_depIdxs = []int32{
 	2,  // 0: chatroom.conversation.conf.Bootstrap.server:type_name -> chatroom.conversation.conf.Server
 	3,  // 1: chatroom.conversation.conf.Bootstrap.data:type_name -> chatroom.conversation.conf.Data
 	4,  // 2: chatroom.conversation.conf.Bootstrap.auth:type_name -> chatroom.conversation.conf.Auth
@@ -934,26 +934,26 @@ var file_internal_conf_conf_proto_depIdxs = []int32{
 	0,  // [0:18] is the sub-list for field type_name
 }
 
-func init() { file_internal_conf_conf_proto_init() }
-func file_internal_conf_conf_proto_init() {
-	if File_internal_conf_conf_proto != nil {
+func init() { file_conversation_service_internal_conf_conf_proto_init() }
+func file_conversation_service_internal_conf_conf_proto_init() {
+	if File_conversation_service_internal_conf_conf_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_service_internal_conf_conf_proto_rawDesc), len(file_conversation_service_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_internal_conf_conf_proto_goTypes,
-		DependencyIndexes: file_internal_conf_conf_proto_depIdxs,
-		MessageInfos:      file_internal_conf_conf_proto_msgTypes,
+		GoTypes:           file_conversation_service_internal_conf_conf_proto_goTypes,
+		DependencyIndexes: file_conversation_service_internal_conf_conf_proto_depIdxs,
+		MessageInfos:      file_conversation_service_internal_conf_conf_proto_msgTypes,
 	}.Build()
-	File_internal_conf_conf_proto = out.File
-	file_internal_conf_conf_proto_goTypes = nil
-	file_internal_conf_conf_proto_depIdxs = nil
+	File_conversation_service_internal_conf_conf_proto = out.File
+	file_conversation_service_internal_conf_conf_proto_goTypes = nil
+	file_conversation_service_internal_conf_conf_proto_depIdxs = nil
 }

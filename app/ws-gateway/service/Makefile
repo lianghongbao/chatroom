@@ -1,7 +1,7 @@
 # chatroom-ws-gateway 的服务级 Makefile
 #
-# 本服务是一个**独立的 Go module**（自己的 go.mod），可以单独 clone 成
-# 独立仓库。所有 recipe 都在本目录内执行，不依赖仓库根。
+# 本目录是 app/ws-gateway/service/ —— 整仓是**一个** Go module（module chatroom），
+# 所以这里的 target 都直接跑在根 module 上，不需要 go.mod / replace。
 #
 # 跨服务的动作（跑全量测试、编排五个服务）走仓库根的 Makefile。
 
@@ -10,10 +10,9 @@ BINARY  := chatroom-ws-gateway
 
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 
-# 共享开发环境变量（nacos / DB / Redis / JWT）。在 chatroom/pkg/tools/ 下，
-# 五个服务共用一份 —— 这些值不一致会导致跨服务调用失败。
+# 共享开发环境变量（nacos / DB / Redis / JWT）。五个服务共用一份 ——
 # 路径基于本 Makefile 的位置，make 在哪个目录跑都一样。
-include $(dir $(lastword $(MAKEFILE_LIST)))../pkg/tools/dev-env.mk
+include $(dir $(lastword $(MAKEFILE_LIST)))../../../pkg/tools/dev-env.mk
 
 .PHONY: build
 # 编译本服务二进制到 bin/chatroom-ws-gateway
@@ -47,24 +46,27 @@ vet:
 	go vet ./...
 
 .PHONY: docker-build
-# 构建镜像。上下文是**仓库根目录** —— 本服务依赖同仓的 chatroom/pkg，
-# 上下文只给服务目录的话 replace 指向的 ../pkg 不在构建里。
+# 构建镜像。上下文是**仓库根目录** —— 本服务依赖同仓的 pkg/，
+# 上下文只给服务目录的话依赖不在构建里。
 docker-build:
-	docker build -t $(BINARY):latest -f $(notdir $(CURDIR))/Dockerfile ..
+	docker build -t $(BINARY):latest -f $(notdir $(CURDIR))/Dockerfile ../..
 
 .PHONY: config
 # 重新生成本服务的 conf proto(internal/conf/conf.pb.go)
+#
+# 走 app/gen-conf.sh —— protoc 从仓库根跑，注册路径是
+# ws-gateway/service/internal/conf/conf.proto，加上服务名这一层前缀避开
+# protobuf 全局注册表的路径撞车。
 config:
-	buf generate --template buf.gen.config.yaml
+	bash ../../gen-conf.sh $(SERVICE)
 
 .PHONY: generate
-# 跑 go generate(触发 wire 重新生成 wire_gen.go)+ go mod tidy
+# 跑 go generate(触发 wire 重新生成 wire_gen.go)
 generate:
 	go generate ./...
-	go mod tidy
 
 .PHONY: all
-# 一键重生 proto + wire + tidy
+# 一键重生 proto + wire
 all: config generate
 
 .PHONY: nacos-config
@@ -76,7 +78,7 @@ all: config generate
 # 常见）会报 "No module named 'yaml'" —— 系统的 /usr/bin/python3 有，
 # 用 PATH="/usr/bin:$PATH" make nacos-config 跑。
 nacos-config:
-	tools/nacos-config.sh diff
+	SERVICE_DIR=$(CURDIR) SERVICE=$(SERVICE) bash ../../../pkg/tools/nacos-config.sh diff
 
 .PHONY: nacos-config-push
 # 把本地 configs/config.yaml 推到 nacos 配置中心
@@ -85,19 +87,7 @@ nacos-config:
 # bootstrap.yaml 不推：「连哪个 nacos」必须由本地文件决定,不能由 nacos
 # 自己决定(本地改了没重推时,nacos 里的旧 registry 会盖掉新值)。
 nacos-config-push:
-	tools/nacos-config.sh push
-
-.PHONY: infra-up
-# 起本地基础设施（MySQL + Redis + Nacos + Jaeger）
-# 本机已经在跑原生 Redis/Nacos 的话先停掉 —— 端口一样。
-# Jaeger UI: http://127.0.0.1:16686 （trace 用内存存，重启丢）
-infra-up:
-	docker compose -f deploy/docker-compose.yaml up -d
-
-.PHONY: infra-down
-# 停掉本地基础设施。数据卷保留（docker compose down -v 才删）。
-infra-down:
-	docker compose -f deploy/docker-compose.yaml down
+	SERVICE_DIR=$(CURDIR) SERVICE=$(SERVICE) bash ../../../pkg/tools/nacos-config.sh push
 
 .PHONY: clean
 # 清理 build 产物 + go test 缓存

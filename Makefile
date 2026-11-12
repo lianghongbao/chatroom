@@ -1,114 +1,108 @@
 # chatroom 仓库根 Makefile
 #
-# 仓库根**不是** Go module —— 它只做编排：把「每个服务 / 每个契约 module」
-# 自己的 make target 跑一遍。各服务仍然是独立的 Go module，可以单独 clone。
+# 仓库根**就是** Go module（module chatroom）—— 整仓一个 go.mod，
+# 没有 replace 也没有 go.work。目录按官方 go-kratos/beer-shop 的思路分：
 #
-# 跟官方 go-kratos/beer-shop 的根 Makefile 一个思路（那边是 api/wire/proto
-# 三个聚合 target），但这里多一层「契约 module」——契约和实现是分开的。
+#   api/<域>/service/    契约（proto + 生成的桩代码），无实现
+#   app/<域>/service/    微服务实现（cmd / internal）
+#   pkg/                 跨服务共享的公共包
+#   third_party/         第三方 proto（离线依赖）
+#
+# 根 Makefile 只做编排：把每个服务 / 每个契约自己的 target 跑一遍。
+# 拆仓时把 api/<域> 抽成独立 module 只需要改版本号 —— 依赖方向不变。
 
 # 五个业务服务。ws-gateway 没有 api 契约（它是聚合网关，不对外暴露业务契约）。
 SERVICES := user friend conversation message ws-gateway
 
-# 四个业务域的契约 module。ws-gateway 没有契约。
+# 四个业务域的契约。ws-gateway 没有契约。
 CONTRACTS := user friend conversation message
-
-# 公共 module（chatroom/pkg）—— 被所有服务 import，自己没有 proto。
-.PHONY: pkg-build
-pkg-build:
-	cd pkg && go build ./...
-
-.PHONY: pkg-test
-pkg-test:
-	cd pkg && go test ./...
-
-.PHONY: pkg-vet
-pkg-vet:
-	cd pkg && go vet ./...
 
 # ---------------------------------------------------------------- 契约
 
 .PHONY: api
-# 契约 proto 用 protoc（contracts/gen.sh），因为它们要 import 仓库根的
-# third_party/google/api/ —— buf v2 的 module 根是单一目录，跨目录引用不了。
 # 重新生成全部契约代码（grpc stub / http stub / openapi.yaml）
+#
+# 走 api/gen.sh —— 用 protoc 而不是 buf，因为契约 proto 要 import
+# 仓库根的 third_party/google/api/，而 buf v2 的 module 根是单一目录，
+# 跨目录引用不了。protoc 原生支持多个 --proto_path。
 api:
 	@for d in $(CONTRACTS); do \
-		echo "=== contracts/$$d ==="; \
-		(cd contracts/$$d && make api) || exit 1; \
+		echo "=== api/$$d/service ==="; \
+		(cd api/$$d/service && make api) || exit 1; \
 	done
 
 # ---------------------------------------------------------------- 服务
 
 .PHONY: build
-# 编译全部服务 + 公共 module
+# 编译全部服务
 build:
 	@for svc in $(SERVICES); do \
-		echo "=== $$svc-service ==="; \
-		(cd $${svc}-service && make build) || exit 1; \
+		echo "=== app/$$svc/service ==="; \
+		(cd app/$$svc/service && make build) || exit 1; \
 	done
-	@$(MAKE) pkg-build
 
 .PHONY: test
-# 跑全部服务的单元测试 + 公共 module 的测试
+# 跑全部服务的单元测试
 test:
 	@for svc in $(SERVICES); do \
-		echo "=== $$svc-service ==="; \
-		(cd $${svc}-service && make test) || exit 1; \
+		echo "=== app/$$svc/service ==="; \
+		(cd app/$$svc/service && make test) || exit 1; \
 	done
-	@$(MAKE) pkg-test
 
 .PHONY: test-integration
 # 跑全部需要 MySQL 的集成测试（data 层 repo + 跨域链路）
 # 每个用例自建临时库、跑完自动 DROP
 test-integration:
 	@for svc in $(SERVICES); do \
-		if [ -f $${svc}-service/Makefile ] && grep -q '^test-integration:' $${svc}-service/Makefile; then \
-			echo "=== $$svc-service ==="; \
-			(cd $${svc}-service && make test-integration) || exit 1; \
+		if [ -f app/$$svc/service/Makefile ] && grep -q '^test-integration:' app/$$svc/service/Makefile; then \
+			echo "=== app/$$svc/service ==="; \
+			(cd app/$$svc/service && make test-integration) || exit 1; \
 		fi; \
 	done
 
 .PHONY: vet
-# 静态检查全部 module
+# 静态检查
 vet:
 	@for svc in $(SERVICES); do \
-		echo "=== $$svc-service ==="; \
-		(cd $${svc}-service && make vet) || exit 1; \
+		echo "=== app/$$svc/service ==="; \
+		(cd app/$$svc/service && make vet) || exit 1; \
 	done
-	@$(MAKE) pkg-vet
+
+.PHONY: config
+# 重新生成全部服务的配置 proto（internal/conf/conf.pb.go）
+config:
+	@for svc in $(SERVICES); do \
+		echo "=== app/$$svc/service (conf) ==="; \
+		(cd app/$$svc/service && make config) || exit 1; \
+	done
 
 .PHONY: proto
-# 重新生成全部 proto 代码：契约（protoc）+ 各服务的配置 proto（buf）。
-proto: api
-	@for svc in $(SERVICES); do \
-		if [ -f $${svc}-service/Makefile ] && grep -q '^config:' $${svc}-service/Makefile; then \
-			echo "=== $$svc-service (conf) ==="; \
-			(cd $${svc}-service && make config) || exit 1; \
-		fi; \
-	done
+# 重新生成全部 proto 代码：契约（protoc）+ 各服务的配置 proto（protoc）
+proto: api config
 
 .PHONY: wire
 # 重新生成 Wire 注入代码
 wire:
 	@for svc in $(SERVICES); do \
-		echo "=== $$svc-service ==="; \
-		(cd $${svc}-service && go generate ./...) || exit 1; \
+		echo "=== app/$$svc/service ==="; \
+		(cd app/$$svc/service && go generate ./...) || exit 1; \
 	done
+
+.PHONY: tidy
+# go mod tidy（根 module 一份）
+tidy:
+	go mod tidy
 
 .PHONY: all
 # 一键重生：全部 proto + Wire + tidy
-all: proto wire
-	@for svc in $(SERVICES); do \
-		(cd $${svc}-service && go mod tidy) || exit 1; \
-	done
+all: proto wire tidy
 
 .PHONY: clean
 # 清理 build 产物 + go test 缓存
 clean:
 	@for svc in $(SERVICES); do \
-		(cd $${svc}-service && make clean) || exit 1; \
+		(cd app/$$svc/service && make clean) || exit 1; \
 	done
-	cd pkg && go clean -testcache
 
 # show help
 .PHONY: help
