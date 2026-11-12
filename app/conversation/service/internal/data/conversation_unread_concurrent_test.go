@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"chatroom/conversation-service/internal/data/ent/conversationmember"
+	"chatroom/app/conversation/service/internal/data/ent/conversationmember"
 )
 
 // TestConversationRepo_UpdateUnreadConcurrent 加未读数不能丢更新。

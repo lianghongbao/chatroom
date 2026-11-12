@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"chatroom/user-service/internal/biz"
+	"chatroom/app/user/service/internal/biz"
 
 	"github.com/go-kratos/kratos/v3/log"
 	"github.com/redis/go-redis/v9"

@@ -6,8 +6,8 @@ import (
 	"context"
 	"time"
 
-	conversationv1 "chatroom/conversation-service/api/conversation/v1"
-	"chatroom/message-service/internal/conf"
+	conversationv1 "chatroom/api/conversation/service/v1"
+	"chatroom/app/message/service/internal/conf"
 	"chatroom/pkg/observability"
 
 	oteltrace "github.com/go-kratos/kratos/contrib/otel/v3/tracing"

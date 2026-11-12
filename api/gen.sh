@@ -7,20 +7,20 @@
 # protoc 原生支持多个 --proto_path，这正是官方 beer-shop 的做法。
 #
 # 用法：gen.sh <域名>      例：gen.sh user
-# 必须在对应契约目录（contracts/<域>/）下执行。
+# 必须在对应契约目录（api/<域>/service/）下执行。
 
 set -euo pipefail
 
 DOMAIN="${1:?用法: gen.sh <域名>}"
 
-# 契约 module 的根（= 执行目录）与仓库根的 third_party。
-# 契约目录固定是 <仓库根>/contracts/<域>/，所以仓库根在两层之上。
+# 契约目录固定是 <仓库根>/api/<域>/service/，所以仓库根在三层之上。
+# 用脚本自身位置推导，不依赖调用时的 cwd。
 CONTRACT_DIR="$(pwd)"
-ROOT="$(cd ../.. && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THIRD_PARTY="${ROOT}/third_party"
 
 if [ ! -d "${THIRD_PARTY}" ]; then
-	echo "找不到 ${THIRD_PARTY} —— 请在 contracts/<域>/ 目录下执行" >&2
+	echo "找不到 ${THIRD_PARTY} —— 请在 api/<域>/service/ 目录下执行" >&2
 	exit 1
 fi
 
@@ -38,10 +38,10 @@ PLUGIN_OPENAPI="github.com/google/gnostic/cmd/protoc-gen-openapi@v0.7.1"
 cd "${CONTRACT_DIR}"
 
 # 本域的 proto（v1 目录下的全部 .proto，含 error_reason.proto）。
-mapfile -t PROTOS < <(find "${DOMAIN}/v1" -name '*.proto' | sort)
+mapfile -t PROTOS < <(find v1 -name '*.proto' | sort)
 
 if [ "${#PROTOS[@]}" -eq 0 ]; then
-	echo "找不到 ${DOMAIN}/v1/*.proto" >&2
+	echo "找不到 v1/*.proto —— 请在 api/${DOMAIN}/service/ 目录下执行" >&2
 	exit 1
 fi
 

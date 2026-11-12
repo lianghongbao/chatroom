@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	v1 "chatroom/user-service/api/user/v1"
-	"chatroom/user-service/internal/conf"
+	v1 "chatroom/api/user/service/v1"
+	"chatroom/app/user/service/internal/conf"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/golang-jwt/jwt/v5"

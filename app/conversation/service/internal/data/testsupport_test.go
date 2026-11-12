@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"chatroom/conversation-service/internal/data/ent"
+	"chatroom/app/conversation/service/internal/data/ent"
 	"chatroom/pkg/testutil"
 
 	entsql "entgo.io/ent/dialect/sql"

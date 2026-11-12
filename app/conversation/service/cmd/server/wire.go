@@ -8,12 +8,12 @@ package main
 import (
 	"log/slog"
 
-	"chatroom/conversation-service/internal/biz"
-	"chatroom/conversation-service/internal/conf"
-	"chatroom/conversation-service/internal/data"
-	obs "chatroom/conversation-service/internal/observability"
-	"chatroom/conversation-service/internal/server"
-	"chatroom/conversation-service/internal/service"
+	"chatroom/app/conversation/service/internal/biz"
+	"chatroom/app/conversation/service/internal/conf"
+	"chatroom/app/conversation/service/internal/data"
+	obs "chatroom/app/conversation/service/internal/observability"
+	"chatroom/app/conversation/service/internal/server"
+	"chatroom/app/conversation/service/internal/service"
 	"chatroom/pkg/middleware"
 	"chatroom/pkg/nacos"
 	pkgobs "chatroom/pkg/observability"

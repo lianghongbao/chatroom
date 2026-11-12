@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"os"
 
-	"chatroom/user-service/internal/conf"
-	"chatroom/user-service/internal/observability"
-	"chatroom/user-service/pkg/nacos"
+	"chatroom/app/user/service/internal/conf"
+	"chatroom/pkg/nacos"
+	"chatroom/pkg/observability"
 
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3"

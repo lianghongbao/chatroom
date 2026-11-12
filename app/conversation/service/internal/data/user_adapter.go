@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"chatroom/conversation-service/internal/biz"
+	"chatroom/app/conversation/service/internal/biz"
 )
 
 // ConversationAdapter 把 RemoteUserClient 适配成 biz.ConversationProfileFetcher。

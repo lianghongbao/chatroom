@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"chatroom/conversation-service/internal/biz"
-	"chatroom/conversation-service/internal/data/ent"
-	"chatroom/conversation-service/internal/data/ent/conversation"
-	"chatroom/conversation-service/internal/data/ent/conversationmember"
+	"chatroom/app/conversation/service/internal/biz"
+	"chatroom/app/conversation/service/internal/data/ent"
+	"chatroom/app/conversation/service/internal/data/ent/conversation"
+	"chatroom/app/conversation/service/internal/data/ent/conversationmember"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"

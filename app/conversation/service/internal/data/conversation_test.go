@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"chatroom/conversation-service/internal/biz"
-	"chatroom/conversation-service/internal/data/ent/conversation"
-	"chatroom/conversation-service/internal/data/ent/conversationmember"
+	"chatroom/app/conversation/service/internal/biz"
+	"chatroom/app/conversation/service/internal/data/ent/conversation"
+	"chatroom/app/conversation/service/internal/data/ent/conversationmember"
 )
 
 // newTestConvRepo 构造接真实 MySQL 的 conversationRepo。

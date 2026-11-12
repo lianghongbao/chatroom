@@ -3,7 +3,7 @@ package data
 import (
 	"time"
 
-	"chatroom/ws-gateway-service/internal/conf"
+	"chatroom/app/ws-gateway/service/internal/conf"
 
 	"github.com/go-kratos/kratos/v3/log"
 	"github.com/google/wire"

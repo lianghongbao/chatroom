@@ -1,0 +1,49 @@
+# chatroom-user 进程配置。三层：基础设施连接（env 注入，无默认值）、
+# 业务默认值（全环境共用，nacos 可覆盖）、运行时参数（最终来自 nacos）。
+#
+# env 约定：DB_* 数据库 / REDIS_* Redis / NACOS_* 注册与配置中心 /
+#           AUTH_* 鉴权 / OTEL_* 可观测性。
+
+server:
+  http:
+    addr: 0.0.0.0:8000
+    timeout: 30s
+  grpc:
+    addr: 0.0.0.0:9000
+    timeout: 30s
+
+data:
+  database:
+    driver: mysql
+    source: "${DB_SOURCE}"
+    debug: false
+    # 表结构以 ent schema 为准，启动时增量对齐（只 ALTER，不删列）
+    auto_migrate: true
+  redis:
+    addr: "${REDIS_ADDR}"
+    read_timeout: 0.2s
+    write_timeout: 0.2s
+
+auth:
+  jwt_secret: "${AUTH_JWT_SECRET}"
+  token_ttl: 3600s
+  access_ttl: 900s
+  refresh_ttl: 604800s
+  token_issuer: chatroom
+  login_max_fail: 5
+  login_lock_ttl: 900s
+  # 服务间内部调用凭证，走 X-Internal-Token 头
+  # 留空则内部端点一律 403（fail closed）
+  internal_secret: "${AUTH_INTERNAL_SECRET:}"
+  skip_operations:
+    - /api.user.v1.User/Register
+    - /api.user.v1.User/Login
+
+observability:
+  metrics_addr: ""
+  tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'
+  service_name: "${NACOS_SERVICE_NAME:chatroom-user}"
+  # 未鉴权请求（401）的 trace 采样率，0~1。不设 = 0.1。
+  # 未鉴权流量可能很大，全量记进 trace 会撑爆存储并淹没真实链路；
+  # 全丢又看不到鉴权失败率的信号，所以按比例采样。
+  unauth_sample_rate: 0.1

@@ -3,11 +3,11 @@ package server
 import (
 	"net/http"
 
-	v1 "chatroom/user-service/api/user/v1"
-	"chatroom/user-service/internal/conf"
-	"chatroom/user-service/internal/middleware"
-	"chatroom/user-service/internal/observability"
-	"chatroom/user-service/internal/service"
+	v1 "chatroom/api/user/service/v1"
+	"chatroom/app/user/service/internal/conf"
+	"chatroom/app/user/service/internal/service"
+	"chatroom/pkg/middleware"
+	"chatroom/pkg/observability"
 
 	kmiddleware "github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"

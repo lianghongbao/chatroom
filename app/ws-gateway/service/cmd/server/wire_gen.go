@@ -7,12 +7,13 @@
 package main
 
 import (
-	"chatroom/ws-gateway-service/internal/conf"
-	"chatroom/ws-gateway-service/internal/data"
-	"chatroom/ws-gateway-service/internal/gateway"
-	"chatroom/ws-gateway-service/internal/observability"
-	"chatroom/ws-gateway-service/internal/server"
-	"chatroom/ws-gateway-service/pkg/nacos"
+	"chatroom/app/ws-gateway/service/internal/conf"
+	"chatroom/app/ws-gateway/service/internal/data"
+	"chatroom/app/ws-gateway/service/internal/gateway"
+	"chatroom/app/ws-gateway/service/internal/observability"
+	"chatroom/app/ws-gateway/service/internal/server"
+	"chatroom/pkg/nacos"
+	observability2 "chatroom/pkg/observability"
 	"github.com/go-kratos/kratos/v3"
 	"log/slog"
 )
@@ -28,8 +29,8 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	confServer := bootstrap.Server
 	confObservability := bootstrap.Observability
 	config := observability.NewConfig(confObservability)
-	prometheusRegistry := observability.NewPromRegistry()
-	provider, err := observability.New(config, prometheusRegistry)
+	prometheusRegistry := observability2.NewPromRegistry()
+	provider, err := observability2.New(config, prometheusRegistry)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,7 +79,9 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	gatewayServer := gateway.NewServerFromConfig(gatewayConfig, dependencies, sender, tokenVerifier, userConversationListerAdapter, lister, logger)
 	httpServer := server.NewHTTPServer(confServer, provider, gatewayServer)
 	subscriber := gateway.NewSubscriberForServer(gatewayServer, client, logger)
-	lifecycle := gateway.NewLifecycle(gatewayServer, subscriber)
+	memberCache := gateway.NewMemberCacheFromDependencies(dependencies)
+	invalidatorSubscriber := gateway.NewMemberInvalidationSubscriber(client, memberCache, logger)
+	lifecycle := gateway.NewLifecycleWithInvalidator(gatewayServer, subscriber, invalidatorSubscriber)
 	registrar, cleanup6, err := nacos.NewRegistrar(iNamingClient, options)
 	if err != nil {
 		cleanup5()

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"chatroom/user-service/internal/biz"
-	"chatroom/user-service/internal/conf"
+	"chatroom/app/user/service/internal/biz"
+	"chatroom/app/user/service/internal/conf"
 
 	"github.com/go-kratos/kratos/v3/log"
 	"github.com/redis/go-redis/v9"

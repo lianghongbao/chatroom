@@ -7,12 +7,14 @@
 package main
 
 import (
-	"chatroom/user-service/internal/biz"
-	"chatroom/user-service/internal/conf"
-	"chatroom/user-service/internal/data"
-	"chatroom/user-service/internal/server"
-	"chatroom/user-service/internal/service"
-	"chatroom/user-service/pkg/nacos"
+	"chatroom/app/user/service/internal/biz"
+	"chatroom/app/user/service/internal/conf"
+	"chatroom/app/user/service/internal/data"
+	"chatroom/app/user/service/internal/observability"
+	"chatroom/app/user/service/internal/server"
+	"chatroom/app/user/service/internal/service"
+	"chatroom/pkg/nacos"
+	observability2 "chatroom/pkg/observability"
 	"github.com/go-kratos/kratos/v3"
 	"log/slog"
 )
@@ -23,11 +25,17 @@ import (
 
 // Injectors from wire.go:
 
-// wireApp init kratos application.
+// wireApp 组装 kratos 应用。
 func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Logger) (*kratos.App, func(), error) {
 	confServer := bootstrap.Server
 	auth := bootstrap.Auth
-	observability := bootstrap.Observability
+	confObservability := bootstrap.Observability
+	config := observability.NewConfig(confObservability)
+	prometheusRegistry := observability2.NewPromRegistry()
+	provider, err := observability2.New(config, prometheusRegistry)
+	if err != nil {
+		return nil, nil, err
+	}
 	confData := bootstrap.Data
 	dataData, cleanup, err := data.NewData(confData)
 	if err != nil {
@@ -40,8 +48,8 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	userCache := data.NewUserCache(dataData)
 	userUsecase := biz.NewUserUsecase(userRepo, auth, loginLimiter, locker, tokenStore, userCache, logger)
 	userService := service.NewUserService(userUsecase, auth)
-	grpcServer := server.NewGRPCServer(confServer, auth, observability, tokenStore, userService)
-	httpServer := server.NewHTTPServer(confServer, auth, observability, tokenStore, userService)
+	grpcServer := server.NewGRPCServer(confServer, auth, provider, tokenStore, userService)
+	httpServer := server.NewHTTPServer(confServer, auth, provider, tokenStore, userService)
 	options := conf.NacosOptions(registry)
 	iNamingClient, cleanup2, err := nacos.NewNamingClient(options)
 	if err != nil {
@@ -54,7 +62,7 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 		cleanup()
 		return nil, nil, err
 	}
-	app := newApp(logger, grpcServer, httpServer, registrar, registry)
+	app := newApp(logger, grpcServer, httpServer, registrar, registry, provider)
 	return app, func() {
 		cleanup3()
 		cleanup2()

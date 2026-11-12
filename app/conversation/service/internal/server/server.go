@@ -4,9 +4,9 @@ package server
 import (
 	"context"
 
-	"chatroom/conversation-service/internal/conf"
+	userv1 "chatroom/api/user/service/v1"
+	"chatroom/app/conversation/service/internal/conf"
 	"chatroom/pkg/middleware"
-	userv1 "chatroom/user-service/api/user/v1"
 
 	kmiddleware "github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/middleware/selector"

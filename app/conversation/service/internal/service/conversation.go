@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 
-	pb "chatroom/conversation-service/api/conversation/v1"
-	"chatroom/conversation-service/internal/biz"
-	"chatroom/conversation-service/internal/middleware"
+	pb "chatroom/api/conversation/service/v1"
+	"chatroom/app/conversation/service/internal/biz"
+	"chatroom/pkg/middleware"
 )
 
 // ConversationService conversation.proto 的 transport adapter。

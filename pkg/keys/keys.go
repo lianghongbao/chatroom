@@ -12,6 +12,7 @@ const (
 	refreshTokenPrefix       = keyPrefix + "refresh:"           // refresh token 存储，后缀是 JTI
 	msgChannelPattern        = keyPrefix + "msg:*"              // 广播频道匹配模式
 	memberInvalidatedChannel = keyPrefix + "member:invalidated" // 成员变更通知频道
+	lockPrefix               = keyPrefix + "lock:"              // 互斥锁前缀，后缀是业务 key
 )
 
 // MessageChannel 消息广播频道名。conversationID 是会话 ID。
@@ -37,6 +38,11 @@ func TokenBlacklistKey(jti string) string {
 // RefreshTokenKey refresh token 存储的 redis key。jti 是 token 的 JTI claim。
 func RefreshTokenKey(jti string) string {
 	return refreshTokenPrefix + jti
+}
+
+// LockKey 互斥锁的 redis key。key 是业务侧的 key（如 "register:lock:alice"）。
+func LockKey(key string) string {
+	return lockPrefix + key
 }
 
 // FormatUint 把 uint64 转成十进制字符串。

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"chatroom/user-service/internal/conf"
+	"chatroom/app/user/service/internal/conf"
 )
 
 // TestChangePassword_RevokesRefreshToken 改密必须把 refresh token 一起撤销。

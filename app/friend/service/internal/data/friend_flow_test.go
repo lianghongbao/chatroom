@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"chatroom/friend-service/internal/biz"
-	userv1 "chatroom/user-service/api/user/v1"
+	userv1 "chatroom/api/user/service/v1"
+	"chatroom/app/friend/service/internal/biz"
 )
 
 // fakeRemoteUserClient 是 RemoteUserClient 的内存替身。它站在**跨服务边界**上 —— 真实链路是 friend 服务经 nacos discovery

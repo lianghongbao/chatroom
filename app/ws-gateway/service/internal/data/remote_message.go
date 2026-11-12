@@ -7,9 +7,9 @@ import (
 	"errors"
 	"time"
 
-	messagev1 "chatroom/message-service/api/message/v1"
+	messagev1 "chatroom/api/message/service/v1"
 
-	"chatroom/ws-gateway-service/internal/observability"
+	"chatroom/pkg/observability"
 
 	oteltrace "github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3/registry"

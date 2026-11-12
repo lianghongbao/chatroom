@@ -34,7 +34,7 @@ func NewPresence(online *OnlineReporter, pool *Pool, members *MemberCache) *Pres
 
 // UserStatus 某个用户的在线状态。
 type UserStatus struct {
-	UserID uint64 `json:"user_id"`
+	UserID string `json:"user_id"`
 	Online bool   `json:"online"`
 	//
 	// Online 为 true 但 Local 为 false —— 他连在别的网关实例上
@@ -42,7 +42,7 @@ type UserStatus struct {
 }
 
 // Status 查单个用户的在线状态。
-func (p *Presence) Status(ctx context.Context, userID uint64) UserStatus {
+func (p *Presence) Status(ctx context.Context, userID string) UserStatus {
 	if p == nil {
 		return UserStatus{UserID: userID}
 	}
@@ -91,12 +91,12 @@ func (p *Presence) ConversationStatus(ctx context.Context, conversationID uint64
 
 // PresenceData 会话级在线状态帧的载荷。
 type PresenceData struct {
-	Members map[uint64]bool `json:"members"`
+	Members map[string]bool `json:"members"`
 }
 
 // EncodePresenceFrame 编一个会话级在线状态帧。
 func EncodePresenceFrame(statuses []UserStatus) []byte {
-	members := make(map[uint64]bool, len(statuses))
+	members := make(map[string]bool, len(statuses))
 	for _, s := range statuses {
 		members[s.UserID] = s.Online
 	}
@@ -113,7 +113,7 @@ func EncodePresenceFrame(statuses []UserStatus) []byte {
 // 流程：查出这个人在哪些会话 → 每个会话取出其它成员 → 推 online 帧。
 //
 // 返回推给了几个人。出错只记日志不返回错误 —— 推不出去不该影响连接流程
-func (s *Server) NotifyOnlineStateChange(userID uint64, online bool) int {
+func (s *Server) NotifyOnlineStateChange(userID string, online bool) int {
 	if s == nil || s.pool == nil || s.presence == nil {
 		return 0
 	}

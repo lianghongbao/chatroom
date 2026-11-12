@@ -8,14 +8,15 @@ package main
 import (
 	"log/slog"
 
-	"chatroom/user-service/internal/biz"
-	"chatroom/user-service/internal/conf"
-	"chatroom/user-service/internal/data"
-	"chatroom/user-service/internal/middleware"
-	"chatroom/user-service/internal/observability"
-	"chatroom/user-service/internal/server"
-	"chatroom/user-service/internal/service"
-	"chatroom/user-service/pkg/nacos"
+	"chatroom/app/user/service/internal/biz"
+	"chatroom/app/user/service/internal/conf"
+	"chatroom/app/user/service/internal/data"
+	"chatroom/app/user/service/internal/observability"
+	"chatroom/app/user/service/internal/server"
+	"chatroom/app/user/service/internal/service"
+	"chatroom/pkg/middleware"
+	"chatroom/pkg/nacos"
+	pkgobs "chatroom/pkg/observability"
 
 	"github.com/go-kratos/kratos/v3"
 	"github.com/google/wire"
@@ -42,13 +43,15 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		// Provider 构造时即注册 otel 全局 provider，所以 wire 会在建 server 之前先建它 ——
 		// server 依赖 *Provider，依赖关系保证了顺序。
 		observability.NewConfig,
-		observability.NewPromRegistry,
-		observability.New,
+		pkgobs.NewPromRegistry,
+		pkgobs.New,
 		// *data.TokenStore 同时实现 biz.TokenStore 和 middleware.TokenChecker，显式绑定让 wire 拉到正确的窄接口
 		wire.Bind(new(biz.TokenStore), new(*data.TokenStore)),
 		wire.Bind(new(middleware.TokenChecker), new(*data.TokenStore)),
 		// data.UserCache 实现 biz.UserCache。
 		wire.Bind(new(biz.UserCache), new(*data.UserCache)),
+		// data.Locker 实现 biz.Locker。
+		wire.Bind(new(biz.Locker), new(*data.Locker)),
 		newApp,
 	))
 }

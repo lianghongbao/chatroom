@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"chatroom/ws-gateway-service/internal/conf"
+	"chatroom/app/ws-gateway/service/internal/conf"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"

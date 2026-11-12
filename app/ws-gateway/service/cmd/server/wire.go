@@ -6,12 +6,12 @@ package main
 import (
 	"log/slog"
 
+	"chatroom/app/ws-gateway/service/internal/conf"
+	"chatroom/app/ws-gateway/service/internal/data"
+	"chatroom/app/ws-gateway/service/internal/gateway"
+	obs "chatroom/app/ws-gateway/service/internal/observability"
+	"chatroom/app/ws-gateway/service/internal/server"
 	pkgobs "chatroom/pkg/observability"
-	"chatroom/ws-gateway-service/internal/conf"
-	"chatroom/ws-gateway-service/internal/data"
-	"chatroom/ws-gateway-service/internal/gateway"
-	obs "chatroom/ws-gateway-service/internal/observability"
-	"chatroom/ws-gateway-service/internal/server"
 
 	"chatroom/pkg/nacos"
 

@@ -3,7 +3,7 @@ package data
 import (
 	"context"
 
-	"chatroom/ws-gateway-service/internal/gateway"
+	"chatroom/app/ws-gateway/service/internal/gateway"
 )
 
 // Sender 把 RemoteMessageClient 适配成 gateway.MessageSender。

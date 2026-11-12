@@ -3,9 +3,9 @@ package server
 import (
 	"net/http"
 
-	"chatroom/ws-gateway-service/internal/conf"
-	"chatroom/ws-gateway-service/internal/gateway"
-	"chatroom/ws-gateway-service/internal/observability"
+	"chatroom/app/ws-gateway/service/internal/conf"
+	"chatroom/app/ws-gateway/service/internal/gateway"
+	"chatroom/pkg/observability"
 
 	kmiddleware "github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"

@@ -1,3 +1,20 @@
+package data
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"chatroom/app/message/service/internal/biz"
+	"chatroom/pkg/testutil"
+
+	"github.com/redis/go-redis/v9"
+)
+
+// newTestMessagePublisher 构造接真实 Redis 的消息广播器。
+func newTestMessagePublisher(t *testing.T) (*MessagePublisher, *redis.Client) {
+	t.Helper()
 	rdb := testutil.NewRedis(t)
 	return &MessagePublisher{rdb: rdb}, rdb
 }

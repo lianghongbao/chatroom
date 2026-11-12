@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "chatroom/conversation-service/api/conversation/v1"
+	v1 "chatroom/api/conversation/service/v1"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 )

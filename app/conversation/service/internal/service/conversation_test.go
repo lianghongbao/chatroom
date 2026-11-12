@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	pb "chatroom/conversation-service/api/conversation/v1"
-	"chatroom/conversation-service/internal/biz"
+	pb "chatroom/api/conversation/service/v1"
+	"chatroom/app/conversation/service/internal/biz"
 	"chatroom/pkg/testutil"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"

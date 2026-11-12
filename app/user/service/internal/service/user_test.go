@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	pb "chatroom/user-service/api/user/v1"
-	"chatroom/user-service/internal/biz"
-	"chatroom/user-service/internal/conf"
-	"chatroom/user-service/internal/middleware"
+	pb "chatroom/api/user/service/v1"
+	"chatroom/app/user/service/internal/biz"
+	"chatroom/app/user/service/internal/conf"
+	"chatroom/pkg/middleware"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/transport"

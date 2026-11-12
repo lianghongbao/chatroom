@@ -9,14 +9,14 @@ import (
 // MemberFetcher 取会话成员列表（算广播目标用）。
 type MemberFetcher interface {
 	// ListConversationMembers 返回会话成员 uid 列表
-	ListConversationMembers(ctx context.Context, conversationID uint64) ([]uint64, error)
+	ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error)
 }
 
 // MemberFetcherFunc 把函数适配成 MemberFetcher。
-type MemberFetcherFunc func(ctx context.Context, conversationID uint64) ([]uint64, error)
+type MemberFetcherFunc func(ctx context.Context, conversationID uint64) ([]string, error)
 
 // ListConversationMembers 调 f。
-func (f MemberFetcherFunc) ListConversationMembers(ctx context.Context, conversationID uint64) ([]uint64, error) {
+func (f MemberFetcherFunc) ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error) {
 	return f(ctx, conversationID)
 }
 
@@ -25,14 +25,14 @@ func (f MemberFetcherFunc) ListConversationMembers(ctx context.Context, conversa
 // 跟 MemberFetcher 反方向：这个问「这个人在哪些会话」
 type UserConversationLister interface {
 	// ListUserConversations 返回该用户参与的会话 id 列表。
-	ListUserConversations(ctx context.Context, userID uint64) ([]uint64, error)
+	ListUserConversations(ctx context.Context, userID string) ([]uint64, error)
 }
 
 // UserConversationListerFunc 把函数适配成 UserConversationLister。
-type UserConversationListerFunc func(ctx context.Context, userID uint64) ([]uint64, error)
+type UserConversationListerFunc func(ctx context.Context, userID string) ([]uint64, error)
 
 // ListUserConversations 调 f。
-func (f UserConversationListerFunc) ListUserConversations(ctx context.Context, userID uint64) ([]uint64, error) {
+func (f UserConversationListerFunc) ListUserConversations(ctx context.Context, userID string) ([]uint64, error) {
 	return f(ctx, userID)
 }
 
@@ -48,7 +48,7 @@ type MemberCache struct {
 
 // memberEntry 一条缓存。
 type memberEntry struct {
-	members   []uint64
+	members   []string
 	fetchedAt time.Time
 }
 
@@ -68,7 +68,7 @@ func NewMemberCache(fetcher MemberFetcher, ttl time.Duration) *MemberCache {
 const defaultMemberCacheTTL = time.Minute
 
 // Get 取会话成员。命中且未过期直接返回；否则回源并缓存。
-func (c *MemberCache) Get(ctx context.Context, conversationID uint64) ([]uint64, error) {
+func (c *MemberCache) Get(ctx context.Context, conversationID uint64) ([]string, error) {
 	if c == nil || c.fetcher == nil {
 		return nil, nil
 	}

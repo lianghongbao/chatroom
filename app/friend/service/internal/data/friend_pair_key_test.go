@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
-	"chatroom/friend-service/internal/biz"
-	"chatroom/friend-service/internal/data/ent"
-	"chatroom/friend-service/internal/data/ent/friend"
+	"chatroom/app/friend/service/internal/biz"
+	"chatroom/app/friend/service/internal/data/ent"
+	"chatroom/app/friend/service/internal/data/ent/friend"
 )
 
 // TestFriendRepo_ConcurrentOppositeApplyCreatesOneRow 反向并发申请只能建一条记录。

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	v1 "chatroom/message-service/api/message/v1"
+	v1 "chatroom/api/message/service/v1"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 )

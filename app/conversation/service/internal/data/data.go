@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"chatroom/conversation-service/internal/conf"
-	"chatroom/conversation-service/internal/data/ent"
+	"chatroom/app/conversation/service/internal/conf"
+	"chatroom/app/conversation/service/internal/data/ent"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/schema"

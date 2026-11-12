@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"os"
 
-	"chatroom/ws-gateway-service/internal/conf"
-	"chatroom/ws-gateway-service/internal/gateway"
-	"chatroom/ws-gateway-service/internal/observability"
-	"chatroom/ws-gateway-service/pkg/nacos"
+	"chatroom/app/ws-gateway/service/internal/conf"
+	"chatroom/app/ws-gateway/service/internal/gateway"
+	"chatroom/pkg/nacos"
+	"chatroom/pkg/observability"
 
 	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
 	"github.com/go-kratos/kratos/v3"

@@ -1,3 +1,33 @@
+package data
+
+import (
+	"context"
+	"encoding/json"
+	"strconv"
+
+	"chatroom/app/message/service/internal/biz"
+	"chatroom/app/message/service/internal/data/ent"
+	"chatroom/app/message/service/internal/data/ent/message"
+
+	"chatroom/pkg/keys"
+	"github.com/redis/go-redis/v9"
+)
+
+// messageRepo biz.MessageRepo 的 ent 实现。
+// 表 messages 上挂 (conversation_id, id) 复合索引 —— 历史消息按会话倒序拉，
+// 这条索引直接覆盖排序，cursor 翻页不用回表。
+type messageRepo struct {
+	data *Data
+}
+
+// NewMessageRepo 构造 biz.MessageRepo 的 ent 实现。
+func NewMessageRepo(data *Data) biz.MessageRepo {
+	return &messageRepo{data: data}
+}
+
+// toBizMessage ent.Message PO → biz.Message DO；po 为 nil 时返 nil
+func toBizMessage(po *ent.Message) *biz.Message {
+	if po == nil {
 		return nil
 	}
 	return &biz.Message{
@@ -8,6 +38,74 @@
 		Content:        po.Content,
 		CreatedAt:      po.CreatedAt,
 	}
+}
+
+// Create 落库一条消息，返回带 id / created_at 的消息
+func (r *messageRepo) Create(ctx context.Context, m *biz.Message) (*biz.Message, error) {
+	po, err := r.data.db.Message.Create().
+		SetConversationID(m.ConversationID).
+		SetSenderID(m.SenderID).
+		SetType(uint8(m.Type)).
+		SetContent(m.Content).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toBizMessage(po), nil
+}
+
+// ListByConversation 拉历史消息，按 id 倒序（新的在前）。cursor 语义是「比这个 id 更旧的」。
+func (r *messageRepo) ListByConversation(ctx context.Context, conversationID uint64, cursor uint64, limit int) ([]*biz.Message, uint64, error) {
+	q := r.data.db.Message.Query().
+		Where(message.ConversationIDEQ(conversationID)).
+		Order(ent.Desc(message.FieldID)).
+		Limit(limit)
+	// cursor=0 表示从最新一条开始；非 0 时只取比它更旧的。
+	if cursor > 0 {
+		q = q.Where(message.IDLT(cursor))
+	}
+	pos, err := q.All(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	msgs := make([]*biz.Message, 0, len(pos))
+	for _, po := range pos {
+		msgs = append(msgs, toBizMessage(po))
+	}
+	// 下一页游标 = 本页最后一条（最旧那条）的 id。没有更多时返 0。
+	var next uint64
+	if len(pos) == limit && len(pos) > 0 {
+		next = pos[len(pos)-1].ID
+	}
+	return msgs, next, nil
+}
+
+// ListSince 拉「id 严格大于 sinceID」的消息，按 id 正序（旧的在前）。
+func (r *messageRepo) ListSince(ctx context.Context, conversationID, sinceID uint64, limit int) ([]*biz.Message, uint64, bool, error) {
+	q := r.data.db.Message.Query().
+		Where(message.ConversationIDEQ(conversationID)).
+		Order(ent.Asc(message.FieldID)).
+		Limit(limit + 1) // 多拉一条判断还有没有更多
+	if sinceID > 0 {
+		q = q.Where(message.IDGT(sinceID))
+	}
+	pos, err := q.All(ctx)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	more := len(pos) > limit
+	if more {
+		pos = pos[:limit]
+	}
+	msgs := make([]*biz.Message, 0, len(pos))
+	for _, po := range pos {
+		msgs = append(msgs, toBizMessage(po))
+	}
+	var last uint64
+	if len(pos) > 0 {
+		last = pos[len(pos)-1].ID
+	}
+	return msgs, last, more, nil
 }
 
 // MessagePublisher biz.MessagePublisher 的 Redis Pub/Sub 实现。
@@ -41,7 +139,7 @@ func (p *MessagePublisher) Publish(ctx context.Context, m *biz.Message) error {
 
 // messageChannel 会话对应的 Pub/Sub 频道名，与 ws-gateway 订阅的频道名一致。
 func messageChannel(conversationID uint64) string {
-	return utils.MessageChannel(conversationID)
+	return keys.MessageChannel(conversationID)
 }
 
 // PublishPayload 广播到 Redis 的消息体，网关直接读内容，不用回查 message 服务。
@@ -68,3 +166,11 @@ func marshalPublishPayload(m *biz.Message) ([]byte, error) {
 
 // formatUint 把 uint64 转成十进制字符串。消息广播热路径上用 strconv 更快。
 func formatUint(v uint64) string {
+	return strconv.FormatUint(v, 10)
+}
+
+// 编译期断言：repo 必须满足 biz 定义的接口。
+var _ biz.MessageRepo = (*messageRepo)(nil)
+
+// 编译期断言：publisher 必须满足 biz 定义的接口。
+var _ biz.MessagePublisher = (*MessagePublisher)(nil)

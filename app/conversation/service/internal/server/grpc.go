@@ -1,11 +1,11 @@
 package server
 
 import (
-	convv1 "chatroom/conversation-service/api/conversation/v1"
-	"chatroom/conversation-service/internal/conf"
-	"chatroom/conversation-service/internal/middleware"
-	"chatroom/conversation-service/internal/observability"
-	"chatroom/conversation-service/internal/service"
+	convv1 "chatroom/api/conversation/service/v1"
+	"chatroom/app/conversation/service/internal/conf"
+	"chatroom/app/conversation/service/internal/service"
+	"chatroom/pkg/middleware"
+	"chatroom/pkg/observability"
 
 	kmiddleware "github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/middleware/recovery"
@@ -14,17 +14,10 @@ import (
 
 // NewGRPCServer 构造 gRPC server。
 func NewGRPCServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.ConversationService) *grpc.Server {
-	issuer := ac.GetTokenIssuer()
-	skip := append([]string(nil), ac.GetSkipOperations()...)
-	skip = append(skip, InternalOps()...)
-
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),
-		middleware.Server(ac.GetJwtSecret(), issuer, store, skip),
-		// HTTP transport 的 Operation 是 URL 路径模板，不是 gRPC 的 operation 名，
-		// 所以内部凭证校验的 op 列表里两份都要有。
-		middleware.InternalServer(ac.GetInternalSecret(), InternalOps()...),
 	}
+	mws = append(mws, authMiddlewares(ac, store)...)
 	mws = append(mws, obs.Middlewares()...)
 
 	var opts = []grpc.ServerOption{

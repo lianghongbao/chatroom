@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	pb "chatroom/friend-service/api/friend/v1"
-	"chatroom/friend-service/internal/biz"
-	"chatroom/friend-service/internal/testutil"
+	pb "chatroom/api/friend/service/v1"
+	"chatroom/app/friend/service/internal/biz"
+	"chatroom/pkg/testutil"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 )
