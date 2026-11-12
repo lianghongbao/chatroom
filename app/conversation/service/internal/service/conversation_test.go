@@ -73,6 +73,11 @@ type fakeConvRepo struct {
 		userID         string
 		delta          int32
 	}
+	unreadBatchCalls struct {
+		conversationID uint64
+		userIDs        []string
+		delta          int32
+	}
 }
 
 func (f *fakeConvRepo) Save(_ context.Context, c *biz.Conversation) (*biz.Conversation, bool, error) {
@@ -154,9 +159,9 @@ func (f *fakeConvRepo) UpdateUnread(_ context.Context, conversationID uint64, us
 }
 
 func (f *fakeConvRepo) UpdateUnreadBatch(_ context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
-	f.unreadCalls.conversationID = conversationID
-	f.unreadCalls.userID = userIDs[0]
-	f.unreadCalls.delta = delta
+	f.unreadBatchCalls.conversationID = conversationID
+	f.unreadBatchCalls.userIDs = userIDs
+	f.unreadBatchCalls.delta = delta
 	return uint32(len(userIDs)), nil
 }
 
@@ -815,6 +820,49 @@ func TestServiceConversation_ClearUnread_PassesThrough(t *testing.T) {
 	}
 	if repo.unreadCalls.conversationID != 7 || repo.unreadCalls.userID != "uid-42" {
 		t.Errorf("参数传错了: conv=%d user=%q", repo.unreadCalls.conversationID, repo.unreadCalls.userID)
+	}
+}
+
+func TestServiceConversation_UpdateUnreadBatch_NilRequest(t *testing.T) {
+	s := newService(&fakeConvRepo{})
+	if _, err := s.UpdateUnreadBatch(context.Background(), nil); err == nil {
+		t.Fatal("nil 请求应该返错")
+	}
+}
+
+func TestServiceConversation_UpdateUnreadBatch_ZeroArgs(t *testing.T) {
+	s := newService(&fakeConvRepo{})
+	if _, err := s.UpdateUnreadBatch(context.Background(), &pb.UpdateUnreadBatchRequest{UserIds: []string{"uid-1"}}); err == nil {
+		t.Fatal("conversation_id=0 应该返错")
+	}
+	if _, err := s.UpdateUnreadBatch(context.Background(), &pb.UpdateUnreadBatchRequest{ConversationId: 1}); err == nil {
+		t.Fatal("user_ids 为空应该返错")
+	}
+}
+
+func TestServiceConversation_UpdateUnreadBatch_PassesThrough(t *testing.T) {
+	repo := &fakeConvRepo{}
+	s := newService(repo)
+
+	reply, err := s.UpdateUnreadBatch(context.Background(), &pb.UpdateUnreadBatchRequest{
+		ConversationId: 7,
+		UserIds:        []string{"uid-1", "uid-2"},
+		Delta:          1,
+	})
+	if err != nil {
+		t.Fatalf("UpdateUnreadBatch: %v", err)
+	}
+	if reply.GetUpdated() != 2 {
+		t.Errorf("updated=%d，期望 2", reply.GetUpdated())
+	}
+	if repo.unreadBatchCalls.conversationID != 7 {
+		t.Errorf("conversation_id=%d，期望 7", repo.unreadBatchCalls.conversationID)
+	}
+	if len(repo.unreadBatchCalls.userIDs) != 2 || repo.unreadBatchCalls.userIDs[0] != "uid-1" {
+		t.Errorf("user_ids 传错了: %v", repo.unreadBatchCalls.userIDs)
+	}
+	if repo.unreadBatchCalls.delta != 1 {
+		t.Errorf("delta=%d，期望 1", repo.unreadBatchCalls.delta)
 	}
 }
 func TestServiceConversation_CheckMembership_PassesThrough(t *testing.T) {
