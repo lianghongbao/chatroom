@@ -14,28 +14,28 @@ import (
 // 跳过传输层，但保留「friend biz 拿到的是好友的昵称/头像」这个契约。
 type fakeRemoteUserClient struct {
 	// users uid → 用户资料。
-	users map[uint64]*userv1.UserInfo
+	users map[string]*userv1.UserInfo
 	// err 返回错误（模拟 user 服务不可达）。
 	err error
 }
 
 func newFakeRemoteUserClient() *fakeRemoteUserClient {
-	return &fakeRemoteUserClient{users: map[uint64]*userv1.UserInfo{}}
+	return &fakeRemoteUserClient{users: map[string]*userv1.UserInfo{}}
 }
 
 // put 登记一个用户。
-func (c *fakeRemoteUserClient) put(id uint64, nickname string) {
+func (c *fakeRemoteUserClient) put(id string, nickname string) {
 	c.users[id] = &userv1.UserInfo{Id: id, Nickname: nickname}
 }
 
-func (c *fakeRemoteUserClient) GetUserByID(ctx context.Context, callerID, targetID uint64) (*userv1.UserInfo, error) {
+func (c *fakeRemoteUserClient) GetUserByID(ctx context.Context, callerID, targetID string) (*userv1.UserInfo, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
 	return c.users[targetID], nil
 }
 
-func (c *fakeRemoteUserClient) GetFriendProfiles(ctx context.Context, ids []uint64) ([]*userv1.UserInfo, error) {
+func (c *fakeRemoteUserClient) GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
@@ -48,7 +48,7 @@ func (c *fakeRemoteUserClient) GetFriendProfiles(ctx context.Context, ids []uint
 	return out, nil
 }
 
-func (c *fakeRemoteUserClient) GetConversationMemberProfiles(ctx context.Context, ids []uint64) ([]*userv1.UserInfo, error) {
+func (c *fakeRemoteUserClient) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	return c.GetFriendProfiles(ctx, ids)
 }
 
@@ -65,13 +65,13 @@ func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 
 	// 两个用户。真实链路里他们是 user 服务里的两行记录；
 	// 这里只在 fakeRemoteUserClient 里登记资料（friend 域只关心 uid + 资料）。
-	const aliceID, bobID = 1, 2
+	const aliceID, bobID = "alice", "bob"
 	cli := newFakeRemoteUserClient()
 	cli.put(aliceID, "Alice")
 	cli.put(bobID, "Bob")
 
 	// 生产路径的 adapter：client → biz.FriendProfile。
-	adapter := NewAdapter(cli)
+	adapter := NewFriendAdapter(cli)
 	uc := biz.NewFriendUsecase(
 		NewFriendRepo(d),
 		adapter,
@@ -97,7 +97,7 @@ func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 		t.Fatalf("pending len = %d, want 1", len(pending))
 	}
 	if pending[0].FriendID != aliceID {
-		t.Fatalf("pending friend_id = %d, want %d (the applicant)", pending[0].FriendID, aliceID)
+		t.Fatalf("pending friend_id = %q, want %q (the applicant)", pending[0].FriendID, aliceID)
 	}
 
 	// 3. B 接受。Accept 返回的 friend_id 必须是「对方」(A)，不是 caller 自己(B)。
@@ -106,7 +106,7 @@ func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 		t.Fatalf("accept: %v", err)
 	}
 	if accepted.FriendID != aliceID {
-		t.Fatalf("accept returned friend_id = %d, want %d (the peer, not the caller)", accepted.FriendID, aliceID)
+		t.Fatalf("accept returned friend_id = %q, want %q (the peer, not the caller)", accepted.FriendID, aliceID)
 	}
 
 	// 4. 双方好友列表都能看到对方。
@@ -125,10 +125,10 @@ func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 		t.Fatalf("bob friend list len = %d, want 1", len(listB))
 	}
 	if listA[0].FriendID != bobID {
-		t.Fatalf("alice list friend_id = %d, want %d", listA[0].FriendID, bobID)
+		t.Fatalf("alice list friend_id = %q, want %q", listA[0].FriendID, bobID)
 	}
 	if listB[0].FriendID != aliceID {
-		t.Fatalf("bob list friend_id = %d, want %d", listB[0].FriendID, aliceID)
+		t.Fatalf("bob list friend_id = %q, want %q", listB[0].FriendID, aliceID)
 	}
 
 	// 5. 昵称/头像已跨服务补全 —— 这一步覆盖 is_visible_to_stranger 与
@@ -155,12 +155,12 @@ func TestFriendFlow_UserServiceDownDegradesGracefully(t *testing.T) {
 	d, _ := newTestDB(t)
 	ctx := context.Background()
 
-	const aliceID, bobID = 1, 2
+	const aliceID, bobID = "alice", "bob"
 	cli := newFakeRemoteUserClient()
 	cli.put(aliceID, "Alice")
 	cli.put(bobID, "Bob")
 
-	uc := biz.NewFriendUsecase(NewFriendRepo(d), NewAdapter(cli), nil, nil)
+	uc := biz.NewFriendUsecase(NewFriendRepo(d), NewFriendAdapter(cli), nil, nil)
 
 	applyRes, err := uc.Apply(ctx, aliceID, bobID, "hi")
 	if err != nil {
@@ -190,12 +190,12 @@ func TestFriendFlow_RemoveFriendBothDirections(t *testing.T) {
 	d, _ := newTestDB(t)
 	ctx := context.Background()
 
-	const aliceID, bobID = 1, 2
+	const aliceID, bobID = "alice", "bob"
 	cli := newFakeRemoteUserClient()
 	cli.put(aliceID, "Alice")
 	cli.put(bobID, "Bob")
 
-	uc := biz.NewFriendUsecase(NewFriendRepo(d), NewAdapter(cli), nil, nil)
+	uc := biz.NewFriendUsecase(NewFriendRepo(d), NewFriendAdapter(cli), nil, nil)
 
 	applyRes, err := uc.Apply(ctx, aliceID, bobID, "hi")
 	if err != nil {
@@ -224,13 +224,13 @@ func TestFriendFlow_AdapterStripsContactInfo(t *testing.T) {
 	ctx := context.Background()
 	cli := newFakeRemoteUserClient()
 	email := "alice@example.com"
-	cli.users[1] = &userv1.UserInfo{
-		Id:       1,
+	cli.users["1"] = &userv1.UserInfo{
+		Id:       "1",
 		Nickname: "Alice",
 		Email:    &email,
 	}
 
-	profiles, err := NewAdapter(cli).FetchProfiles(ctx, 1, []uint64{1})
+	profiles, err := NewFriendAdapter(cli).FetchProfiles(ctx, "1", []string{"1"})
 	if err != nil {
 		t.Fatalf("FetchProfiles: %v", err)
 	}

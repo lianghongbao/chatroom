@@ -49,8 +49,8 @@ echo "生成契约代码（${DOMAIN}）：${PROTOS[*]}"
 
 # 把四个插件编译到缓存目录（版本由上面的 @version 钉死）。
 #
-# 用固定缓存目录而不是每次 mktemp：插件编译一次要几十秒，四个契约 module
-# 各编一遍太慢。缓存目录按插件版本组合命名 —— 版本变了自动重建。
+# 用固定缓存目录而不是每次 mktemp：插件编译一次要几十秒，四个契约各编一遍
+# 太慢。缓存目录按插件版本组合命名 —— 版本变了自动重建。
 #
 # 并发跑（多个契约同时 make api）时 go install 会争 module cache 的锁，
 # 偶发失败。所以加锁 + 重试。
@@ -81,17 +81,28 @@ for pkg in "${PLUGIN_PKG}" "${PLUGIN_GRPC}" "${PLUGIN_HTTP}" "${PLUGIN_OPENAPI}"
 	done
 done
 
-# paths=source_relative —— 生成的 .pb.go 跟 proto 待在一起。
+# protoc 从仓库根跑，--proto_path 指向 api/ —— 这样注册进 protobuf 全局
+# 注册表的文件路径是 <域>/service/v1/<文件>.proto。
+#
+# 路径必须**全局唯一**：整个仓库是单个 Go module，四个域的契约会被链进
+# 同一个二进制。protobuf 的注册表按「相对 proto_path 根的路径」做 key，
+# 四份都叫 v1/error_reason.proto 会在 init 期 panic
+# （proto: file "v1/error_reason.proto" is already registered）。
+# 加上域名这一层前缀就天然避开了。
+#
+# paths=source_relative —— 生成的 .pb.go 跟 proto 待在一起
+# （api/<域>/service/v1/）。
+cd "${ROOT}"
 protoc \
-	--proto_path=. \
+	--proto_path=api \
 	--proto_path="${THIRD_PARTY}" \
 	--plugin=protoc-gen-go="${PLUGIN_DIR}/protoc-gen-go" \
 	--plugin=protoc-gen-go-grpc="${PLUGIN_DIR}/protoc-gen-go-grpc" \
 	--plugin=protoc-gen-go-http="${PLUGIN_DIR}/protoc-gen-go-http" \
 	--plugin=protoc-gen-openapi="${PLUGIN_DIR}/protoc-gen-openapi" \
-	--go_out=paths=source_relative:. \
-	--go-grpc_out=paths=source_relative:. \
-	--go-http_out=paths=source_relative:. \
-	--openapi_out=. \
+	--go_out=paths=source_relative:api \
+	--go-grpc_out=paths=source_relative:api \
+	--go-http_out=paths=source_relative:api \
+	--openapi_out=api \
 	--openapi_opt=fq_schema_naming=true,default_response=false \
-	"${PROTOS[@]}"
+	"${PROTOS[@]/#/api/${DOMAIN}/service/}"

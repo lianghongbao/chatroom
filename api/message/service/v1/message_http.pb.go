@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-http v2.9.2
 // - protoc             v6.33.3
-// source: message/v1/message.proto
+// source: message/service/v1/message.proto
 
 package v1
 

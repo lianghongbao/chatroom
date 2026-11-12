@@ -44,9 +44,9 @@ func TestConversationCache_SetAndGetMembers(t *testing.T) {
 	t.Cleanup(func() { _ = rdb.Del(ctx, convMembersKey(convID)).Err() })
 
 	// 故意乱序写入 —— 读出来必须是升序。
-	c.SetMembers(ctx, convID, []uint64{30, 10, 20})
+	c.SetMembers(ctx, convID, []string{"30", "10", "20"}, 0)
 
-	got, err := c.Members(ctx, convID)
+	got, _, err := c.Members(ctx, convID)
 	if err != nil {
 		t.Fatalf("Members: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestConversationCache_SetAndGetMembers(t *testing.T) {
 func TestConversationCache_MembersMissReturnsNil(t *testing.T) {
 	c, _ := newTestConvCache(t)
 
-	got, err := c.Members(context.Background(), 900002)
+	got, _, err := c.Members(context.Background(), 900002)
 	if err != nil {
 		t.Fatalf("未命中不该报错: %v", err)
 	}
@@ -81,14 +81,14 @@ func TestConversationCache_SetMembersOverwrites(t *testing.T) {
 
 	t.Cleanup(func() { _ = rdb.Del(ctx, convMembersKey(convID)).Err() })
 
-	c.SetMembers(ctx, convID, []uint64{1, 2, 3})
-	c.SetMembers(ctx, convID, []uint64{7})
+	c.SetMembers(ctx, convID, []string{"1", "2", "3"}, 0)
+	c.SetMembers(ctx, convID, []string{"7"}, 0)
 
-	got, err := c.Members(ctx, convID)
+	got, _, err := c.Members(ctx, convID)
 	if err != nil {
 		t.Fatalf("Members: %v", err)
 	}
-	if len(got) != 1 || got[0] != 7 {
+	if len(got) != 1 || got[0] != "7" {
 		t.Fatalf("回填应覆盖旧值，实际 %v", got)
 	}
 }
@@ -101,10 +101,10 @@ func TestConversationCache_InvalidateMembers(t *testing.T) {
 
 	t.Cleanup(func() { _ = rdb.Del(ctx, convMembersKey(convID)).Err() })
 
-	c.SetMembers(ctx, convID, []uint64{1, 2})
+	c.SetMembers(ctx, convID, []string{"1", "2"}, 0)
 	c.InvalidateMembers(ctx, convID)
 
-	got, err := c.Members(ctx, convID)
+	got, _, err := c.Members(ctx, convID)
 	if err != nil {
 		t.Fatalf("Members: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestConversationCache_SetMembersSetsTTL(t *testing.T) {
 
 	t.Cleanup(func() { _ = rdb.Del(ctx, convMembersKey(convID)).Err() })
 
-	c.SetMembers(ctx, convID, []uint64{1, 2})
+	c.SetMembers(ctx, convID, []string{"1", "2"}, 0)
 
 	ttl, err := rdb.TTL(ctx, convMembersKey(convID)).Result()
 	if err != nil {
@@ -144,10 +144,10 @@ func TestConversationCache_NilReceiverSafe(t *testing.T) {
 	var c *ConversationCache
 	ctx := context.Background()
 
-	if got, err := c.Members(ctx, 1); err != nil || got != nil {
+	if got, _, err := c.Members(ctx, 1); err != nil || got != nil {
 		t.Fatalf("nil cache Members 应返 (nil, nil)，实际 (%v, %v)", got, err)
 	}
 	// 这些方法没有返回值，panic 就是失败。
-	c.SetMembers(ctx, 1, []uint64{1})
+	c.SetMembers(ctx, 1, []string{"1"}, 0)
 	c.InvalidateMembers(ctx, 1)
 }

@@ -18,17 +18,17 @@ import (
 // fakeTokenVerifier 是 TokenVerifier 的替身。
 type fakeTokenVerifier struct {
 	// uid 校验通过时返回的用户 id。
-	uid uint64
+	uid string
 	// err 校验失败时返回的错误。
 	err error
 	// seen 记录校验过的 token。
 	seen []string
 }
 
-func (f *fakeTokenVerifier) Verify(raw string) (uint64, error) {
+func (f *fakeTokenVerifier) Verify(raw string) (string, error) {
 	f.seen = append(f.seen, raw)
 	if f.err != nil {
-		return 0, f.err
+		return "", f.err
 	}
 	return f.uid, nil
 }
@@ -46,7 +46,7 @@ type fakeMessageSender struct {
 	// gotToken 收到的 token。
 	gotToken string
 	// gotSender 收到的发送方 uid。
-	gotSender uint64
+	gotSender string
 	// gotConversation 收到的会话 id。
 	gotConversation uint64
 	// gotMsgType 收到的消息类型。
@@ -55,7 +55,7 @@ type fakeMessageSender struct {
 	gotContent string
 }
 
-func (f *fakeMessageSender) Send(_ context.Context, token string, senderID, conversationID uint64, msgType uint8, content string) (uint64, int64, error) {
+func (f *fakeMessageSender) Send(_ context.Context, token string, senderID string, conversationID uint64, msgType uint8, content string) (uint64, int64, error) {
 	f.calls++
 	f.gotToken = token
 	f.gotSender = senderID
@@ -76,7 +76,7 @@ func newTestGateway(t *testing.T) (*Server, *Pool, *fakeMessageSender, *fakeToke
 
 	pool := NewPool(nil)
 	sender := &fakeMessageSender{msgID: 55, createdAt: 1700000000}
-	verifier := &fakeTokenVerifier{uid: 42}
+	verifier := &fakeTokenVerifier{uid: "uid-42"}
 
 	s := NewServer(Config{
 		Path:          "/ws",
@@ -173,11 +173,11 @@ func TestServer_HandshakeRegistersConnection(t *testing.T) {
 
 	// 等握手处理完。
 	deadline := time.Now().Add(2 * time.Second)
-	for pool.Count(42) == 0 && time.Now().Before(deadline) {
+	for pool.Count("uid-42") == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if pool.Count(42) != 1 {
-		t.Errorf("连接数 = %d, want 1", pool.Count(42))
+	if pool.Count("uid-42") != 1 {
+		t.Errorf("连接数 = %d, want 1", pool.Count("uid-42"))
 	}
 }
 
@@ -195,7 +195,7 @@ func TestServer_ConnectionCarriesToken(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	var got *Connection
 	for time.Now().Before(deadline) {
-		list := pool.Get(42)
+		list := pool.Get("uid-42")
 		if len(list) > 0 {
 			got = list[0]
 			break
@@ -268,8 +268,8 @@ func TestServer_ChatForwardsToMessageService(t *testing.T) {
 	if sender.gotToken != "my-token" {
 		t.Errorf("token = %q, want %q", sender.gotToken, "my-token")
 	}
-	if sender.gotSender != 42 {
-		t.Errorf("sender id = %d, want 42", sender.gotSender)
+	if sender.gotSender != "uid-42" {
+		t.Errorf("sender id = %q, want \"uid-42\"", sender.gotSender)
 	}
 	if sender.gotConversation != 7 {
 		t.Errorf("conversation id = %d, want 7", sender.gotConversation)
@@ -441,9 +441,9 @@ func TestServer_UnsupportedFrameTypeGetsError(t *testing.T) {
 func TestServer_BroadcastToMembers(t *testing.T) {
 	s, pool, _, _, _ := newTestGateway(t)
 
-	senderConn := newTestConn(42)
-	otherConn := newTestConn(99)
-	strangerConn := newTestConn(77)
+	senderConn := newTestConn("uid-42")
+	otherConn := newTestConn("uid-99")
+	strangerConn := newTestConn("uid-77")
 	pool.Add(senderConn)
 	pool.Add(otherConn)
 	pool.Add(strangerConn)
@@ -451,12 +451,12 @@ func TestServer_BroadcastToMembers(t *testing.T) {
 	payload, _ := json.Marshal(&PublishPayload{
 		MessageID:      55,
 		ConversationID: 7,
-		SenderID:       42,
+		SenderID:       "uid-42",
 		Type:           1,
 		Content:        "hello",
 		CreatedAt:      1700000000,
 	})
-	s.BroadcastToMembers([]uint64{42, 99}, 42, payload)
+	s.BroadcastToMembers([]string{"uid-42", "uid-99"}, "uid-42", payload)
 
 	// 收消息的那端要收到一帧 message。
 	frame := readQueuedFrame(t, otherConn)
@@ -477,15 +477,15 @@ func TestServer_BroadcastToMembers(t *testing.T) {
 func TestServer_BroadcastReachesAllDevicesOfMember(t *testing.T) {
 	s, pool, _, _, _ := newTestGateway(t)
 
-	phone := newTestConn(99)
-	web := newTestConn(99)
+	phone := newTestConn("uid-99")
+	web := newTestConn("uid-99")
 	pool.Add(phone)
 	pool.Add(web)
 
 	payload, _ := json.Marshal(&PublishPayload{
-		MessageID: 55, ConversationID: 7, SenderID: 42, Type: 1, Content: "hi",
+		MessageID: 55, ConversationID: 7, SenderID: "uid-42", Type: 1, Content: "hi",
 	})
-	s.BroadcastToMembers([]uint64{99}, 42, payload)
+	s.BroadcastToMembers([]string{"uid-99"}, "uid-42", payload)
 
 	readQueuedFrame(t, phone)
 	readQueuedFrame(t, web)
@@ -495,19 +495,19 @@ func TestServer_BroadcastReachesAllDevicesOfMember(t *testing.T) {
 func TestServer_HandleBroadcastUsesMemberCache(t *testing.T) {
 	pool := NewPool(nil)
 	sender := &fakeMessageSender{}
-	verifier := &fakeTokenVerifier{uid: 42}
+	verifier := &fakeTokenVerifier{uid: "uid-42"}
 
-	cache := NewMemberCache(MemberFetcherFunc(func(_ context.Context, id uint64) ([]uint64, error) {
-		return []uint64{42, 99}, nil
+	cache := NewMemberCache(MemberFetcherFunc(func(_ context.Context, id uint64) ([]string, error) {
+		return []string{"uid-42", "uid-99"}, nil
 	}), time.Minute)
 
 	s := NewServer(Config{Path: "/ws"}, pool, sender, verifier, cache, nil, nil)
 
-	otherConn := newTestConn(99)
+	otherConn := newTestConn("uid-99")
 	pool.Add(otherConn)
 
 	payload, _ := json.Marshal(&PublishPayload{
-		MessageID: 55, ConversationID: 7, SenderID: 42, Type: 1, Content: "hi",
+		MessageID: 55, ConversationID: 7, SenderID: "uid-42", Type: 1, Content: "hi",
 	})
 	s.HandleBroadcast(payload)
 
@@ -520,7 +520,7 @@ func TestServer_HandleBroadcastUsesMemberCache(t *testing.T) {
 // TestServer_HandleBroadcastMalformedPayload 坏广播体要丢掉，不能 panic。
 func TestServer_HandleBroadcastMalformedPayload(t *testing.T) {
 	s, pool, _, _, _ := newTestGateway(t)
-	c := newTestConn(99)
+	c := newTestConn("uid-99")
 	pool.Add(c)
 
 	s.HandleBroadcast([]byte(`{`))
@@ -533,11 +533,11 @@ func TestServer_HandleBroadcastMalformedPayload(t *testing.T) {
 // TestServer_HandleBroadcastWithoutMemberCache 没有成员查询能力时丢弃广播。
 func TestServer_HandleBroadcastWithoutMemberCache(t *testing.T) {
 	s, pool, _, _, _ := newTestGateway(t)
-	c := newTestConn(99)
+	c := newTestConn("uid-99")
 	pool.Add(c)
 
 	payload, _ := json.Marshal(&PublishPayload{
-		MessageID: 55, ConversationID: 7, SenderID: 42, Type: 1, Content: "hi",
+		MessageID: 55, ConversationID: 7, SenderID: "uid-42", Type: 1, Content: "hi",
 	})
 	s.HandleBroadcast(payload)
 
@@ -609,21 +609,21 @@ func TestServer_DisconnectRemovesConnection(t *testing.T) {
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
-	for pool.Count(42) == 0 && time.Now().Before(deadline) {
+	for pool.Count("uid-42") == 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if pool.Count(42) != 1 {
-		t.Fatalf("连接数 = %d, want 1", pool.Count(42))
+	if pool.Count("uid-42") != 1 {
+		t.Fatalf("连接数 = %d, want 1", pool.Count("uid-42"))
 	}
 
 	conn.Close()
 
 	deadline = time.Now().Add(3 * time.Second)
-	for pool.Count(42) > 0 && time.Now().Before(deadline) {
+	for pool.Count("uid-42") > 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
-	if pool.Count(42) != 0 {
-		t.Errorf("断开后连接数 = %d, want 0", pool.Count(42))
+	if pool.Count("uid-42") != 0 {
+		t.Errorf("断开后连接数 = %d, want 0", pool.Count("uid-42"))
 	}
 }
 

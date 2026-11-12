@@ -39,7 +39,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req *pb.SendMessageReq
 	if err != nil {
 		return nil, err
 	}
-	return &pb.SendMessageReply{Message: convertMessage(msg)}, nil
+	return &pb.SendMessageReply{Message: convertMessageInfo(msg)}, nil
 }
 
 // ListMessages 拉历史消息，按 id 倒序（新的在前）。
@@ -57,7 +57,7 @@ func (s *MessageService) ListMessages(ctx context.Context, req *pb.ListMessagesR
 	}
 	out := &pb.ListMessagesReply{NextCursor: next, Messages: make([]*pb.MessageInfo, 0, len(msgs))}
 	for _, m := range msgs {
-		out.Messages = append(out.Messages, convertMessage(m))
+		out.Messages = append(out.Messages, convertMessageInfo(m))
 	}
 	return out, nil
 }
@@ -81,7 +81,7 @@ func (s *MessageService) ListMessagesSince(ctx context.Context, req *pb.ListMess
 		Messages:      make([]*pb.MessageInfo, 0, len(msgs)),
 	}
 	for _, m := range msgs {
-		out.Messages = append(out.Messages, convertMessage(m))
+		out.Messages = append(out.Messages, convertMessageInfo(m))
 	}
 	return out, nil
 }
@@ -138,8 +138,8 @@ func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
 	}
 }
 
-// convertMessage biz.Message → proto.MessageInfo。m == nil 时返 nil。
-func convertMessage(m *biz.Message) *pb.MessageInfo {
+// convertMessageInfo biz.Message → proto.MessageInfo。m == nil 时返 nil。
+func convertMessageInfo(m *biz.Message) *pb.MessageInfo {
 	if m == nil {
 		return nil
 	}

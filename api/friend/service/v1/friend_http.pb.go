@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-http v2.9.2
 // - protoc             v6.33.3
-// source: friend/v1/friend.proto
+// source: friend/service/v1/friend.proto
 
 package v1
 

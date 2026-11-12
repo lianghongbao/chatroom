@@ -212,32 +212,38 @@ type fakeLimiter struct {
 	allowErr   error
 	allowCalls struct {
 		username string
+		clientIP string
 		called   bool
 	}
 	onSuccessCalls struct {
 		username string
+		clientIP string
 		called   bool
 	}
 	onFailureCalls struct {
 		username string
+		clientIP string
 		called   bool
 	}
 }
 
-func (f *fakeLimiter) Allow(_ context.Context, username string) error {
+func (f *fakeLimiter) Allow(_ context.Context, username, clientIP string) error {
 	f.allowCalls.called = true
 	f.allowCalls.username = username
+	f.allowCalls.clientIP = clientIP
 	return f.allowErr
 }
 
-func (f *fakeLimiter) OnSuccess(_ context.Context, username string) {
+func (f *fakeLimiter) OnSuccess(_ context.Context, username, clientIP string) {
 	f.onSuccessCalls.called = true
 	f.onSuccessCalls.username = username
+	f.onSuccessCalls.clientIP = clientIP
 }
 
-func (f *fakeLimiter) OnFailure(_ context.Context, username string) {
+func (f *fakeLimiter) OnFailure(_ context.Context, username, clientIP string) {
 	f.onFailureCalls.called = true
 	f.onFailureCalls.username = username
+	f.onFailureCalls.clientIP = clientIP
 }
 
 // fakeLocker 是 biz.Locker 的替身，恒返可释放的 no-op。

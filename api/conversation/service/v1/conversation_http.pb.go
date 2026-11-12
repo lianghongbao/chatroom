@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-http v2.9.2
 // - protoc             v6.33.3
-// source: conversation/v1/conversation.proto
+// source: conversation/service/v1/conversation.proto
 
 package v1
 

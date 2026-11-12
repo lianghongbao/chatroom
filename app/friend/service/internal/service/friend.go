@@ -30,18 +30,13 @@ func (s *FriendService) ApplyFriend(ctx context.Context, req *pb.ApplyFriendRequ
 	if !ok {
 		return nil, biz.ErrFriendInvalidArgument
 	}
-	// 附言长度按 rune 计 —— 中文一个字算一个，不是三个字节。
-	if len([]rune(req.GetMessage())) > biz.MaxApplyMessageLen {
-		return nil, biz.ErrFriendInvalidArgument
-	}
+	// 附言长度不在这里判 —— 截断是 biz 层的职责（超过 MaxApplyMessageLen
+	// 的部分被裁掉，而不是整条申请被拒）。service 只做非空校验。
 	res, err := s.uc.Apply(ctx, uid, req.GetTargetId(), req.GetMessage())
 	if err != nil {
 		return nil, err
 	}
-	return &pb.ApplyFriendReply{
-		RequestId: res.RequestID,
-		Status:    friendStatusToDTO(res.Status),
-	}, nil
+	return convertApplyReply(res), nil
 }
 
 // AcceptFriend 同意好友申请；caller uid 由 ctx 派生。
@@ -57,7 +52,7 @@ func (s *FriendService) AcceptFriend(ctx context.Context, req *pb.AcceptFriendRe
 	if err != nil {
 		return nil, err
 	}
-	return &pb.AcceptFriendReply{Friend: convertFriend(f)}, nil
+	return &pb.AcceptFriendReply{Friend: convertFriendInfo(f)}, nil
 }
 
 // RejectFriend 拒绝好友申请；caller uid 由 ctx 派生。
@@ -105,7 +100,7 @@ func (s *FriendService) ListFriends(ctx context.Context, req *pb.ListFriendsRequ
 	}
 	out := &pb.ListFriendsReply{NextCursor: next, Friends: make([]*pb.FriendInfo, 0, len(friends))}
 	for _, f := range friends {
-		out.Friends = append(out.Friends, convertFriend(f))
+		out.Friends = append(out.Friends, convertFriendInfo(f))
 	}
 	return out, nil
 }
@@ -125,7 +120,7 @@ func (s *FriendService) ListPendingRequests(ctx context.Context, req *pb.ListPen
 	}
 	out := &pb.ListPendingRequestsReply{NextCursor: next, Requests: make([]*pb.FriendInfo, 0, len(reqs))}
 	for _, f := range reqs {
-		out.Requests = append(out.Requests, convertFriend(f))
+		out.Requests = append(out.Requests, convertFriendInfo(f))
 	}
 	return out, nil
 }
@@ -146,18 +141,20 @@ func (s *FriendService) CountPending(ctx context.Context, req *pb.CountPendingRe
 	return &pb.CountPendingReply{Count: n}, nil
 }
 
-// convertFriend biz.Friend → proto.FriendInfo。f == nil 时返 nil。
+// convertFriendInfo biz.Friend → proto.FriendInfo。f == nil 时返 nil。
 //
 // friend_id 始终是「对方」的 uid：正向关系取 FriendID，反向关系取 UserID。
 // biz 层不映射这层语义 —— 它只知道关系记录的两端是谁。
-func convertFriend(f *biz.Friend) *pb.FriendInfo {
+func convertFriendInfo(f *biz.Friend) *pb.FriendInfo {
 	if f == nil {
 		return nil
 	}
 	info := &pb.FriendInfo{
-		Id:              f.ID,
-		Message:         f.Message,
-		CreatedAtFriend: f.CreatedAt.Unix(),
+		Id:      f.ID,
+		Message: f.Message,
+		// created_at_friend 是「关系建立时间」——status 转 ACCEPTED 的时刻，
+		// 对应 DO 的 UpdatedAt，不是记录创建时间 CreatedAt。
+		CreatedAtFriend: f.UpdatedAt.Unix(),
 	}
 	// Profile 为 nil = 未补全 / 对方不可见。昵称头像留空，不报错。
 	if f.Profile != nil {
@@ -169,6 +166,18 @@ func convertFriend(f *biz.Friend) *pb.FriendInfo {
 		info.FriendId = f.FriendID
 	}
 	return info
+}
+
+// convertApplyReply biz.FriendApplyResult → proto.ApplyFriendReply。
+// r == nil 时返一个空 reply（不是 nil）—— 调用方已经过了参数校验。
+func convertApplyReply(r *biz.FriendApplyResult) *pb.ApplyFriendReply {
+	if r == nil {
+		return &pb.ApplyFriendReply{}
+	}
+	return &pb.ApplyFriendReply{
+		RequestId: r.RequestID,
+		Status:    friendStatusToDTO(r.Status),
+	}
 }
 
 // friendStatusToDTO biz.FriendStatus (0/1/2) → proto FriendStatus (1/2/3)。

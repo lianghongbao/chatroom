@@ -78,11 +78,8 @@ func TestFriendRepo_PairKeyIsNormalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("查: %v", err)
 	}
-	if po.PairKey == nil {
-		t.Fatal("pair_key 是 NULL")
-	}
-	if *po.PairKey != "uid-1,uid-2" {
-		t.Errorf("pair_key = %q, want \"uid-1,uid-2\"（两个 uid 应升序拼接）", *po.PairKey)
+	if po.PairKey != "uid-1,uid-2" {
+		t.Errorf("pair_key = %q, want \"uid-1,uid-2\"（两个 uid 应升序拼接）", po.PairKey)
 	}
 }
 
