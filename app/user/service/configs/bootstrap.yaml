@@ -1,4 +1,4 @@
-# configs/user/bootstrap.yaml
+# configs/bootstrap.yaml
 #
 # 启动引导配置 —— 只回答一个问题：**连哪个 nacos、从 nacos 哪个 dataId 取业务配置**。
 #
@@ -8,7 +8,7 @@
 #   "改了 nacos 地址不生效"。拆开后，bootstrap 只在本地/环境变量里，
 #   nacos 上那份（config.yaml）永远不含 registry 段。
 #
-# 加载顺序（见 cmd/user/main.go）：
+# 加载顺序（见 cmd/server/main.go）：
 #   1. 读 bootstrap.yaml + env      -> 拿到 nacos 地址 / namespace / group / dataId
 #   2. 用它构造 nacos config client
 #   3. 读 config.yaml + nacos(同一条 dataId) + env 合并成最终配置

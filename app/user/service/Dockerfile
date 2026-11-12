@@ -5,16 +5,22 @@
 #   docker build -t chatroom-user -f app/user/service/Dockerfile .
 FROM golang:1.26 AS builder
 
+# 镜像里的 go 可能比 go.mod 要求的 patch 版本旧（golang:1.26 会浮到最新的
+# 1.26.x）。GOTOOLCHAIN=auto 让 go 自己下载 go.mod 指定的那个版本 ——
+# 钉死 FROM 的 patch 版本不可行：镜像仓库只暴露 major.minor tag。
+ENV GOTOOLCHAIN=auto \
+    GOPROXY=https://goproxy.cn,direct
+
 # go.mod / go.sum 先 COPY —— 依赖没变时这一层能命中缓存。
 COPY go.mod go.sum /src/
 WORKDIR /src
 
-RUN GOPROXY=https://goproxy.cn go mod download
+RUN go mod download
 
 # 再 COPY 全部源码。
 COPY . /src
 
-RUN GOPROXY=https://goproxy.cn go build -ldflags "-X main.Version=$(cat VERSION 2>/dev/null || echo dev)" \
+RUN go build -ldflags "-X main.Version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o /src/bin/chatroom-user ./app/user/service/cmd/server
 
 FROM debian:stable-slim

@@ -1,4 +1,4 @@
-# configs/gateway/config.yaml
+# configs/config.yaml
 #
 # chatroom-ws-gateway 进程配置。WebSocket 网关（PRD §3.5）。
 #

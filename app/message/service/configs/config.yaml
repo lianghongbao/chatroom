@@ -1,4 +1,4 @@
-# configs/message/config.yaml
+# configs/config.yaml
 #
 # chatroom-message 进程配置。与 user / friend / conversation 进程共用
 # nacos/DB/Redis,差别:
@@ -8,7 +8,7 @@
 # 三层职责和别的进程一致。
 #
 # 跨服务调用：本进程通过 nacos discovery 解析 "chatroom-conversation" 端点
-# (在 message-service/internal/data/remote_conversation.go 写死),不依赖 conversation
+# (在 app/message/service/internal/data/remote_conversation.go 写死),不依赖 conversation
 # 进程的端口 —— nacos 自动负载均衡。
 #
 # 消息广播：发消息后往 Redis Pub/Sub 的 chatroom:msg:{conversationId} 频道

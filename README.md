@@ -39,8 +39,8 @@
 | biz | DO、usecase、repo 接口 | DO | DTO、PO、存储客户端 |
 | data | PO、repo 实现 | DO ↔ PO | DTO |
 
-- `service` 依赖**契约 module** 和 `biz`，**不依赖** `data`
-- `biz` 只为错误码枚举依赖**契约 module**，**不依赖** `service` / `data`
+- `service` 依赖**契约包** 和 `biz`，**不依赖** `data`
+- `biz` 只为错误码枚举依赖**契约包**，**不依赖** `service` / `data`
 - `data` 依赖 `biz` 来实现 repo 接口，**不依赖** `service`
 - `cmd` 是唯一用 Wire 把三层接起来的地方
 
@@ -228,7 +228,7 @@ yaml 里的 `${VAR}` 由 Kratos 拿合并后的 map 解析，所以本地文件�
 只管自己那份）：
 
 ```bash
-cd user-service
+cd app/user/service
 make nacos-config          # 对比本地和 nacos，有差异时退出码非 0
 make nacos-config-push     # 把本地推到 nacos
 ```
@@ -243,22 +243,24 @@ nacos 上改完配置**不会热更新** —— 服务只在启动时读一次�
 （本机已有原生 Redis/Nacos 就别起，端口冲突）：
 
 ```bash
-cd user-service && make infra-up     # 起 MySQL + Redis + Nacos
-cd user-service && make infra-down   # 停掉
+docker compose -f app/user/service/deploy/docker-compose.yaml up -d    # 起 MySQL + Redis + Nacos
+docker compose -f app/user/service/deploy/docker-compose.yaml down    # 停掉
 ```
 
-工具链（wire / buf / kratos CLI）：
+工具链（wire / kratos CLI）：
 
 ```bash
 go install github.com/google/wire/cmd/wire@latest
-go install github.com/bufbuild/buf/cmd/buf@latest
 go install github.com/go-kratos/kratos/cmd/kratos/v3@latest
 ```
 
-起服务 —— 每个服务一个独立 module，在**自己的目录**里跑：
+protoc 插件不用单独装 —— `api/gen.sh` / `app/gen-conf.sh` 会把钉好版本的
+插件编到 `.cache/protoc-plugins/`（按版本组合做 key）。
+
+起服务 —— 整仓**一个** Go module，但在**自己的目录**里跑：
 
 ```bash
-cd user-service && make run          # 前台启动（带全 env + NACOS_SERVICE_NAME）
+cd app/user/service && make run          # 前台启动（带全 env + NACOS_SERVICE_NAME）
 ```
 
 五个服务一起起（后台，日志在 `/tmp/chatroom-<服务>.log`）：
@@ -455,9 +457,8 @@ trace 里能看到这次拒绝 —— 放外面的话就是「上游突然大面
 不是下游不健康，不该计入熔断统计。
 
 熔断拒绝时上层拿到的是 **error**（不是空结果）—— 这正是上面「降级语义」
-要求的那件事。`app/conversation/service/internal/data/remote_user_degradation_test.go`
-里有对应的回归用例：熔断拒绝 / 503 / 500 / 超时，都不能被误判成
-「用户不存在」。
+要求的那件事。`pkg/breaker/breaker_test.go` 里有熔断器本身的回归用例
+（计数窗口、只算 5xx、样本不足不熔断）。
 
 ### 跨服务调用踩坑
 
@@ -648,7 +649,7 @@ IP 从 `RemoteAddr` 取。只有网关前面确实有 ingress、且客户端**�
 每个服务在自己的目录里跑：
 
 ```bash
-cd user-service
+cd app/user/service
 make test              # 单元测试，不碰外部依赖
 make test-integration  # data 层 repo + 跨域链路，需要 MySQL
 ```
@@ -695,21 +696,28 @@ Redis 相关的用例（订阅 / 在线状态）在 `CHATROOM_TEST_REDIS_ADDR` �
 
 ## 代码生成
 
-每个服务在自己的目录里跑：
-
-```bash
-cd user-service
-make api      # 重新生成 api proto（转发到契约 module）
-make config   # 重新生成 conf proto（buf，见 buf.gen.config.yaml）
-make service  # 用 kratos CLI 生成 service 层骨架
-make all      # 全部生成 + Wire + go mod tidy
-```
-
-契约包自己也能单独跑：
+契约在自己的目录里跑（生成 grpc / http stub + openapi.yaml）：
 
 ```bash
 cd api/user/service
-make api      # 重新生成 grpc / http stub + openapi.yaml
+make api      # 重新生成 grpc / http stub + openapi.yaml（protoc，见 api/gen.sh）
+```
+
+服务在自己的目录里跑：
+
+```bash
+cd app/user/service
+make config   # 重新生成 conf proto（protoc，见 app/gen-conf.sh）
+make generate # 跑 go generate（Wire）
+make all      # config + generate
+```
+
+kratos CLI 生成 service 层骨架要在服务目录里跑 —— 它要吃契约 proto 的路径：
+
+```bash
+cd app/user/service
+kratos proto server ../../../api/conversation/service/v1/conversation.proto \
+    --target-dir=internal/service
 ```
 
 五个服务 + 四个契约全跑一遍（仓库根）：
@@ -763,12 +771,12 @@ make test    # 五个服务的单元测试
 `app/<服务>/service/internal/service/<服务>.go` 由 **kratos CLI** 生成，不是手写的：
 
 ```bash
-kratos proto server ../../api/conversation/service/v1/conversation.proto \
+kratos proto server ../../../api/conversation/service/v1/conversation.proto \
     --target-dir=internal/service
 ```
 
-`make service` 在对应服务的目录里跑（`user` / `friend` / `conversation` / `message`
-四个域有业务 proto）—— proto 在契约包里，路径要带上 `../../api/`。
+在对应服务的目录里跑（`user` / `friend` / `conversation` / `message`
+四个域有业务 proto）—— proto 在契约包里，路径要带上 `../../../api/`。
 
 生成器**只在文件不存在时写** —— 已存在的会报 `<Service> already exists` 并跳过，
 所以重跑不会覆盖已实现的版本。
@@ -837,7 +845,7 @@ client 没有 Ping 方法，所以 `data` 层自己开一条 `*sql.DB` 交给 en
 
 ### 探针配置
 
-K8s 清单（`app/<服务>/service/deploy/k8s/10-*.yaml`）里三个探针各管一件事：
+三个探针各管一件事：
 
 ```yaml
 startupProbe:    # 启动期给足时间，期间不跑 liveness
@@ -936,9 +944,9 @@ conf → `pkg/observability.Config` 的翻译。
 ## 部署
 
 ```bash
-cd user-service && make docker-build   # 构建本服务镜像
-cd user-service && make infra-up      # 本地起 MySQL + Redis + Nacos
-cd user-service && make infra-down    # 停掉
+cd app/user/service && make docker-build   # 构建本服务镜像
+docker compose -f app/user/service/deploy/docker-compose.yaml up -d  # 本地起 MySQL + Redis + Nacos
+docker compose -f app/user/service/deploy/docker-compose.yaml down  # 停掉
 ```
 
 每个服务一个 Dockerfile，在 `app/<服务>/service/Dockerfile`。构建上下文是**仓库根目录** ——
@@ -951,29 +959,35 @@ docker build -t chatroom-user:latest -f app/user/service/Dockerfile .
 或者用 Makefile（它会自动算好 `-f` 和上下文）：
 
 ```bash
-cd user-service && make docker-build
+cd app/user/service && make docker-build
 ```
 
-K8s 清单在 `app/<服务>/service/deploy/k8s/`，用法见那里的
-[README](./app/user/service/deploy/k8s/README.md)。
+> 镜像里的 go 版本：builder 阶段用 `golang:1.26`（只暴露 major.minor tag，
+> 实际拉到的 patch 版本可能比 `go.mod` 要求的旧）。Dockerfile 里设了
+> `GOTOOLCHAIN=auto`，让 go 自己下载 `go.mod` 指定的那个工具链。
+> 这个错**只在镜像构建时暴露** —— `go build` / `go test` 全都发现不了。
 
-每个服务除了 Deployment + Service，还有一份 `20-*-scaling.yaml`：
+> 敏感字段（DB / Redis / nacos 凭证 / JWT 密钥）走 env 注入，
+> 镜像里的 `config.yaml` / `bootstrap.yaml` 只有非敏感默认值。
 
-- **HPA**（HorizontalPodAutoscaler）—— 按 CPU 使用率横向扩缩。Utilization
-  相对的是 **requests** 不是 limit。集群里要装 **metrics-server**，否则指标
-  一直是 `<unknown>`，HPA 不会扩缩（Deployment 不受影响，pod 照常起）。
-- **PDB**（PodDisruptionBudget）—— 节点排空 / 集群升级这类**自愿中断**时
-  一次只驱逐一个副本。用 `maxUnavailable` 而不是 `minAvailable`：后者在只有
-  1 个副本时会把节点排空卡死。
+### 本地基础设施
 
-> `app/<服务>/service/deploy/k8s/01-config.yaml` 里全是**占位凭证** —— 真密钥不提交进版本库。
+`app/<服务>/service/deploy/docker-compose.yaml` 一键起 MySQL + Redis +
+Nacos + Jaeger（只管底座，不管业务服务）：
+
+```bash
+docker compose -f deploy/docker-compose.yaml up -d
+docker compose -f deploy/docker-compose.yaml down
+```
+
+本机已经在跑原生 Redis/Nacos 的话端口会冲突，先停掉再起这份。
 
 ## 常用命令
 
 每个服务在自己的目录里跑：
 
 ```bash
-cd user-service
+cd app/user/service
 make build         # 编译到 app/user/service/bin/chatroom-user
 make vet
 make test          # 本服务的测试

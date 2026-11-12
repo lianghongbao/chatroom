@@ -190,6 +190,34 @@ no trace explains it".
   degradation contract above already handles: it must never be flattened
   into an empty result.
 
+### Config file contract (bootstrap vs config)
+
+Every service reads **two** files, and both must exist:
+
+| File | Contains | Never contains |
+|------|----------|-----------------|
+| `configs/bootstrap.yaml` | only `registry.nacos` | business parameters |
+| `configs/config.yaml` | business parameters | `registry` |
+
+The split breaks a circular dependency: the business config in the config
+center depends on "which nacos to connect to", so that fact cannot live in
+the config center. `bootstrap.yaml` is read **first** (file + env only) to
+build the nacos client; the business config is then merged from
+file + nacos + env, lowest to highest priority.
+
+**Both files are mandatory.** `cmd/server/main.go` loads the bootstrap
+first and `panic`s if it is missing — kratos' file source does an
+`os.Stat`, so a missing file is a hard error, not an empty config:
+
+```
+panic: stat configs/bootstrap.yaml: no such file or directory
+```
+
+The `bootstrap.yaml` `service_name` must be `<service>`-specific
+(`chatroom-user`, `chatroom-friend`, …) — it is what other services
+discover this one by. Copying another service's file verbatim registers
+this process under the wrong name.
+
 ### Database pool contract
 
 Every service that owns a database sets the pool explicitly in
@@ -360,11 +388,16 @@ Regenerate via `make api`, `make config`, or `make all`; never hand-edit
   from the repo root so the registered proto path carries the domain (or
   service) name — see "Protobuf global registry" above for why that is
   mandatory.
-- `make api` in a service directory forwards to its contract package.
+- `make api` lives in the **contract** package directory
+  (`api/<domain>/service/`), not in the service directory.
 - The repo-root `Makefile` aggregates: `api` / `build` / `test` / `vet` /
   `config` / `proto` / `wire` / `all` across every service and contract.
-- `make service` (kratos CLI) must point at the contract proto path,
-  e.g. `kratos proto server ../../api/<domain>/service/v1/<domain>.proto`.
+- The kratos CLI (`kratos proto server`) runs **inside the service directory**
+  and points at the contract proto path — three levels up from
+  `app/<service>/service/`, so
+  `kratos proto server ../../../api/<domain>/service/v1/<domain>.proto`.
+  It writes the `internal/service/<domain>.go` skeleton (only when the file
+  does not already exist).
 
 ## Naming & error reasons
 

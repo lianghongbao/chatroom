@@ -1,4 +1,4 @@
-# configs/conversation/config.yaml
+# configs/config.yaml
 #
 # chatroom-conversation 进程配置。与 user / friend 进程共用 nacos/DB/Redis,差别:
 #   - server 端口 8002/9002(避免和 user(8000/9000)、friend(8001/9001)进程同时本地启动时冲突)
@@ -7,7 +7,7 @@
 # 三层职责和 user / friend 进程一致。
 #
 # 跨服务调用：本进程通过 nacos discovery 解析 "chatroom-user" 端点(在
-# conversation-service/internal/data/remote_user.go 写死),不依赖 user 进程的端口 —— nacos 自动负载均衡。
+# app/conversation/service/internal/data/remote_user.go 写死),不依赖 user 进程的端口 —— nacos 自动负载均衡。
 # user 进程端口变更不会影响 conversation 进程,反之亦然。
 
 server:
