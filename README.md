@@ -15,8 +15,8 @@
 ## 技术栈
 
 - **Kratos v3** —— 三层分层（service / biz / data）+ Wire 依赖注入
-- **Protobuf** —— API 先行，`contracts/<域>/<域>/v1/` 定义，生成 gRPC / HTTP / OpenAPI
-- **ent v0.14.6** —— ORM，每个服务各有一份 schema（`<服务>-service/internal/data/ent/schema/`）
+- **Protobuf** —— API 先行，`api/<域>/service/v1/` 定义，生成 gRPC / HTTP / OpenAPI
+- **ent v0.14.6** —— ORM，每个服务各有一份 schema（`app/<服务>/service/internal/data/ent/schema/`）
 - **Redis** —— 缓存、限频、token 黑名单、Pub/Sub 广播、在线状态
 - **Nacos 3.x** —— 服务注册发现 + 配置中心
 - **JWT** —— 双 token（access / refresh），中间件鉴权
@@ -52,8 +52,8 @@
 跨域调用走**调用方**域 `biz` 里声明的接口，实现放在**调用方**域的 `data` 里：
 
 ```
-friend-service/internal/biz/       → type FriendProfileFetcher interface
-friend-service/internal/data/      → type Adapter 实现它（包住 remote_user.go）
+app/friend/service/internal/biz/       → type FriendProfileFetcher interface
+app/friend/service/internal/data/      → type Adapter 实现它（包住 remote_user.go）
 ```
 
 调对方服务的 gRPC 客户端就在同一个 `data` 包里，文件名 `remote_<对方>.go`
@@ -77,7 +77,7 @@ key。这些统一放在 **`chatroom/pkg/keys`**（只有一份）：
 > 频道名对不上就是消息静默丢失（不报错，只是对方永远收不到）。
 > 抽到 `chatroom/pkg` 之后由编译器保证一致。
 
-跨域错误原因分两处：域特有的留在 `contracts/<域>/<域>/v1/error_reason.proto`（对外契约），
+跨域错误原因分两处：域特有的留在 `api/<域>/service/v1/error_reason.proto`（对外契约），
 框架级的（未认证、上游不可用……）是 **`chatroom/pkg/errors`** 里的
 纯 Go 枚举（`COMMON_*`，`type ErrorReason int32`）—— 只有一份，
 因为 reason 字符串是跨服务契约（调用方靠它判断「该重试」还是「该报错」）。
@@ -97,18 +97,59 @@ user 域的 `USER_TOKEN_BLACKLISTED` —— 拉黑动作发生在 user 服务，
 
 ## 目录结构
 
-根目录**不是**一个 Go module —— 它放一个公共 module 和五个服务目录。
-每个服务是一个**独立的 Go module**，目录结构就是官方 kratos 单服务模板。
+整仓是**一个** Go module（`module chatroom`），一个 `go.mod`，没有 `replace`
+也没有 `go.work`。目录按官方 [go-kratos/beer-shop](https://github.com/go-kratos/beer-shop)
+的思路分：`api/` 放契约，`app/` 放微服务。
 
 ```
 chatroom/
-  pkg/                          ← 公共 module, module chatroom/pkg
-    go.mod
+  Makefile            **仓库根编排**：api / build / test / vet / config / proto / wire / all
+  go.mod              module chatroom —— 整仓一份
+  third_party/        第三方 proto 的唯一副本（全仓库一份）
+    google/api/         annotations.proto + http.proto（离线依赖）
+  api/                **契约** —— 每个业务域一个，只有 proto + 生成的桩代码
+    gen.sh              契约生成脚本（protoc，从仓库根跑）
+    user/service/        chatroom/api/user/service/v1
+      v1/                proto + 生成的 grpc / http stub
+      openapi.yaml       生成产物
+      Makefile           api
+    friend/service/
+    conversation/service/
+    message/service/
+  app/                **微服务** —— 一个业务域一个可部署服务
+    gen-conf.sh        配置 proto 生成脚本（protoc，从仓库根跑）
+    user/service/
+      cmd/server/        入口 + Wire 注入
+      internal/conf/     本服务自己的配置 proto + 生成代码
+        conf.proto       配置 proto（五个服务里文件名都一样）
+        conf.pb.go       生成产物
+      internal/service/  传输层适配，一个资源一个文件
+      internal/server/   HTTP / gRPC server 构造 + 路由注册
+        server.go        ProviderSet、内部端点清单
+        http.go          NewHTTPServer
+        grpc.go          NewGRPCServer
+      internal/biz/      领域模型、usecase、repo 接口、错误
+      internal/data/     repo 实现、存储客户端、ent schema
+        remote_<svc>.go  调其它服务的 gRPC 客户端（跨进程）
+        health.go        依赖探测：硬 / 软依赖判定
+      internal/observability/ 本服务的观测配置翻译层（conf → pkg/observability.Config）
+      configs/bootstrap.yaml  引导配置：连哪个 nacos、哪条 dataId
+      configs/config.yaml     本服务的配置（原样推进 nacos）
+      Dockerfile         本服务的镜像（构建上下文 = **仓库根目录**，因为依赖同仓的 pkg/ 和 api/）
+      Makefile           服务级 target：build / run / test / config / docker-build
+    friend/service/
+    conversation/service/
+    message/service/
+    ws-gateway/service/    WebSocket 网关：连接池、心跳、协议编解码、广播
+                           **没有对应的 api/** —— 它不对外暴露业务契约
+  pkg/                **跨服务共享的公共包**（同一个 module 下的普通目录）
     nacos/       Nacos client + 注册/发现 + 配置源
     keys/        Redis key / Pub-Sub 频道名（跨服务契约的权威）
     errors/      框架级错误原因 COMMON_*（跨服务契约的权威）
     health/      健康检查（liveness / readiness，跨服务统一语义）
     middleware/  JWT + 内部凭证 + 黑名单中间件
+    breaker/     跨服务 gRPC 调用的熔断器
+    dbpool/      database/sql 连接池调优
     observability/ Metrics + tracing 中间件
     testutil/    测试辅助（DB / Redis / JWT）
     tools/       构建辅助（dev-env.mk / nacos-config.sh）
@@ -119,134 +160,52 @@ chatroom/
 `internal/observability` 的兜底服务名五份全是 `"chatroom-user"`，
 四个服务的 trace 会认成同一个服务。放在 `pkg/` 之后由编译器保证一致。
 
-`pkg` 是**独立 module**，不是普通目录 —— 这样它能被 import（`internal/` 不行），
-所以跨服务契约的权威只有一份。同时 `pkg` 不依赖任何服务（`pkg/go.mod` 里
-没有 `chatroom/<服务>` 的 require），依赖方向是单向的：服务 → pkg。
-
-```
-chatroom/
-  Makefile            **仓库根编排**：api / build / test / vet / proto / wire / all
-  third_party/        第三方 proto 的唯一副本（全仓库一份，不在各契约目录里）
-    google/api/         annotations.proto + http.proto（离线依赖）
-  contracts/           **契约 module** —— 每个业务域一个，只有 proto + 生成的桩代码
-    gen.sh              契约生成脚本（protoc，跨目录引用 third_party）
-    user/                module chatroom/api-user
-      user/v1/          proto + 生成的 grpc / http stub
-      openapi.yaml      生成产物
-      Makefile          api / build / test
-    friend/              module chatroom/api-friend
-    conversation/        module chatroom/api-conversation
-    message/             module chatroom/api-message
-  <服务>-service/       一个业务域一个可部署服务（独立 module，可单独 clone）
-    go.mod              module chatroom/<服务>-service
-    go.sum
-    tool (...)          代码生成器（wire / ent），Go 1.24+ 的 tool 指令
-    cmd/server/        入口 + Wire 注入
-    internal/conf/     本服务自己的配置 proto + 生成代码
-      conf.proto       配置 proto（五个服务里文件名都一样）
-      conf.pb.go       生成产物
-    internal/service/  传输层适配，一个资源一个文件
-    internal/server/   HTTP / gRPC server 构造 + 路由注册
-      server.go        ProviderSet、内部端点清单
-      http.go          NewHTTPServer
-      grpc.go          NewGRPCServer
-    internal/biz/      领域模型、usecase、repo 接口、错误
-    internal/data/     repo 实现、存储客户端、ent schema
-      remote_<svc>.go  调其它服务的 gRPC 客户端（跨进程）
-      health.go        依赖探测：硬 / 软依赖判定
-    internal/observability/ 本服务的观测配置翻译层（conf → pkg/observability.Config）
-    configs/bootstrap.yaml  引导配置：连哪个 nacos、哪条 dataId
-    configs/config.yaml     本服务的配置（原样推进 nacos）
-    （公共代码在仓库根的 pkg/，不在服务目录里）
-    buf.yaml           buf module 根 = 服务目录（这里只剩 conf proto）
-    buf.gen.config.yaml conf proto 的生成模板
-    deploy/            部署相关
-      docker-compose.yaml  本地一键起 MySQL / Redis / Nacos
-      k8s/                 K8s 部署清单
-    migrations/        空库初始化脚本
-    tools/             构建辅助
-      nacos-config.sh  本地 config.yaml <-> nacos 配置中心的同步脚本（薄壳，实现在 pkg/tools/）
-    Dockerfile         本服务的镜像（构建上下文 = **仓库根目录**，因为依赖 ../pkg 和 ../contracts）
-    Makefile           服务级 target：build / run / test / docker-build
-ws-gateway-service/internal/gateway/   WebSocket 网关：连接池、心跳、协议编解码、广播
-```
+`pkg` 不依赖任何服务（`pkg/` 下没有任何 `app/` 的 import），依赖方向是
+单向的：服务 → pkg。
 
 ### 跨服务依赖怎么走
 
 一个服务不 import 另一个服务的 `internal/` —— Go 的 `internal/` 可见性规则
-在编译期就挡住了。跨服务只 import 对方的**契约 module**（`contracts/<域>`），
+在编译期就挡住了。跨服务只 import 对方的**契约包**（`api/<域>/service/v1`），
 那是公开契约。
 
 ### 依赖的是契约，不是服务
 
 这是微服务「独立演进」能不能落地的前提。调用方需要的是「user 域对外的
-契约」，不是「user 服务的实现」。所以契约单独抽成 module：
+契约」，不是「user 服务的实现」。所以契约单独放在 `api/`：
 
 ```
-chatroom/api-user         契约：proto + 生成的 grpc / http stub。没有实现。
-chatroom/user-service     实现：biz / data / service。依赖 chatroom/api-user。
+chatroom/api/user/service/v1     契约：proto + 生成的 grpc / http stub。没有实现。
+chatroom/app/user/service        实现：biz / data / service。依赖上面的契约包。
 ```
 
-`friend-service` 依赖 `chatroom/api-user`，**不依赖** `chatroom/user-service`。
-带来的直接好处：
+`app/friend/service` 依赖 `chatroom/api/user/service/v1`，**不依赖**
+`chatroom/app/user/service`。带来的直接好处：
 
-- user 服务换 ORM、拆表、改内部结构 → friend 的 `go.mod` 一个字都不用动。
+- user 服务换 ORM、拆表、改内部结构 → friend 的代码一个字都不用动。
 - 契约没变的情况下，user 服务重新部署，friend 连重新编译都不需要。
-- 契约 module 可以单独发版（打 tag），调用方按版本引 —— 契约演进有版本，
-  不是靠「大家说好了一起改」。
 
-> 之前契约就躺在服务目录里（`<服务>-service/api/<域>/v1/`），调用方直接
-> `replace chatroom/user-service => ../user-service`。编译期能过，但代价是
-> **调用方把对方的实现也拖进了依赖图**：user 服务加一个第三方库、改一个
-> 内部包名，friend 的构建就跟着抖。契约独立成 module 之后，依赖图上只剩
-> 「服务 → 契约」这一条边。
-
-跨服务依赖在**调用方**的 `go.mod` 里用 `replace` 指向本地路径：
-
-| module | 依赖 |
-|---|---|
-| `pkg` | — （公共 module，不依赖任何服务） |
-| `contracts/user`（`chatroom/api-user`） | — （只有 protobuf / grpc / kratos） |
-| `contracts/friend` | — |
-| `contracts/conversation` | — |
-| `contracts/message` | — |
-| `user` | `pkg`、`api-user` |
-| `friend` | `pkg`、`api-friend`、`api-user` |
-| `conversation` | `pkg`、`api-conversation`、`api-user` |
-| `message` | `pkg`、`api-message`、`api-conversation`、`api-user` |
-| `ws-gateway` | `pkg`、`api-conversation`、`api-message` |
-
-```go
-// friend-service/go.mod
-require (
-	chatroom/pkg v0.0.0
-	chatroom/api-friend v0.0.0
-	chatroom/api-user v0.0.0
-)
-
-replace (
-	chatroom/pkg => ../pkg
-	chatroom/api-friend => ../contracts/friend
-	chatroom/api-user => ../contracts/user
-)
-```
+> 之前契约就躺在服务目录里（`<服务>/api/<域>/v1/`），调用方直接 import
+> 整个服务包。编译期能过，但代价是**调用方把对方的实现也拖进了依赖图**：
+> user 服务加一个第三方库、改一个内部包名，friend 的构建就跟着抖。
+> 契约独立成包之后，依赖图上只剩「服务 → 契约」这一条边。
 
 依赖方向永远是**服务 → 契约 → 无**：
 
 - `pkg` 不反向依赖任何服务 —— 否则 `pkg` 一改，所有服务都得跟着改。
-- 契约 module 之间**互不依赖**（每个域的 proto 不 import 别的域的 proto）——
+- 契约之间**互不依赖**（每个域的 proto 不 import 别的域的 proto）——
   否则 user 的契约一变，friend 连编译都要重跑。
 
-`replace` 指向本地路径，所以本地开发时改完契约立刻生效，不用先发布版本。
-每个服务单独 clone 出去时，保留 `replace` 指向同级的 `../contracts/<域>`，
-或改成真实版本号 —— 其余代码一行不用改。
+单个 module 意味着这些依赖是**同一个仓库内的 import path**，不需要
+`replace`，本地改完契约立刻生效。要把某个域拆成独立仓库时，只需要把
+`api/<域>` 抽成单独的 module 并改版本号 —— import 路径和依赖箭头不变。
 
 每个服务有**两份**本地配置，按「这个值该由谁决定」分：
 
 | 文件 | 装什么 | 进 nacos 吗 |
 |------|--------|------------|
-| `<服务>-service/configs/bootstrap.yaml` | `registry.nacos` —— 连哪个 nacos、哪条 dataId | **不进** |
-| `<服务>-service/configs/config.yaml` | `server` / `data` / `auth` / `observability` | **进，原样推** |
+| `app/<服务>/service/configs/bootstrap.yaml` | `registry.nacos` —— 连哪个 nacos、哪条 dataId | **不进** |
+| `app/<服务>/service/configs/config.yaml` | `server` / `data` / `auth` / `observability` | **进，原样推** |
 
 拆开是为了断掉一个循环依赖：业务配置就放在 nacos 上，所以「连哪个 nacos」
 必须在读它之前就知道。两者放一个文件，nacos 上就会存着自己地址的一份拷贝，
@@ -257,7 +216,7 @@ replace (
 
 配置值按 **file < nacos < env** 合并（后面的赢）：
 
-- **file** —— `<服务>-service/configs/config.yaml`，业务默认值 + `${ENV}` 占位符
+- **file** —— `app/<服务>/service/configs/config.yaml`，业务默认值 + `${ENV}` 占位符
 - **nacos** —— `chatroom-<服务>.yaml`，各环境的运行时参数
 - **env** —— 密钥、DSN 等部署时注入的东西
 
@@ -357,13 +316,13 @@ JWT 的 `sub` claim 存的就是 uid 字符串。
 
 ## 表结构变更
 
-**权威是 ent schema**（每个服务各有一份，在 `<服务>-service/internal/data/ent/schema/`）。
+**权威是 ent schema**（每个服务各有一份，在 `app/<服务>/service/internal/data/ent/schema/`）。
 改完 schema 重启对应服务，ent 会比对现状，
 只发必要的 `ALTER TABLE`（加列 / 改列宽 / 补索引）把库对齐到 schema。不动已有数据。
 
 ```bash
-vim <服务>-service/internal/data/ent/schema/xxx.go
-make -C <服务>-service run   # 重启即生效
+vim app/<服务>/service/internal/data/ent/schema/xxx.go
+make -C app/<服务>/service run   # 重启即生效
 ```
 
 注意：**ent 不删列** —— 废弃的列要手工 `ALTER TABLE ... DROP COLUMN`。
@@ -389,7 +348,7 @@ make -C <服务>-service run   # 重启即生效
 > 等 schema 对齐、pod 正常起来后再放开；滚动更新本身是安全的 ——
 > `maxSurge` 默认只多起一个副本，同一时刻只有一个进程在改 schema。
 
-`<服务>-service/migrations/*.sql` 是「空库初始化快照」，用来在不依赖 Go 运行时的情况下建出空库
+`app/<服务>/service/migrations/*.sql` 是「空库初始化快照」，用来在不依赖 Go 运行时的情况下建出空库
 （干净的测试库、手工初始化）。文件名 `<YYYYMMDDHHMMSS>_<服务名>.sql`，按字典序即创建时间序。
 
 > `CREATE TABLE IF NOT EXISTS` 在表已存在时整条跳过，所以这些脚本**不能**用来对齐已有的库。
@@ -397,7 +356,7 @@ make -C <服务>-service run   # 重启即生效
 改完 schema 建议顺手核对脚本与 ent 产物是否一致：
 
 ```bash
-make -C <服务>-service test -count=1
+make -C app/<服务>/service test -count=1
 ```
 
 ### 单聊唯一性
@@ -451,7 +410,7 @@ make -C <服务>-service test -count=1
 | 批量拉资料时某一片失败 | 整体 error | 只记 warn，列表主体照常返回 |
 
 批量接口还有一条：**user 服务的批量端点单次最多收 200 个 id，超出部分静默截断**。
-调用方必须自己分片（`conversation-service/internal/data/remote_user.go` 的
+调用方必须自己分片（`app/conversation/service/internal/data/remote_user.go` 的
 `batchProfiles`），否则被截断的那部分 id 会被当成「不存在」——
 200 人以上的群就建不出来了。
 
@@ -496,7 +455,7 @@ trace 里能看到这次拒绝 —— 放外面的话就是「上游突然大面
 不是下游不健康，不该计入熔断统计。
 
 熔断拒绝时上层拿到的是 **error**（不是空结果）—— 这正是上面「降级语义」
-要求的那件事。`conversation-service/internal/data/remote_user_degradation_test.go`
+要求的那件事。`app/conversation/service/internal/data/remote_user_degradation_test.go`
 里有对应的回归用例：熔断拒绝 / 503 / 500 / 超时，都不能被误判成
 「用户不存在」。
 
@@ -577,9 +536,9 @@ token 放在 query 里而不是 header —— 浏览器的 WebSocket API 不能�
 
 ```bash
 GATEWAY_HTTP_ADDR=0.0.0.0:8004 GATEWAY_INSTANCE_ID=gw-1 chatroom-ws-gateway \
-  -conf ws-gateway-service/configs/config.yaml -bootstrap ws-gateway-service/configs/bootstrap.yaml
+  -conf app/ws-gateway/service/configs/config.yaml -bootstrap app/ws-gateway/service/configs/bootstrap.yaml
 GATEWAY_HTTP_ADDR=0.0.0.0:8005 GATEWAY_INSTANCE_ID=gw-2 chatroom-ws-gateway \
-  -conf ws-gateway-service/configs/config.yaml -bootstrap ws-gateway-service/configs/bootstrap.yaml
+  -conf app/ws-gateway/service/configs/config.yaml -bootstrap app/ws-gateway/service/configs/bootstrap.yaml
 ```
 
 每个实例都订阅 `chatroom:msg:*`，都会收到**所有**会话的消息，包括自己没人的会话 ——
@@ -589,7 +548,7 @@ GATEWAY_HTTP_ADDR=0.0.0.0:8005 GATEWAY_INSTANCE_ID=gw-2 chatroom-ws-gateway \
 
 > K8s 里上面那两件事不用手工做：`GATEWAY_INSTANCE_ID` 直接取 pod 名
 > （`fieldRef: metadata.name`），天然错开；副本数交给 HPA —— 见
-> `ws-gateway-service/deploy/k8s/20-ws-gateway-scaling.yaml`。
+> `app/ws-gateway/service/deploy/k8s/20-ws-gateway-scaling.yaml`。
 
 ### 准入限制
 
@@ -715,7 +674,7 @@ Redis 相关的用例（订阅 / 在线状态）在 `CHATROOM_TEST_REDIS_ADDR` �
 | `testutil.NewRedis(t)` | 连 DB 15 的客户端，不可达就 skip |
 | `testutil.AuthedCtx(t, uid)` | 带有效 JWT 的 context |
 
-各域的 data 层测试在自己的 `<域>-service/internal/data/` 下，用该域的 `newTestDB(t)`
+各域的 data 层测试在自己的 `app/<域>/service/internal/data/` 下，用该域的 `newTestDB(t)`
 （见 `testsupport_test.go`）包住 `testutil.NewDB`。
 
 跨域用例（拉 user 服务的资料等）放在**调用方**域的 data 包里，
@@ -746,10 +705,10 @@ make service  # 用 kratos CLI 生成 service 层骨架
 make all      # 全部生成 + Wire + go mod tidy
 ```
 
-契约 module 自己也能单独跑：
+契约包自己也能单独跑：
 
 ```bash
-cd contracts/user
+cd api/user/service
 make api      # 重新生成 grpc / http stub + openapi.yaml
 ```
 
@@ -764,11 +723,11 @@ make all     # 契约 + conf proto + Wire + go mod tidy
 生成分两处跑 —— **契约**在契约目录，**配置**在服务目录：
 
 ```bash
-cd contracts/user
-../gen.sh user                               # 契约 proto（grpc / http / openapi）
+cd api/user/service
+../../gen.sh user                           # 契约 proto（grpc / http / openapi）
 
-cd ../../user-service
-buf generate --template buf.gen.config.yaml  # conf proto
+cd ../../app/user/service
+../../gen-conf.sh user                      # conf proto
 ```
 
 契约用 **protoc** 而不是 buf —— 因为契约 proto 要 import 仓库根的
@@ -777,33 +736,39 @@ buf generate --template buf.gen.config.yaml  # conf proto
 protoc 原生支持多个 `--proto_path`，这正是官方 `go-kratos/beer-shop` 的做法
 （它用 `--proto_path=../../../third_party`）。
 
-插件版本在 `contracts/gen.sh` 里用 `@version` 钉死，编译产物缓存在
-`.cache/protoc-plugins/`（按版本组合命名），并发跑不会互相踩。
+conf proto 也用 protoc（不用 buf），因为整仓是一个 module —— 五个服务的
+conf 包可能被链进同一个二进制，而 protobuf 的注册表按「相对 proto_path 根的
+路径」做 key。脚本从**仓库根**跑，`--proto_path=app`，注册路径就成了
+`<服务>/service/internal/conf/conf.proto`，带服务名这一层前缀天然避开撞车。
+契约那边同理：`--proto_path=api` → `<域>/service/v1/<文件>.proto`。
 
-服务目录里的 buf module 只剩 conf proto —— 它不 import 任何第三方 proto，
-不需要跨目录解析，继续用 buf。`paths=source_relative` 让 `<域>/v1/xxx.proto`
-生成到 `<域>/v1/xxx.pb.go` —— pb 代码跟 proto 待在一起。
+插件版本在 `api/gen.sh` / `app/gen-conf.sh` 里用 `@version` 钉死，编译产物
+缓存在 `.cache/protoc-plugins/`（按版本组合命名），并发跑不会互相踩。
+
+`paths=source_relative` 让 `v1/xxx.proto` 生成到 `v1/xxx.pb.go` —— pb 代码跟
+proto 待在一起。
 
 全部一次跑完（仓库根）：
 
 ```bash
-make api     # 四个契约 module 重新生成
+make api     # 四个契约包重新生成
+make config  # 五个服务的 conf proto
 make proto   # 契约 + 各服务的 conf proto
-make build   # 五个服务 + pkg
-make test    # 五个服务 + pkg 的单元测试
+make build   # 五个服务
+make test    # 五个服务的单元测试
 ```
 
 ### service 层也是生成的
 
-`<服务>-service/internal/service/<服务>.go` 由 **kratos CLI** 生成，不是手写的：
+`app/<服务>/service/internal/service/<服务>.go` 由 **kratos CLI** 生成，不是手写的：
 
 ```bash
-kratos proto server ../contracts/conversation/conversation/v1/conversation.proto \
+kratos proto server ../../api/conversation/service/v1/conversation.proto \
     --target-dir=internal/service
 ```
 
 `make service` 在对应服务的目录里跑（`user` / `friend` / `conversation` / `message`
-四个域有业务 proto）—— proto 在契约 module 里，路径要带上 `../contracts/`。
+四个域有业务 proto）—— proto 在契约包里，路径要带上 `../../api/`。
 
 生成器**只在文件不存在时写** —— 已存在的会报 `<Service> already exists` 并跳过，
 所以重跑不会覆盖已实现的版本。
@@ -859,7 +824,7 @@ c.Add("redis", false, d.PingRedis)  // 软依赖
 **别把 Redis 标成硬依赖**：Redis 一抖，四个服务的 pod 会被全摘光，
 故障面比降级大得多。也别把 MySQL 标成软依赖：那会让流量继续打进一个
 连不上库的 pod。这两条判定都有测试守着
-（`<服务>-service/internal/data/health_test.go`）。
+（`app/<服务>/service/internal/data/health_test.go`）。
 
 > 为什么 ws-gateway 的 Redis 反过来是硬依赖：那边 Redis Pub/Sub 是消息
 > 投递到 WS 客户端的**唯一**通道，断了就真的什么都推不出去。带着一个
@@ -872,7 +837,7 @@ client 没有 Ping 方法，所以 `data` 层自己开一条 `*sql.DB` 交给 en
 
 ### 探针配置
 
-K8s 清单（`<服务>-service/deploy/k8s/10-*.yaml`）里三个探针各管一件事：
+K8s 清单（`app/<服务>/service/deploy/k8s/10-*.yaml`）里三个探针各管一件事：
 
 ```yaml
 startupProbe:    # 启动期给足时间，期间不跑 liveness
@@ -904,7 +869,7 @@ livenessProbe:   # 只查进程
 | metrics | `METRICS_ADDR` | `0.0.0.0:9100` | 进程内起一个 HTTP server 暴露 `/metrics` |
 | trace | `OTEL_EXPORTER_OTLP_ENDPOINT` | `otel-collector:4317` | gRPC 导出 span 到 collector |
 
-配置项在 `observability` 段（`<服务>-service/configs/config.yaml`）：
+配置项在 `observability` 段（`app/<服务>/service/configs/config.yaml`）：
 
 ```yaml
 observability:
@@ -976,13 +941,11 @@ cd user-service && make infra-up      # 本地起 MySQL + Redis + Nacos
 cd user-service && make infra-down    # 停掉
 ```
 
-每个服务一个 Dockerfile，在 `<服务>-service/Dockerfile`。构建上下文是**仓库根目录** ——
-服务依赖同仓的 `chatroom/pkg`（`go.mod` 里 `replace chatroom/pkg => ../pkg`）和
-契约 module（`replace chatroom/api-user => ../contracts/user`），上下文只给
-服务目录的话这些都不在构建里：
+每个服务一个 Dockerfile，在 `app/<服务>/service/Dockerfile`。构建上下文是**仓库根目录** ——
+服务依赖同仓的 `pkg/` 和 `api/`，上下文只给服务目录的话这些都不在构建里：
 
 ```bash
-docker build -t chatroom-user:latest -f user-service/Dockerfile .
+docker build -t chatroom-user:latest -f app/user/service/Dockerfile .
 ```
 
 或者用 Makefile（它会自动算好 `-f` 和上下文）：
@@ -991,8 +954,8 @@ docker build -t chatroom-user:latest -f user-service/Dockerfile .
 cd user-service && make docker-build
 ```
 
-K8s 清单在 `<服务>-service/deploy/k8s/`，用法见那里的
-[README](./user-service/deploy/k8s/README.md)。
+K8s 清单在 `app/<服务>/service/deploy/k8s/`，用法见那里的
+[README](./app/user/service/deploy/k8s/README.md)。
 
 每个服务除了 Deployment + Service，还有一份 `20-*-scaling.yaml`：
 
@@ -1003,7 +966,7 @@ K8s 清单在 `<服务>-service/deploy/k8s/`，用法见那里的
   一次只驱逐一个副本。用 `maxUnavailable` 而不是 `minAvailable`：后者在只有
   1 个副本时会把节点排空卡死。
 
-> `<服务>-service/deploy/k8s/01-config.yaml` 里全是**占位凭证** —— 真密钥不提交进版本库。
+> `app/<服务>/service/deploy/k8s/01-config.yaml` 里全是**占位凭证** —— 真密钥不提交进版本库。
 
 ## 常用命令
 
@@ -1011,7 +974,7 @@ K8s 清单在 `<服务>-service/deploy/k8s/`，用法见那里的
 
 ```bash
 cd user-service
-make build         # 编译到 user-service/bin/chatroom-user
+make build         # 编译到 app/user/service/bin/chatroom-user
 make vet
 make test          # 本服务的测试
 make test-integration  # 需要 MySQL 的集成测试
