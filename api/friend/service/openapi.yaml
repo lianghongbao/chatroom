@@ -1,0 +1,263 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: Friend API
+    description: |-
+        FriendService 好友服务。
+
+         跨服务:通过 nacos 调 user.GetUserByID 拉取好友公开资料。
+    version: 0.0.1
+paths:
+    /api/friend/accept:
+        post:
+            tags:
+                - Friend
+            description: AcceptFriend 同意好友申请。仅 target 可调用。
+            operationId: Friend_AcceptFriend
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.friend.v1.AcceptFriendRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.AcceptFriendReply'
+    /api/friend/apply:
+        post:
+            tags:
+                - Friend
+            description: |-
+                ApplyFriend 发起好友申请。
+                 幂等：自申请 / 已好友 / 重复申请 / 反向 PENDING 合并 / 覆盖 REJECTED。
+            operationId: Friend_ApplyFriend
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.friend.v1.ApplyFriendRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.ApplyFriendReply'
+    /api/friend/list:
+        get:
+            tags:
+                - Friend
+            description: ListFriends 列出当前用户的所有好友（status = ACCEPTED）。分页 cursor-based，按 friends.id 升序。
+            operationId: Friend_ListFriends
+            parameters:
+                - name: cursor
+                  in: query
+                  description: 游标：上一次响应的 next_cursor；首次留空。
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: 单页大小。1..200 合法, 超出由 service 层折叠到 50 默认。
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.ListFriendsReply'
+    /api/friend/pending:
+        get:
+            tags:
+                - Friend
+            description: |-
+                ListPendingRequests 列出作为「目标方」收到的 PENDING 申请。
+                 friend_id 在此指向申请发起方 (friends.user_id)。分页语义同 ListFriendsRequest。
+            operationId: Friend_ListPendingRequests
+            parameters:
+                - name: cursor
+                  in: query
+                  description: 游标：上一次响应的 next_cursor；首次留空。
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: 单页大小。1..200 合法, 超出由 service 层折叠到 50 默认。
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.ListPendingRequestsReply'
+    /api/friend/pending/count:
+        get:
+            tags:
+                - Friend
+            description: CountPending 返回作为目标方收到的 PENDING 申请总数。
+            operationId: Friend_CountPending
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.CountPendingReply'
+    /api/friend/reject:
+        post:
+            tags:
+                - Friend
+            description: RejectFriend 拒绝好友申请。语义同 AcceptFriend 的鉴权。
+            operationId: Friend_RejectFriend
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.friend.v1.RejectFriendRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.RejectFriendReply'
+    /api/friend/remove:
+        post:
+            tags:
+                - Friend
+            description: RemoveFriend 删除好友关系。任意一方可调用。
+            operationId: Friend_RemoveFriend
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.friend.v1.RemoveFriendRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.friend.v1.RemoveFriendReply'
+components:
+    schemas:
+        api.friend.v1.AcceptFriendReply:
+            type: object
+            properties:
+                friend:
+                    $ref: '#/components/schemas/api.friend.v1.FriendInfo'
+        api.friend.v1.AcceptFriendRequest:
+            type: object
+            properties:
+                requestId:
+                    type: string
+                    description: 申请记录 ID。
+            description: AcceptFriendRequest 同意好友申请。
+        api.friend.v1.ApplyFriendReply:
+            type: object
+            properties:
+                requestId:
+                    type: string
+                    description: 新建 / 更新后的关系记录 ID。
+                status:
+                    type: integer
+                    description: 当前关系状态。
+                    format: enum
+        api.friend.v1.ApplyFriendRequest:
+            type: object
+            properties:
+                targetId:
+                    type: string
+                    description: 目标用户 uid。空串视为非法。
+                message:
+                    type: string
+                    description: 申请附言（可选）。> 200 字符视为非法。
+            description: ApplyFriendRequest 发起好友申请。
+        api.friend.v1.CountPendingReply:
+            type: object
+            properties:
+                count:
+                    type: string
+        api.friend.v1.FriendInfo:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 关系记录 ID。
+                friendId:
+                    type: string
+                    description: 对方用户 uid。
+                nickname:
+                    type: string
+                    description: 对方昵称。
+                avatar:
+                    type: string
+                    description: 对方头像 URL。
+                createdAt:
+                    type: string
+                    description: 对方注册时间（Unix 秒）。
+                createdAtFriend:
+                    type: string
+                    description: 关系建立时间（Unix 秒, status 转 ACCEPTED 的时间）。
+                message:
+                    type: string
+                    description: 申请附言（最多 200 字符）。
+            description: |-
+                FriendInfo 单条好友关系。
+
+                 friend_id 是「对方」的 uid。昵称/头像等资料由 service 层
+                 调 user.GetUserByID 填充, 不可达时降级为空并 warn。
+        api.friend.v1.ListFriendsReply:
+            type: object
+            properties:
+                friends:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.friend.v1.FriendInfo'
+                nextCursor:
+                    type: string
+                    description: 下一页游标。空表示已到末页。
+        api.friend.v1.ListPendingRequestsReply:
+            type: object
+            properties:
+                requests:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.friend.v1.FriendInfo'
+                nextCursor:
+                    type: string
+        api.friend.v1.RejectFriendReply:
+            type: object
+            properties: {}
+        api.friend.v1.RejectFriendRequest:
+            type: object
+            properties:
+                requestId:
+                    type: string
+            description: RejectFriendRequest 拒绝好友申请。
+        api.friend.v1.RemoveFriendReply:
+            type: object
+            properties: {}
+        api.friend.v1.RemoveFriendRequest:
+            type: object
+            properties:
+                friendId:
+                    type: string
+                    description: 对方用户 uid（不是关系记录 ID）。
+            description: RemoveFriendRequest 删除好友。
+tags:
+    - name: Friend

@@ -1,0 +1,227 @@
+syntax = "proto3";
+
+package api.user.v1;
+
+option go_package = "chatroom/api/user/service/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.user.v1";
+option objc_class_prefix = "APIUserV1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/field_mask.proto";
+
+// 全域约定：uid 由 Authorization Bearer 派生，未携带 token 返 401；
+// email / phone 仅「自己看自己」时填充，GetUserByID 查他人永远为空（防社工库）。
+// UserService 用户服务。
+service User {
+    // 注册（username 必填；nickname 留空回退 username）。
+    rpc Register (RegisterRequest) returns (RegisterReply) {
+        option (google.api.http) = {
+            post: "/api/user/register"
+            body: "*"
+        };
+    }
+
+    // 登录。返回 access (15m) + refresh (7d) 双 token；token_type="Bearer"。
+    rpc Login (LoginRequest) returns (LoginReply) {
+        option (google.api.http) = {
+            post: "/api/user/login"
+            body: "*"
+        };
+    }
+
+    // refresh 换新一对；旧 refresh 一次性失效（OAuth rotation）。
+    rpc RefreshToken (RefreshTokenRequest) returns (LoginReply) {
+        option (google.api.http) = {
+            post: "/api/user/refresh"
+            body: "*"
+        };
+    }
+
+    // 登出：access 进 Redis 黑名单 (TTL=剩余寿命) + refresh 删除。
+    rpc Logout (LogoutRequest) returns (LogoutReply) {
+        option (google.api.http) = {
+            post: "/api/user/logout"
+            body: "*"
+        };
+    }
+
+    // 当前用户资料。
+    rpc GetUser (GetUserRequest) returns (UserInfo) {
+        option (google.api.http) = {
+            get: "/api/user/info"
+        };
+    }
+
+    // 更新当前用户；update_mask 列出本次要改的字段，未列字段保留。
+    rpc UpdateUser (UpdateUserRequest) returns (UserInfo) {
+        option (google.api.http) = {
+            put: "/api/user/info"
+            body: "*"
+        };
+    }
+
+    // 改密。旧错 / 用户不存在折叠为同一错误（防撞库枚举），改完强制登出当前会话。
+    rpc ChangePassword (ChangePasswordRequest) returns (ChangePasswordReply) {
+        option (google.api.http) = {
+            post: "/api/user/change_password"
+            body: "*"
+        };
+    }
+
+    // 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
+    rpc GetUserByID (GetUserByIDRequest) returns (UserInfo) {
+        option (google.api.http) = {
+            get: "/api/user/{id}"
+        };
+    }
+
+    // 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
+    rpc GetUsersByIDs (GetUsersByIDsRequest) returns (GetUsersByIDsReply) {
+        option (google.api.http) = {
+            post: "/api/user/batch"
+            body: "*"
+        };
+    }
+
+    // GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
+    //
+    // 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
+    //
+    // 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
+    // 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+    rpc GetFriendProfiles (GetFriendProfilesRequest) returns (GetFriendProfilesReply) {
+        option (google.api.http) = {
+            post: "/api/user/friend_profiles"
+            body: "*"
+        };
+    }
+
+    // GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation 服务补全会话成员列表。
+    //
+    // 跟 GetFriendProfiles 的区别：会话成员未必是好友（群聊可以是陌生人拉进来的），
+    // 但同会话即互相可见昵称/头像，所以同样跳过 is_visible_to_stranger 判定。
+    //
+    // 鉴权：仅供服务间调用，需带 X-Internal-Token。返回的 UserInfo 不含 email / phone。
+    rpc GetConversationMemberProfiles (GetConversationMemberProfilesRequest) returns (GetConversationMemberProfilesReply) {
+        option (google.api.http) = {
+            post: "/api/user/conversation_member_profiles"
+            body: "*"
+        };
+    }
+}
+
+// GetFriendProfilesRequest 批量拉好友公开资料。
+message GetFriendProfilesRequest {
+    // 待查用户 uid 列表。单次最多 200 个，超出截断。
+    repeated string ids = 1;
+}
+
+// GetFriendProfilesReply 返回的公开资料，不含 email / phone。
+message GetFriendProfilesReply {
+    // 顺序与 ids 无关，caller 按 user.id 自行索引。
+    repeated UserInfo users = 1;
+}
+
+// GetConversationMemberProfilesRequest 批量拉会话成员公开资料。
+message GetConversationMemberProfilesRequest {
+    // 待查用户 uid 列表。单次最多 200 个，超出截断。
+    repeated string ids = 1;
+}
+
+// GetConversationMemberProfilesReply 返回的公开资料，不含 email / phone。
+message GetConversationMemberProfilesReply {
+    // 顺序与 ids 无关，caller 按 user.id 自行索引。
+    repeated UserInfo users = 1;
+}
+
+// UserInfo 用户资料。email/phone 仅「自己看自己」时填充（service 层清理）。
+message UserInfo {
+    // 用户 uid，UUIDv7 字符串，不透明且不可枚举。
+    string id = 1;
+    string username = 2;
+    string nickname = 3;
+    string avatar = 4;
+    // Unix 秒，由客户端按 locale 格式化。
+    int64 created_at = 5;
+    optional string email = 6;
+    optional string phone = 7;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  // 留空回退到 username。
+  string nickname = 3;
+}
+
+message RegisterReply {
+  // 新建用户的 uid。
+  string id = 1;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginReply {
+  // 旧字段保留兼容老客户端。
+  string token = 1;
+  string user_id = 2;
+  string access_token = 3;
+  string refresh_token = 4;
+  // access_token 剩余秒数，前端按此提前刷新。
+  int64 expires_in = 5;
+  // OAuth2：固定 "Bearer"。
+  string token_type = 6;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {
+  // access 的 jti 由 middleware 注入 ctx，客户端只需传 refresh。
+  string refresh_token = 1;
+}
+
+message LogoutReply {
+}
+
+message GetUserRequest {
+}
+
+message UpdateUserRequest {
+  string nickname = 1;
+  string avatar = 2;
+  // 列出本次要更新的字段路径；未列出字段保持原值。
+  google.protobuf.FieldMask update_mask = 3;
+}
+
+message ChangePasswordRequest {
+  string old_password = 1;
+  string new_password = 2;
+  // 当前会话的 refresh token。改密后要把它一起撤销 ——
+  // 只拉黑 access token 的话，refresh token 还在，攻击者（或另一台设备）
+  // 还能用它换出新 access token。
+  // 不传就只能撤销 access token（老客户端兼容路径）。
+  string refresh_token = 3;
+}
+
+message ChangePasswordReply {
+}
+
+message GetUserByIDRequest {
+  string id = 1;
+}
+
+// GetUsersByIDsRequest 批量按 ID 列表查公开资料。单次最多 200 个，超出截断。
+message GetUsersByIDsRequest {
+  repeated string ids = 1;
+}
+
+// GetUsersByIDsReply 顺序与 ids 无关，caller 按 user.id 自行索引。
+message GetUsersByIDsReply {
+  repeated UserInfo users = 1;
+}

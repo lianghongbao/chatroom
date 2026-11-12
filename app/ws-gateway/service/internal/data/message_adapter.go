@@ -1,0 +1,71 @@
+package data
+
+import (
+	"context"
+
+	"chatroom/ws-gateway-service/internal/gateway"
+)
+
+// Sender 把 RemoteMessageClient 适配成 gateway.MessageSender。
+// 网关不落库，只把客户端的聊天帧转发给 message 服务。
+type Sender struct {
+	cli RemoteMessageClient
+}
+
+// NewSender 注入 RemoteMessageClient，cli 为 nil 时 Send 返错误。
+func NewSender(cli RemoteMessageClient) *Sender {
+	return &Sender{cli: cli}
+}
+
+// Send 转发一条消息到 message 服务。
+// senderID 只是本地记录，方便排查，message 服务以 token 里的 uid 为准。
+func (s *Sender) Send(ctx context.Context, token string, senderID string, conversationID uint64, msgType uint8, content string) (uint64, int64, error) {
+	if s == nil || s.cli == nil {
+		return 0, 0, errNoRemoteMessage
+	}
+	info, err := s.cli.SendMessage(ctx, token, conversationID, msgType, content)
+	if err != nil {
+		return 0, 0, err
+	}
+	return info.GetId(), info.GetCreatedAt(), nil
+}
+
+// 确保 Sender 满足 gateway.MessageSender —— 编译期检查。
+var _ gateway.MessageSender = (*Sender)(nil)
+
+// Lister 把 RemoteMessageClient 适配成 gateway.MessageLister。
+// 网关断线重连时用它补消息 —— 客户端报「我最后看到的是 id=X」。
+type Lister struct {
+	cli RemoteMessageClient
+}
+
+// NewLister 注入 RemoteMessageClient，cli 为 nil 时 ListSince 返错误。
+func NewLister(cli RemoteMessageClient) *Lister {
+	return &Lister{cli: cli}
+}
+
+// ListSince 拉「id 严格大于 sinceID」的消息。
+func (l *Lister) ListSince(ctx context.Context, token string, conversationID, sinceID uint64, limit int32) ([]gateway.MessageInfo, uint64, bool, error) {
+	if l == nil || l.cli == nil {
+		return nil, 0, false, errNoRemoteMessage
+	}
+	infos, last, hasMore, err := l.cli.ListMessagesSince(ctx, token, conversationID, sinceID, limit)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	out := make([]gateway.MessageInfo, 0, len(infos))
+	for _, info := range infos {
+		out = append(out, gateway.MessageInfo{
+			ID:             info.GetId(),
+			ConversationID: info.GetConversationId(),
+			SenderID:       info.GetSenderId(),
+			Type:           uint8(info.GetType()),
+			Content:        info.GetContent(),
+			CreatedAt:      info.GetCreatedAt(),
+		})
+	}
+	return out, last, hasMore, nil
+}
+
+// 确保 Lister 满足 gateway.MessageLister —— 编译期检查。
+var _ gateway.MessageLister = (*Lister)(nil)

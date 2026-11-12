@@ -1,0 +1,31 @@
+# 构建上下文是仓库根目录（服务依赖同仓的 pkg/ 和 contracts/ 契约 module）。
+# 这里排除掉跟镜像构建无关的东西 —— 尤其是各服务的 bin/ 产物，
+# 不排除的话每次构建都要把它们传给 docker daemon。
+
+# 各服务的编译产物
+*/bin/
+bin/
+
+# 本地依赖目录（模块已经 vendored 进 go.sum，不进镜像）
+*/vendor/
+
+# git
+.git/
+.gitignore
+.gitattributes
+
+# 开发工具的配置
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 日志和证书
+*.log
+*.cert
+*.key
+
+# 文档
+*.md
+!*/deploy/k8s/*.md

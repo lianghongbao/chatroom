@@ -1,0 +1,7 @@
+version: v2
+# 本服务的 buf module 根就是服务目录 —— proto 的 import 路径相对这里解析。
+#
+# 本服务没有业务 proto（网关不定义 gRPC 契约，只调别人的），所以不需要
+# vendored 的 google/api/。buf build / generate 不需要网络。
+modules:
+  - path: .

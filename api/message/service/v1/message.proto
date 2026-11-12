@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package api.message.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "chatroom/api/message/service/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.message.v1";
+option objc_class_prefix = "APIMessageV1";
+
+// MessageService 消息服务：消息落库 + 历史消息分页 + 未读数。
+//
+// 实时推送不在这里做 —— 发消息时发到 Redis Pub/Sub 频道，ws-gateway 订阅后推给目标连接。
+// 网关无状态，靠 Pub/Sub 天然支持多实例水平扩展（PRD §四）。
+service Message {
+    // SendMessage 发消息。落库后广播。
+    // 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+    rpc SendMessage (SendMessageRequest) returns (SendMessageReply) {
+        option (google.api.http) = {
+            post: "/api/message/send"
+            body: "*"
+        };
+    }
+
+    // ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
+    // 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+    rpc ListMessages (ListMessagesRequest) returns (ListMessagesReply) {
+        option (google.api.http) = {
+            get: "/api/message/list"
+        };
+    }
+
+    // ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
+    // 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
+    // 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+    rpc ListMessagesSince (ListMessagesSinceRequest) returns (ListMessagesSinceReply) {
+        option (google.api.http) = {
+            get: "/api/message/since"
+        };
+    }
+
+    // MarkRead 清零某个会话的未读数。只清调用方自己的。
+    rpc MarkRead (MarkReadRequest) returns (MarkReadReply) {
+        option (google.api.http) = {
+            post: "/api/message/read"
+            body: "*"
+        };
+    }
+
+    // GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
+    rpc GetUnreadCount (GetUnreadCountRequest) returns (GetUnreadCountReply) {
+        option (google.api.http) = {
+            get: "/api/message/unread"
+        };
+    }
+}
+
+// MessageType 消息类型。
+enum MessageType {
+    MESSAGE_TYPE_UNSPECIFIED = 0;
+    // 文本。
+    MESSAGE_TYPE_TEXT = 1;
+    // 图片 —— content 存图片 URL。
+    MESSAGE_TYPE_IMAGE = 2;
+}
+
+// MessageInfo 一条消息。
+message MessageInfo {
+    // 消息 ID。会话内单调递增。
+    uint64 id = 1;
+    // 所属会话 ID。
+    uint64 conversation_id = 2;
+    // 发送者 uid。
+    string sender_id = 3;
+    // 消息类型。
+    MessageType type = 4;
+    // 消息内容。文本消息是原文，图片消息是图片 URL。
+    string content = 5;
+    // 发送时间（Unix 秒）。
+    int64 created_at = 6;
+}
+
+// SendMessageRequest 发消息。
+message SendMessageRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 消息类型。缺省按文本处理。
+    MessageType type = 2;
+    // 消息内容。文本消息是原文，图片消息是图片 URL。≤ 4000 字符。
+    string content = 3;
+}
+
+// SendMessageReply 发消息的返回。
+message SendMessageReply {
+    // 落库后的消息（含 id / created_at）。
+    MessageInfo message = 1;
+}
+
+// ListMessagesRequest 拉历史消息。
+message ListMessagesRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 游标：上一页最后一条消息的 id。首次留空（从最新一条开始拉）。
+    // 语义是「比这个 id 更旧的」，按 id 倒序返回。
+    uint64 cursor = 2;
+    // 单页大小。1..200 合法；<= 0 折叠到 50 默认；> 200 截到 200。
+    int32 page_size = 3;
+}
+
+// ListMessagesReply 历史消息。
+message ListMessagesReply {
+    // 消息列表，按 id 倒序（新的在前）。
+    repeated MessageInfo messages = 1;
+    // 下一页游标。空表示没有更多了。
+    uint64 next_cursor = 2;
+}
+
+// ListMessagesSinceRequest 拉「比某个 id 更新的」消息。
+message ListMessagesSinceRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 基准消息 id。返回 id 严格大于它的消息。0 表示从头拉。
+    uint64 since_id = 2;
+    // 单页大小。1..200 合法；<= 0 折叠到 50 默认；> 200 截到 200。
+    int32 page_size = 3;
+}
+
+// ListMessagesSinceReply 增量消息。
+message ListMessagesSinceReply {
+    // 消息列表，按 id 正序（旧的在前）—— 客户端按顺序补进本地列表。
+    repeated MessageInfo messages = 1;
+    // 最后一条消息的 id。客户端拿它当下次重连的 since_id。没有消息时为 0。
+    uint64 last_message_id = 2;
+    // 还有更多吗。为 true 时客户端应该继续拉（用 last_message_id 当 since_id）。
+    bool has_more = 3;
+}
+
+// MarkReadRequest 清未读数。
+message MarkReadRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+}
+
+// MarkReadReply 清未读数的结果。
+message MarkReadReply {
+    // 清零后的未读数（正常是 0）。
+    uint32 unread_count = 1;
+}
+
+// GetUnreadCountRequest 查未读数。
+message GetUnreadCountRequest {
+    // 会话 ID。不传（0）表示查所有会话的未读总数。
+    uint64 conversation_id = 1;
+}
+
+// GetUnreadCountReply 未读数。
+message GetUnreadCountReply {
+    // 未读数。
+    uint32 unread_count = 1;
+    // 各会话的未读数，key 是 conversation_id。只在没指定 conversation_id 时有值。
+    map<uint64, uint32> per_conversation = 2;
+}

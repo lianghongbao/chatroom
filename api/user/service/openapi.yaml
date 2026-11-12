@@ -1,0 +1,385 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: User API
+    description: |-
+        全域约定：uid 由 Authorization Bearer 派生，未携带 token 返 401；
+         email / phone 仅「自己看自己」时填充，GetUserByID 查他人永远为空（防社工库）。
+         UserService 用户服务。
+    version: 0.0.1
+paths:
+    /api/user/batch:
+        post:
+            tags:
+                - User
+            description: 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
+            operationId: User_GetUsersByIDs
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.GetUsersByIDsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.GetUsersByIDsReply'
+    /api/user/change_password:
+        post:
+            tags:
+                - User
+            description: 改密。旧错 / 用户不存在折叠为同一错误（防撞库枚举），改完强制登出当前会话。
+            operationId: User_ChangePassword
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.ChangePasswordRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.ChangePasswordReply'
+    /api/user/conversation_member_profiles:
+        post:
+            tags:
+                - User
+            description: |-
+                GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation 服务补全会话成员列表。
+
+                 跟 GetFriendProfiles 的区别：会话成员未必是好友（群聊可以是陌生人拉进来的），
+                 但同会话即互相可见昵称/头像，所以同样跳过 is_visible_to_stranger 判定。
+
+                 鉴权：仅供服务间调用，需带 X-Internal-Token。返回的 UserInfo 不含 email / phone。
+            operationId: User_GetConversationMemberProfiles
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.GetConversationMemberProfilesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.GetConversationMemberProfilesReply'
+    /api/user/friend_profiles:
+        post:
+            tags:
+                - User
+            description: |-
+                GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
+
+                 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
+
+                 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
+                 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+            operationId: User_GetFriendProfiles
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.GetFriendProfilesRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.GetFriendProfilesReply'
+    /api/user/info:
+        get:
+            tags:
+                - User
+            description: 当前用户资料。
+            operationId: User_GetUser
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.UserInfo'
+        put:
+            tags:
+                - User
+            description: 更新当前用户；update_mask 列出本次要改的字段，未列字段保留。
+            operationId: User_UpdateUser
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.UpdateUserRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.UserInfo'
+    /api/user/login:
+        post:
+            tags:
+                - User
+            description: 登录。返回 access (15m) + refresh (7d) 双 token；token_type="Bearer"。
+            operationId: User_Login
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.LoginRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.LoginReply'
+    /api/user/logout:
+        post:
+            tags:
+                - User
+            description: 登出：access 进 Redis 黑名单 (TTL=剩余寿命) + refresh 删除。
+            operationId: User_Logout
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.LogoutRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.LogoutReply'
+    /api/user/refresh:
+        post:
+            tags:
+                - User
+            description: refresh 换新一对；旧 refresh 一次性失效（OAuth rotation）。
+            operationId: User_RefreshToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.RefreshTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.LoginReply'
+    /api/user/register:
+        post:
+            tags:
+                - User
+            description: 注册（username 必填；nickname 留空回退 username）。
+            operationId: User_Register
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.RegisterRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.RegisterReply'
+    /api/user/{id}:
+        get:
+            tags:
+                - User
+            description: 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
+            operationId: User_GetUserByID
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.UserInfo'
+components:
+    schemas:
+        api.user.v1.ChangePasswordReply:
+            type: object
+            properties: {}
+        api.user.v1.ChangePasswordRequest:
+            type: object
+            properties:
+                oldPassword:
+                    type: string
+                newPassword:
+                    type: string
+                refreshToken:
+                    type: string
+                    description: |-
+                        当前会话的 refresh token。改密后要把它一起撤销 ——
+                         只拉黑 access token 的话，refresh token 还在，攻击者（或另一台设备）
+                         还能用它换出新 access token。
+                         不传就只能撤销 access token（老客户端兼容路径）。
+        api.user.v1.GetConversationMemberProfilesReply:
+            type: object
+            properties:
+                users:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.user.v1.UserInfo'
+                    description: 顺序与 ids 无关，caller 按 user.id 自行索引。
+            description: GetConversationMemberProfilesReply 返回的公开资料，不含 email / phone。
+        api.user.v1.GetConversationMemberProfilesRequest:
+            type: object
+            properties:
+                ids:
+                    type: array
+                    items:
+                        type: string
+                    description: 待查用户 uid 列表。单次最多 200 个，超出截断。
+            description: GetConversationMemberProfilesRequest 批量拉会话成员公开资料。
+        api.user.v1.GetFriendProfilesReply:
+            type: object
+            properties:
+                users:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.user.v1.UserInfo'
+                    description: 顺序与 ids 无关，caller 按 user.id 自行索引。
+            description: GetFriendProfilesReply 返回的公开资料，不含 email / phone。
+        api.user.v1.GetFriendProfilesRequest:
+            type: object
+            properties:
+                ids:
+                    type: array
+                    items:
+                        type: string
+                    description: 待查用户 uid 列表。单次最多 200 个，超出截断。
+            description: GetFriendProfilesRequest 批量拉好友公开资料。
+        api.user.v1.GetUsersByIDsReply:
+            type: object
+            properties:
+                users:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.user.v1.UserInfo'
+            description: GetUsersByIDsReply 顺序与 ids 无关，caller 按 user.id 自行索引。
+        api.user.v1.GetUsersByIDsRequest:
+            type: object
+            properties:
+                ids:
+                    type: array
+                    items:
+                        type: string
+            description: GetUsersByIDsRequest 批量按 ID 列表查公开资料。单次最多 200 个，超出截断。
+        api.user.v1.LoginReply:
+            type: object
+            properties:
+                token:
+                    type: string
+                    description: 旧字段保留兼容老客户端。
+                userId:
+                    type: string
+                accessToken:
+                    type: string
+                refreshToken:
+                    type: string
+                expiresIn:
+                    type: string
+                    description: access_token 剩余秒数，前端按此提前刷新。
+                tokenType:
+                    type: string
+                    description: OAuth2：固定 "Bearer"。
+        api.user.v1.LoginRequest:
+            type: object
+            properties:
+                username:
+                    type: string
+                password:
+                    type: string
+        api.user.v1.LogoutReply:
+            type: object
+            properties: {}
+        api.user.v1.LogoutRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+                    description: access 的 jti 由 middleware 注入 ctx，客户端只需传 refresh。
+        api.user.v1.RefreshTokenRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+        api.user.v1.RegisterReply:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 新建用户的 uid。
+        api.user.v1.RegisterRequest:
+            type: object
+            properties:
+                username:
+                    type: string
+                password:
+                    type: string
+                nickname:
+                    type: string
+                    description: 留空回退到 username。
+        api.user.v1.UpdateUserRequest:
+            type: object
+            properties:
+                nickname:
+                    type: string
+                avatar:
+                    type: string
+                updateMask:
+                    type: string
+                    description: 列出本次要更新的字段路径；未列出字段保持原值。
+                    format: field-mask
+        api.user.v1.UserInfo:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 用户 uid，UUIDv7 字符串，不透明且不可枚举。
+                username:
+                    type: string
+                nickname:
+                    type: string
+                avatar:
+                    type: string
+                createdAt:
+                    type: string
+                    description: Unix 秒，由客户端按 locale 格式化。
+                email:
+                    type: string
+                phone:
+                    type: string
+            description: UserInfo 用户资料。email/phone 仅「自己看自己」时填充（service 层清理）。
+tags:
+    - name: User

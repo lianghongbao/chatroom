@@ -1,0 +1,244 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: Message API
+    description: |-
+        MessageService 消息服务：消息落库 + 历史消息分页 + 未读数。
+
+         实时推送不在这里做 —— 发消息时发到 Redis Pub/Sub 频道，ws-gateway 订阅后推给目标连接。
+         网关无状态，靠 Pub/Sub 天然支持多实例水平扩展（PRD §四）。
+    version: 0.0.1
+paths:
+    /api/message/list:
+        get:
+            tags:
+                - Message
+            description: |-
+                ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
+                 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+            operationId: Message_ListMessages
+            parameters:
+                - name: conversationId
+                  in: query
+                  description: 会话 ID。
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  description: |-
+                    游标：上一页最后一条消息的 id。首次留空（从最新一条开始拉）。
+                     语义是「比这个 id 更旧的」，按 id 倒序返回。
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: 单页大小。1..200 合法；<= 0 折叠到 50 默认；> 200 截到 200。
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.message.v1.ListMessagesReply'
+    /api/message/read:
+        post:
+            tags:
+                - Message
+            description: MarkRead 清零某个会话的未读数。只清调用方自己的。
+            operationId: Message_MarkRead
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.message.v1.MarkReadRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.message.v1.MarkReadReply'
+    /api/message/send:
+        post:
+            tags:
+                - Message
+            description: |-
+                SendMessage 发消息。落库后广播。
+                 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+            operationId: Message_SendMessage
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.message.v1.SendMessageRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.message.v1.SendMessageReply'
+    /api/message/since:
+        get:
+            tags:
+                - Message
+            description: |-
+                ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
+                 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
+                 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+            operationId: Message_ListMessagesSince
+            parameters:
+                - name: conversationId
+                  in: query
+                  description: 会话 ID。
+                  schema:
+                    type: string
+                - name: sinceId
+                  in: query
+                  description: 基准消息 id。返回 id 严格大于它的消息。0 表示从头拉。
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: 单页大小。1..200 合法；<= 0 折叠到 50 默认；> 200 截到 200。
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.message.v1.ListMessagesSinceReply'
+    /api/message/unread:
+        get:
+            tags:
+                - Message
+            description: GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
+            operationId: Message_GetUnreadCount
+            parameters:
+                - name: conversationId
+                  in: query
+                  description: 会话 ID。不传（0）表示查所有会话的未读总数。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.message.v1.GetUnreadCountReply'
+components:
+    schemas:
+        api.message.v1.GetUnreadCountReply:
+            type: object
+            properties:
+                unreadCount:
+                    type: integer
+                    description: 未读数。
+                    format: uint32
+                perConversation:
+                    type: object
+                    additionalProperties:
+                        type: integer
+                        format: uint32
+                    description: 各会话的未读数，key 是 conversation_id。只在没指定 conversation_id 时有值。
+            description: GetUnreadCountReply 未读数。
+        api.message.v1.ListMessagesReply:
+            type: object
+            properties:
+                messages:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.message.v1.MessageInfo'
+                    description: 消息列表，按 id 倒序（新的在前）。
+                nextCursor:
+                    type: string
+                    description: 下一页游标。空表示没有更多了。
+            description: ListMessagesReply 历史消息。
+        api.message.v1.ListMessagesSinceReply:
+            type: object
+            properties:
+                messages:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.message.v1.MessageInfo'
+                    description: 消息列表，按 id 正序（旧的在前）—— 客户端按顺序补进本地列表。
+                lastMessageId:
+                    type: string
+                    description: 最后一条消息的 id。客户端拿它当下次重连的 since_id。没有消息时为 0。
+                hasMore:
+                    type: boolean
+                    description: 还有更多吗。为 true 时客户端应该继续拉（用 last_message_id 当 since_id）。
+            description: ListMessagesSinceReply 增量消息。
+        api.message.v1.MarkReadReply:
+            type: object
+            properties:
+                unreadCount:
+                    type: integer
+                    description: 清零后的未读数（正常是 0）。
+                    format: uint32
+            description: MarkReadReply 清未读数的结果。
+        api.message.v1.MarkReadRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+            description: MarkReadRequest 清未读数。
+        api.message.v1.MessageInfo:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 消息 ID。会话内单调递增。
+                conversationId:
+                    type: string
+                    description: 所属会话 ID。
+                senderId:
+                    type: string
+                    description: 发送者 uid。
+                type:
+                    type: integer
+                    description: 消息类型。
+                    format: enum
+                content:
+                    type: string
+                    description: 消息内容。文本消息是原文，图片消息是图片 URL。
+                createdAt:
+                    type: string
+                    description: 发送时间（Unix 秒）。
+            description: MessageInfo 一条消息。
+        api.message.v1.SendMessageReply:
+            type: object
+            properties:
+                message:
+                    allOf:
+                        - $ref: '#/components/schemas/api.message.v1.MessageInfo'
+                    description: 落库后的消息（含 id / created_at）。
+            description: SendMessageReply 发消息的返回。
+        api.message.v1.SendMessageRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                type:
+                    type: integer
+                    description: 消息类型。缺省按文本处理。
+                    format: enum
+                content:
+                    type: string
+                    description: 消息内容。文本消息是原文，图片消息是图片 URL。≤ 4000 字符。
+            description: SendMessageRequest 发消息。
+tags:
+    - name: Message
