@@ -35,6 +35,19 @@ bin/
 # 恢复过程的临时目录
 .recover/
 
+# Go 工作区（整仓一个 module，不需要 go.work）
+go.work
+go.work.sum
+
+# 本地环境覆盖（生产凭证走 env 注入，不进版本库）
+.env
+.env.local
+*.env.local
+
+# 覆盖率报告
+coverage.out
+coverage.html
+
 # Develop tools
 .vscode/
 .idea/
