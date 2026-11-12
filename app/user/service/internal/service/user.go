@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 
-	"chatroom/pkg/middleware"
 	pb "chatroom/api/user/service/v1"
 	"chatroom/app/user/service/internal/biz"
 	"chatroom/app/user/service/internal/conf"
+	"chatroom/pkg/middleware"
 
 	"github.com/go-kratos/kratos/v3/log"
 )

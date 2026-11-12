@@ -29,8 +29,11 @@ Thumbs.db
 *.log
 bin/
 
-# 契约生成用的 protoc 插件缓存（contracts/gen.sh）
+# 契约生成用的 protoc 插件缓存（api/gen.sh / app/gen-conf.sh）
 .cache/
+
+# 恢复过程的临时目录
+.recover/
 
 # Develop tools
 .vscode/

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"chatroom/pkg/testutil"
 	"chatroom/app/user/service/internal/biz"
 	"chatroom/app/user/service/internal/conf"
+	"chatroom/pkg/testutil"
 
 	"github.com/redis/go-redis/v9"
 )
