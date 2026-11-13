@@ -14,7 +14,7 @@ var (
 		{Name: "type", Type: field.TypeUint8, Comment: "会话类型 1=单聊 2=群聊", Default: 1},
 		{Name: "name", Type: field.TypeString, Size: 128, Comment: "群名, 单聊为空, ≤ 128 字符", Default: ""},
 		{Name: "owner_id", Type: field.TypeString, Size: 36, Comment: "群主 uid (UUIDv7 字符串), 单聊为空串", Default: ""},
-		{Name: "pair_key", Type: field.TypeString, Nullable: true, Size: 32, Comment: "单聊成员对键 'uid1,uid2', 群聊为 NULL"},
+		{Name: "pair_key", Type: field.TypeString, Nullable: true, Size: 73, Comment: "单聊成员对键 'uid1,uid2', 群聊为 NULL"},
 		{Name: "created_at", Type: field.TypeTime, Comment: "创建时间"},
 		{Name: "updated_at", Type: field.TypeTime, Comment: "最后活动时间", SchemaType: map[string]string{"mysql": "datetime(6)"}},
 	}

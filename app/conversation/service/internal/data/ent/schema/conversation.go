@@ -42,14 +42,18 @@ func (Conversation) Fields() []ent.Field {
 		// 群主 uid。单聊为 0。
 		// 群主 uid（UUIDv7 字符串）。单聊为空串。
 		field.String("owner_id").Default("").MaxLen(36).Comment("群主 uid (UUIDv7 字符串), 单聊为空串"),
-		// 单聊的成员对键，形如 "10,20"（两个 uid 升序拼接）。
+		// 单聊的成员对键，形如 "uid1,uid2"（两个 uid 升序拼接）。
 		//
 		// 群聊为 NULL。这列的唯一索引就是"单聊唯一"的数据库级约束 ——
 		// 并发建同一对成员的单聊时，两个请求都会尝试插入同一个 pair_key，
 		// 第二个被唯一索引挡下。事务外的预查挡不住并发，真正的仲裁在索引上。
 		//
 		// MySQL 唯一索引允许存在多个 NULL，所以群聊之间不会互相冲突。
-		field.String("pair_key").Optional().Nillable().MaxLen(32).Comment("单聊成员对键 'uid1,uid2', 群聊为 NULL"),
+		//
+		// 长度按 UUIDv7 字符串算：两个 uid 各 36 字符 + 一个逗号 = 73。
+		// 之前留的是 32 —— 那是数字 uid 时代的长度，改用字符串 uid 后
+		// auto_migrate 要把列缩窄，就会撞上「存量行比新列长」而报错。
+		field.String("pair_key").Optional().Nillable().MaxLen(73).Comment("单聊成员对键 'uid1,uid2', 群聊为 NULL"),
 		field.Time("created_at").Immutable().Default(time.Now).Comment("创建时间"),
 		// 最后活动时间。成员变动 / 改名 / 有新消息时更新，会话列表按它倒序。
 		//
