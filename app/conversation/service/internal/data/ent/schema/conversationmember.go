@@ -19,7 +19,7 @@ type ConversationMember struct {
 	ent.Schema
 }
 
-// Annotations of the ConversationMember.
+// ConversationMember 的表注解。
 func (ConversationMember) Annotations() []schema.Annotation {
 	// 把字段 Comment 同步写到 MySQL DDL 的列备注里，便于运维核对语义。
 	return []schema.Annotation{
@@ -27,7 +27,7 @@ func (ConversationMember) Annotations() []schema.Annotation {
 	}
 }
 
-// Fields of the ConversationMember.
+// ConversationMember 的字段。
 func (ConversationMember) Fields() []ent.Field {
 	return []ent.Field{
 		field.Uint64("id").Comment("主键, 自增"),
@@ -39,7 +39,7 @@ func (ConversationMember) Fields() []ent.Field {
 	}
 }
 
-// Indexes of the ConversationMember.
+// ConversationMember 的索引。
 func (ConversationMember) Indexes() []ent.Index {
 	return []ent.Index{
 		// 同一会话内不能有重复成员。also serves 幂等写入。
@@ -49,7 +49,7 @@ func (ConversationMember) Indexes() []ent.Index {
 	}
 }
 
-// Edges of the ConversationMember.
+// ConversationMember 的关联边。
 func (ConversationMember) Edges() []ent.Edge {
 	return []ent.Edge{
 		// 到会话的边。与 Conversation.Members 构成一对多。

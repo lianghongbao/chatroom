@@ -23,7 +23,7 @@ type Friend struct {
 	ent.Schema
 }
 
-// Annotations of the Friend.
+// Friend 的表注解。
 func (Friend) Annotations() []schema.Annotation {
 	// 把字段的 Comment 同步写到 MySQL DDL 的列备注里 (auto_migrate 时
 	// 由 ent 编译成 ALTER TABLE ... MODIFY COLUMN ... COMMENT '...')，
@@ -33,7 +33,7 @@ func (Friend) Annotations() []schema.Annotation {
 	}
 }
 
-// Fields of the Friend.
+// Friend 的字段。
 func (Friend) Fields() []ent.Field {
 	return []ent.Field{
 		field.Uint64("id").
@@ -68,7 +68,7 @@ func (Friend) Fields() []ent.Field {
 	}
 }
 
-// Indexes of the Friend.
+// Friend 的索引。
 func (Friend) Indexes() []ent.Index {
 	return []ent.Index{
 		// 复合唯一: 同一对 (user_id, friend_id) 只能有一条记录,
