@@ -55,6 +55,10 @@ func (r *fakeUserRepo) FindByID(ctx context.Context, id string) (*User, error) {
 	return u, nil
 }
 
+func (r *fakeUserRepo) FindByIDWithHash(ctx context.Context, id string) (*User, error) {
+	return r.FindByID(ctx, id)
+}
+
 func (r *fakeUserRepo) FindByUsername(ctx context.Context, username string) (*User, error) {
 	for _, u := range r.users {
 		if u.Username == username {

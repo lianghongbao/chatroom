@@ -75,6 +75,19 @@ func (r *userRepo) FindByID(ctx context.Context, id string) (*biz.User, error) {
 	return toBizUser(po, true), nil
 }
 
+// FindByIDWithHash 按主键查用户，**保留 PasswordHash**。
+// clearHash=false：改密要拿哈希跟旧密码比对
+func (r *userRepo) FindByIDWithHash(ctx context.Context, id string) (*biz.User, error) {
+	po, err := r.data.db.User.Get(ctx, id)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, biz.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return toBizUser(po, false), nil
+}
+
 // FindByUsername 按用户名查用户；找不到返 ErrUserNotFound；返回的 DO 保留 PasswordHash（供 Login bcrypt 比对）
 func (r *userRepo) FindByUsername(ctx context.Context, username string) (*biz.User, error) {
 	po, err := r.data.db.User.Query().Where(user.UsernameEQ(username)).Only(ctx)

@@ -103,6 +103,10 @@ func (f *fakeRepo) FindByID(_ context.Context, id string) (*biz.User, error) {
 	return f.findByIDRet, nil
 }
 
+func (f *fakeRepo) FindByIDWithHash(ctx context.Context, id string) (*biz.User, error) {
+	return f.FindByID(ctx, id)
+}
+
 func (f *fakeRepo) FindByUsername(_ context.Context, username string) (*biz.User, error) {
 	if f.findByUsernameErr != nil {
 		return nil, f.findByUsernameErr

@@ -147,6 +147,10 @@ func (u *User) IsBanned() bool {
 type UserRepo interface {
 	Save(ctx context.Context, u *User) (string, error)
 	FindByID(ctx context.Context, id string) (*User, error)
+	// FindByIDWithHash 与 FindByID 同义，但**保留 PasswordHash**。
+	// 改密要拿哈希跟旧密码比对，走 FindByID 会拿到空哈希 —— 比对必然失败，
+	// 表现为「旧密码永远不对」。
+	FindByIDWithHash(ctx context.Context, id string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	// 批量查；找不到的 id 在结果中不出现，不返错。返回顺序与 ids 无关
 	FindByIDs(ctx context.Context, ids []string) ([]*User, error)
@@ -768,7 +772,7 @@ func (uc *UserUsecase) ChangePassword(ctx context.Context, uid string, oldPasswo
 		return ErrUserInvalidArgument
 	}
 
-	u, err := uc.repo.FindByID(ctx, uid)
+	u, err := uc.repo.FindByIDWithHash(ctx, uid)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			uc.notifyFailure(ctx, "", "")
