@@ -31,6 +31,11 @@ var (
 				Columns: []*schema.Column{FriendsColumns[1], FriendsColumns[2]},
 			},
 			{
+				Name:    "friend_pair_key",
+				Unique:  true,
+				Columns: []*schema.Column{FriendsColumns[3]},
+			},
+			{
 				Name:    "friend_friend_id",
 				Unique:  false,
 				Columns: []*schema.Column{FriendsColumns[2]},

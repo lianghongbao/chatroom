@@ -74,6 +74,11 @@ func (Friend) Indexes() []ent.Index {
 		// 复合唯一: 同一对 (user_id, friend_id) 只能有一条记录,
 		// 并发 Apply 唯一索引兜底 (Register 路径同样的设计)。
 		index.Fields("user_id", "friend_id").Unique(),
+		// pair_key 唯一: 归一化后 "a,b" 和 "b,a" 落到同一个键 ——
+		// 反向并发申请（A 申请 B 同时 B 申请 A）时,上面那个复合索引挡不住
+		// (方向不同),真正的仲裁者是这个唯一索引。
+		// 缺了它,反向并发会建出两条互相矛盾的关系记录。
+		index.Fields("pair_key").Unique(),
 		// 反向查询: "我被谁申请了" / Accept/Reject 阶段按 friend_id 找
 		// 待确认的记录。
 		index.Fields("friend_id"),
