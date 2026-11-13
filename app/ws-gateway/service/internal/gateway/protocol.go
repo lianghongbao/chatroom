@@ -83,12 +83,16 @@ type ResumeData struct {
 	HasMore bool `json:"has_more"`
 }
 
-// EncodeServerFrame 把下行帧编成 JSON，t 是帧类型，data 是载荷。
+// EncodeServerFrame 把下行帧编成 JSON。
+// t 帧类型
+// data 载荷
 func EncodeServerFrame(t FrameType, data any) ([]byte, error) {
 	return json.Marshal(&ServerFrame{Type: t, Data: data})
 }
 
-// EncodeErrorFrame 编一个错误帧，msg 是给客户端看的话，code 是错误码。
+// EncodeErrorFrame 编一个错误帧。
+// msg 给客户端看的话
+// code 错误码
 func EncodeErrorFrame(msg string, code string) []byte {
 	b, err := EncodeServerFrame(FrameError, &ErrorData{Message: msg, Code: code})
 	if err != nil {
@@ -104,31 +108,37 @@ func EncodePongFrame() []byte {
 	return b
 }
 
-// EncodeOnlineFrame 编一个在线状态帧，userID 是用户 ID，online 是是否在线。
+// EncodeOnlineFrame 编一个在线状态帧。
+// userID 用户 ID
+// online 是否在线
 func EncodeOnlineFrame(userID string, online bool) []byte {
 	b, _ := EncodeServerFrame(FrameOnline, &OnlineData{UserID: userID, Online: online})
 	return b
 }
 
-// EncodeMessageFrame 编一个消息帧，d 是消息内容。
+// EncodeMessageFrame 编一个消息帧。
+// d 消息内容
 func EncodeMessageFrame(d *MessageData) []byte {
 	b, _ := EncodeServerFrame(FrameMessage, d)
 	return b
 }
 
-// EncodeAckFrame 编一个 ack 帧，d 是落库后的消息 id 与时间。
+// EncodeAckFrame 编一个 ack 帧。
+// d 落库后的消息 id 与时间
 func EncodeAckFrame(d *AckData) []byte {
 	b, _ := EncodeServerFrame(FrameAck, d)
 	return b
 }
 
-// EncodeResumeResultFrame 编一个断线重连结果帧，d 是补消息的结果。
+// EncodeResumeResultFrame 编一个断线重连结果帧。
+// d 补消息的结果
 func EncodeResumeResultFrame(d *ResumeData) []byte {
 	b, _ := EncodeServerFrame(FrameResumeResult, d)
 	return b
 }
 
-// DecodeClientFrame 解析客户端上行帧，payload 是原始帧内容。
+// DecodeClientFrame 解析客户端上行帧。
+// payload 原始帧内容
 func DecodeClientFrame(payload []byte) (*ClientFrame, error) {
 	var f ClientFrame
 	if err := json.Unmarshal(payload, &f); err != nil {
@@ -137,7 +147,8 @@ func DecodeClientFrame(payload []byte) (*ClientFrame, error) {
 	return &f, nil
 }
 
-// messageChannel 会话对应的 Pub/Sub 频道名，conversationID 是会话 ID。
+// messageChannel 会话对应的 Pub/Sub 频道名。
+// conversationID 会话 ID
 func messageChannel(conversationID uint64) string {
 	return keys.MessageChannel(conversationID)
 }

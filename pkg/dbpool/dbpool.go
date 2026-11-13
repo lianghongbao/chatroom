@@ -31,7 +31,8 @@ type Options struct {
 	ConnMaxIdleTime time.Duration
 }
 
-// Resolve 补齐缺省值。每一项 <= 0 都用默认值。o 是待补齐的参数。
+// Resolve 补齐缺省值。每一项 <= 0 都用默认值。
+// o 待补齐的参数
 func Resolve(o Options) Options {
 	if o.MaxOpenConns <= 0 {
 		o.MaxOpenConns = DefaultMaxOpenConns
@@ -48,8 +49,9 @@ func Resolve(o Options) Options {
 	return o
 }
 
-// Apply 把参数落到 *sql.DB 上。db 是数据库句柄，为 nil 时什么都不做；
-// o 是连接池参数。
+// Apply 把参数落到 *sql.DB 上。
+// db 数据库句柄，为 nil 时什么都不做
+// o 连接池参数
 func Apply(db *sql.DB, o Options) {
 	if db == nil {
 		return

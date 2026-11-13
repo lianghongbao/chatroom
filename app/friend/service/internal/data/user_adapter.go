@@ -13,7 +13,8 @@ type FriendAdapter struct {
 	cli RemoteUserClient
 }
 
-// NewFriendAdapter 构造 FriendAdapter。cli 是下游客户端，nil 时仍可用。
+// NewFriendAdapter 构造 FriendAdapter。
+// cli 下游客户端
 func NewFriendAdapter(cli RemoteUserClient) *FriendAdapter {
 	return &FriendAdapter{cli: cli}
 }

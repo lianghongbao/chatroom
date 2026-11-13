@@ -21,7 +21,9 @@ type loginLimiter struct {
 	lockedKey func(string, string) string
 }
 
-// NewLoginLimiter 构造登录限频器。d 是存储客户端，auth 是鉴权配置段；
+// NewLoginLimiter 构造登录限频器。
+// d 存储客户端
+// auth 鉴权配置段
 // Auth / Redis 任一缺失返 nil，biz 层关掉限频。
 func NewLoginLimiter(d *Data, auth *conf.Auth) biz.LoginLimiter {
 	if d == nil || d.Redis() == nil || auth == nil {

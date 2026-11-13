@@ -16,7 +16,8 @@ type MembershipAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewMembershipAdapter 注入 RemoteConversationClient，cli 是远端客户端，
+// NewMembershipAdapter 注入 RemoteConversationClient。
+// cli 远端客户端
 // 为 nil 时 IsMember 返错误。
 func NewMembershipAdapter(cli RemoteConversationClient) *MembershipAdapter {
 	return &MembershipAdapter{cli: cli}
@@ -37,7 +38,8 @@ type UnreadAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewUnreadAdapter 注入 RemoteConversationClient，cli 是远端客户端，
+// NewUnreadAdapter 注入 RemoteConversationClient。
+// cli 远端客户端
 // 为 nil 时所有方法返错误。
 func NewUnreadAdapter(cli RemoteConversationClient) *UnreadAdapter {
 	return &UnreadAdapter{cli: cli}
@@ -83,7 +85,8 @@ type MembersAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewMembersAdapter 注入 RemoteConversationClient，cli 是远端客户端，
+// NewMembersAdapter 注入 RemoteConversationClient。
+// cli 远端客户端
 // 为 nil 时 ListConversationMembers 返错误。
 func NewMembersAdapter(cli RemoteConversationClient) *MembersAdapter {
 	return &MembersAdapter{cli: cli}
@@ -102,7 +105,8 @@ type MemberListerAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewMemberListerAdapter 注入 RemoteConversationClient，cli 是远端客户端，
+// NewMemberListerAdapter 注入 RemoteConversationClient。
+// cli 远端客户端
 // 为 nil 时 ListConversationMembers 返错误。
 func NewMemberListerAdapter(cli RemoteConversationClient) *MemberListerAdapter {
 	return &MemberListerAdapter{cli: cli}
@@ -121,7 +125,8 @@ type UserConversationListerAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewUserConversationListerAdapter 注入 RemoteConversationClient，cli 是远端客户端，
+// NewUserConversationListerAdapter 注入 RemoteConversationClient。
+// cli 远端客户端
 // 为 nil 时 ListUserConversations 返错误。
 func NewUserConversationListerAdapter(cli RemoteConversationClient) *UserConversationListerAdapter {
 	return &UserConversationListerAdapter{cli: cli}

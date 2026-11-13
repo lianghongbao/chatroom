@@ -16,7 +16,8 @@ type ConversationService struct {
 	uc *biz.ConversationUsecase
 }
 
-// NewConversationService 构造 ConversationService。uc 是会话用例。
+// NewConversationService 构造 ConversationService。
+// uc 会话用例
 func NewConversationService(uc *biz.ConversationUsecase) *ConversationService {
 	return &ConversationService{uc: uc}
 }
@@ -49,7 +50,7 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req *pb.Cr
 }
 
 // conversationTypeFromDTO 把 proto 会话类型转成 biz 类型。
-// t 是 proto 枚举值，未知值返 ErrConversationInvalidArgument。
+// t proto 枚举值
 func conversationTypeFromDTO(t pb.ConversationType) (biz.ConversationType, error) {
 	switch t {
 	case pb.ConversationType_CONVERSATION_TYPE_UNSPECIFIED:
@@ -333,7 +334,7 @@ func (s *ConversationService) ListUserConversations(ctx context.Context, req *pb
 }
 
 // convertConversation 把 biz 会话转成 proto 会话信息。
-// c 是领域模型，为 nil 时返 nil。昵称 / 头像数组与 member_ids 等长且下标对齐。
+// c 领域模型
 func convertConversation(c *biz.Conversation) *pb.ConversationInfo {
 	if c == nil {
 		return nil
@@ -362,7 +363,7 @@ func convertConversation(c *biz.Conversation) *pb.ConversationInfo {
 }
 
 // conversationTypeToDTO 把 biz 会话类型转成 proto 枚举。
-// t 是 biz 类型，未知值返 UNSPECIFIED。
+// t biz 类型
 func conversationTypeToDTO(t biz.ConversationType) pb.ConversationType {
 	switch t {
 	case biz.ConversationTypeSingle:

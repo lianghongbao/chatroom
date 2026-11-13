@@ -18,12 +18,14 @@ type friendRepo struct {
 	data *Data
 }
 
-// NewFriendRepo 构造 biz.FriendRepo 的 ent 实现。data 是数据层实例。
+// NewFriendRepo 构造 biz.FriendRepo 的 ent 实现。
+// data 数据层实例
 func NewFriendRepo(data *Data) biz.FriendRepo {
 	return &friendRepo{data: data}
 }
 
-// toBizFriend 把 ent.Friend PO 折成 biz.Friend DO。po 为 nil 时返 nil。
+// toBizFriend 把 ent.Friend PO 折成 biz.Friend DO。
+// po 为 nil 时返 nil
 func toBizFriend(po *ent.Friend) *biz.Friend {
 	if po == nil {
 		return nil
@@ -56,7 +58,8 @@ func (r *friendRepo) Save(ctx context.Context, f *biz.Friend) (uint64, error) {
 	return po.ID, nil
 }
 
-// isDeadlockErr 判断 err 是不是 InnoDB 死锁（1213）或锁等待超时（1205）。
+// isDeadlockErr 判断。
+// err 不是 InnoDB 死锁（1213）或锁等待超时（1205）
 // 1213 = ER_LOCK_DEADLOCK，1205 = ER_LOCK_WAIT_TIMEOUT。
 func isDeadlockErr(err error) bool {
 	if err == nil {
@@ -69,8 +72,10 @@ func isDeadlockErr(err error) bool {
 	return mysqlErr.Number == 1213 || mysqlErr.Number == 1205
 }
 
-// pairKey 归一化的「两人对」唯一键。a、b 是两个 uid，升序拼成 "a,b"，
+// pairKey 归一化的「两人对」唯一键。两个 uid 升序拼成 "a,b"，
 // 保证 (a,b) 和 (b,a) 落到同一个键，唯一索引才挡得住反向并发。
+// a uid
+// b uid
 func pairKey(a, b string) string {
 	if a > b {
 		a, b = b, a

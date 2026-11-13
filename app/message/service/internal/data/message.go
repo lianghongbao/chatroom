@@ -19,12 +19,14 @@ type messageRepo struct {
 	data *Data
 }
 
-// NewMessageRepo 构造 biz.MessageRepo 的 ent 实现。data 是共享的数据客户端。
+// NewMessageRepo 构造 biz.MessageRepo 的 ent 实现。
+// data 共享的数据客户端
 func NewMessageRepo(data *Data) biz.MessageRepo {
 	return &messageRepo{data: data}
 }
 
-// toBizMessage ent.Message PO → biz.Message DO。po 为 nil 时返 nil。
+// toBizMessage ent.Message PO → biz.Message DO。
+// po 为 nil 时返 nil
 func toBizMessage(po *ent.Message) *biz.Message {
 	if po == nil {
 		return nil
@@ -117,7 +119,8 @@ type MessagePublisher struct {
 	rdb redis.Cmdable
 }
 
-// NewMessagePublisher 构造 MessagePublisher。d 是共享的数据客户端，
+// NewMessagePublisher 构造 MessagePublisher。
+// d 共享的数据客户端
 // Redis 不可用时返 nil（不广播）。
 func NewMessagePublisher(d *Data) *MessagePublisher {
 	if d == nil || d.Redis() == nil {
@@ -142,7 +145,7 @@ func (p *MessagePublisher) Publish(ctx context.Context, m *biz.Message) error {
 }
 
 // messageChannel 会话对应的 Pub/Sub 频道名，与 ws-gateway 订阅的频道名一致。
-// conversationID 是会话 ID。
+// conversationID 会话 ID
 func messageChannel(conversationID uint64) string {
 	return keys.MessageChannel(conversationID)
 }
@@ -157,7 +160,8 @@ type PublishPayload struct {
 	CreatedAt      int64  `json:"created_at"`
 }
 
-// marshalPublishPayload 把 biz.Message 折成广播体。m 是要广播的消息。
+// marshalPublishPayload 把 biz.Message 折成广播体。
+// m 要广播的消息
 func marshalPublishPayload(m *biz.Message) ([]byte, error) {
 	return json.Marshal(&PublishPayload{
 		MessageID:      m.ID,
@@ -169,7 +173,8 @@ func marshalPublishPayload(m *biz.Message) ([]byte, error) {
 	})
 }
 
-// formatUint 把 uint64 转成十进制字符串。v 是待转换的值。
+// formatUint 把 uint64 转成十进制字符串。
+// v 待转换的值
 // 消息广播热路径上用 strconv 更快。
 func formatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)

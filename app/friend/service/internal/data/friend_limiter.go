@@ -41,7 +41,8 @@ var defaultFriendLimiter = struct {
 	removeLimit:       30,
 }
 
-// NewFriendLimiter 构造好友域频控。d 是数据层实例，Data 或 Redis 任一为 nil 时返 nil，
+// NewFriendLimiter 构造好友域频控。
+// d 数据层实例
 // 由 biz 层走 noop。返回 biz.FriendLimiter 接口，wire 无需再 Bind。
 func NewFriendLimiter(d *Data) biz.FriendLimiter {
 	if d == nil || d.Redis() == nil {

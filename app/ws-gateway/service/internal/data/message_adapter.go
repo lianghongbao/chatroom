@@ -12,7 +12,8 @@ type Sender struct {
 	cli RemoteMessageClient
 }
 
-// NewSender 注入 RemoteMessageClient，cli 为 nil 时 Send 返错误。
+// NewSender 注入 RemoteMessageClient。
+// cli 为 nil 时 Send 返错误
 func NewSender(cli RemoteMessageClient) *Sender {
 	return &Sender{cli: cli}
 }
@@ -40,7 +41,8 @@ type Lister struct {
 	cli RemoteMessageClient
 }
 
-// NewLister 注入 RemoteMessageClient，cli 为 nil 时 ListSince 返错误。
+// NewLister 注入 RemoteMessageClient。
+// cli 为 nil 时 ListSince 返错误
 func NewLister(cli RemoteMessageClient) *Lister {
 	return &Lister{cli: cli}
 }

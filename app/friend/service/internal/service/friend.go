@@ -16,7 +16,8 @@ type FriendService struct {
 	uc *biz.FriendUsecase
 }
 
-// NewFriendService 构造 FriendService。uc 是好友用例。
+// NewFriendService 构造 FriendService。
+// uc 好友用例
 func NewFriendService(uc *biz.FriendUsecase) *FriendService {
 	return &FriendService{uc: uc}
 }
@@ -193,7 +194,8 @@ func friendStatusToDTO(s biz.FriendStatus) pb.FriendStatus {
 	}
 }
 
-// clampPageSize 限制 page_size 在合法区间（1..200），其它回退默认 50。n 是请求里的 page_size。
+// clampPageSize 限制 page_size 在合法区间（1..200），其它回退默认 50。
+// n 请求里的 page_size
 func clampPageSize(n int32) int {
 	if n <= 0 || n > 200 {
 		return 50

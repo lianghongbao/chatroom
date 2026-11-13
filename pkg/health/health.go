@@ -70,8 +70,9 @@ type Checker struct {
 	lastStatus Status
 }
 
-// NewChecker 构造 Checker。timeout 是单项检查超时，<= 0 时用 DefaultTimeout；
-// checks 是要跑的依赖检查。
+// NewChecker 构造 Checker。
+// timeout 单项检查超时，<= 0 时用 DefaultTimeout
+// checks 要跑的依赖检查
 func NewChecker(timeout time.Duration, checks ...Check) *Checker {
 	if timeout <= 0 {
 		timeout = DefaultTimeout

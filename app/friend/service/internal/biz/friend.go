@@ -37,7 +37,9 @@ const (
 // MaxApplyMessageLen 好友申请附言的最大长度（按 rune 计，不是字节）。
 const MaxApplyMessageLen = 200
 
-// truncateRunes 按 rune 截断字符串。s 是待截断文本，max 是保留的 rune 数上限。
+// truncateRunes 按 rune 截断字符串。
+// s 待截断文本
+// max 保留的 rune 数上限
 // 不能用 s[:n] —— 那是按字节切的，会切出半个 UTF-8 字符。
 func truncateRunes(s string, max int) string {
 	if max <= 0 {
@@ -142,8 +144,11 @@ type FriendUsecase struct {
 	logger   *slog.Logger
 }
 
-// NewFriendUsecase 构造 FriendUsecase。repo 是好友仓储；profiles 为 nil 时走降级；
-// limiter 为 nil 时关闭限频；logger 为 nil 时用 slog.Default。
+// NewFriendUsecase 构造 FriendUsecase。
+// repo 好友仓储
+// profiles 拉资料的依赖，为 nil 时走降级
+// limiter 限频器，为 nil 时关闭限频
+// logger 日志器，为 nil 时用 slog.Default
 func NewFriendUsecase(repo FriendRepo, profiles FriendProfileFetcher, limiter FriendLimiter, logger *slog.Logger) *FriendUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -412,7 +417,8 @@ func (uc *FriendUsecase) List(ctx context.Context, callerID string, cursor uint6
 }
 
 // normalizePeer 把记录的「对方」归一化到 FriendID，返回副本（不改原对象）。
-// f 是原记录，callerID 是操作者 ID。
+// f 原记录
+// callerID 操作者 ID
 // 好友关系只存单条记录，caller 落在哪一列取决于谁先发起。
 func normalizePeer(f *Friend, callerID string) *Friend {
 	if f == nil {
@@ -478,7 +484,9 @@ func (uc *FriendUsecase) CountPending(ctx context.Context, callerID string) (uin
 }
 
 // fillProfiles 按 friend_id 把资料写回好友列表，原地写入 Profile 字段。
-// fetcher 是拉资料的依赖，callerID 是操作者 ID，friends 是待补全的记录。
+// fetcher 拉资料的依赖
+// callerID 操作者 ID
+// friends 待补全的记录
 // 整批 err 降级；单条缺省静默。
 func fillProfiles(ctx context.Context, fetcher FriendProfileFetcher, callerID string, friends []*Friend) error {
 	if fetcher == nil || len(friends) == 0 {

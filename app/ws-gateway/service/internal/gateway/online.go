@@ -15,8 +15,10 @@ type OnlineReporter struct {
 	ttl        time.Duration
 }
 
-// NewOnlineReporter 构造 OnlineReporter，instanceID 是本实例 ID，ttl 是在线状态
-// 有效期（<= 0 用默认值）。rdb 为 nil 时降级（不写在线状态）。
+// NewOnlineReporter 构造 OnlineReporter。
+// rdb Redis 客户端，为 nil 时降级（不写在线状态）
+// instanceID 本实例 ID
+// ttl 在线状态有效期，<= 0 用默认值
 func NewOnlineReporter(rdb redis.Cmdable, instanceID string, ttl time.Duration) *OnlineReporter {
 	if ttl <= 0 {
 		ttl = defaultOnlineTTL
@@ -68,7 +70,8 @@ func (r *OnlineReporter) IsOnline(ctx context.Context, userID string) bool {
 	return n > 0
 }
 
-// onlineKey 在线状态的 Redis key，userID 是用户 ID。
+// onlineKey 在线状态的 Redis key。
+// userID 用户 ID
 func onlineKey(userID string) string {
 	return "online:" + userID
 }

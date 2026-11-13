@@ -20,7 +20,8 @@ type Data struct {
 	rdb *redis.Client
 }
 
-// NewData 打开 redis 客户端，c 是配置段。Redis 缺配置时 rdb 为 nil，下游降级。
+// NewData 打开 redis 客户端。
+// c 配置段
 // 返回的清理函数负责关闭客户端。
 func NewData(c *conf.Data) (*Data, func(), error) {
 	var rdb *redis.Client

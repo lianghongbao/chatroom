@@ -13,7 +13,8 @@ type ConversationAdapter struct {
 	cli RemoteUserClient
 }
 
-// NewConversationAdapter wire 注入 RemoteUserClient。cli 是远程用户客户端，
+// NewConversationAdapter wire 注入 RemoteUserClient。
+// cli 远程用户客户端
 // nil 时仍可用。
 func NewConversationAdapter(cli RemoteUserClient) *ConversationAdapter {
 	return &ConversationAdapter{cli: cli}

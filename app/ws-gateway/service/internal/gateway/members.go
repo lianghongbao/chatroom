@@ -51,8 +51,9 @@ type memberEntry struct {
 	fetchedAt time.Time
 }
 
-// NewMemberCache 构造 MemberCache，fetcher 是回源查询器，ttl 是缓存有效期
-// （<= 0 用默认值）。fetcher 为 nil 时 Get 返 nil。
+// NewMemberCache 构造 MemberCache。
+// fetcher 回源查询器，为 nil 时 Get 返 nil
+// ttl 缓存有效期，<= 0 用默认值
 func NewMemberCache(fetcher MemberFetcher, ttl time.Duration) *MemberCache {
 	if ttl <= 0 {
 		ttl = defaultMemberCacheTTL

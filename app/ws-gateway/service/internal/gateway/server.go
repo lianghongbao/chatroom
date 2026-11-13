@@ -87,10 +87,14 @@ type Server struct {
 	wg sync.WaitGroup
 }
 
-// NewServer 构造网关。cfg 是网关配置，pool 是连接池，sender 是消息转发器，
-// verify 是握手鉴权器，members 是会话成员缓存（算广播目标用），
-// online 是在线状态上报器，logger 是日志器。
-// members / online 为 nil 时分别不广播、不上报在线状态。
+// NewServer 构造网关。
+// cfg 网关配置
+// pool 连接池
+// sender 消息转发器
+// verify 握手鉴权器
+// members 会话成员缓存，算广播目标用，为 nil 时不广播
+// online 在线状态上报器，为 nil 时不上报在线状态
+// logger 日志器
 func NewServer(cfg Config, pool *Pool, sender MessageSender, verify TokenVerifier, members *MemberCache, online *OnlineReporter, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
@@ -561,7 +565,8 @@ func (s *Server) ConnectionCount() int {
 	return s.pool.Total()
 }
 
-// formatInt64 便于日志输出的 int64 字符串，v 是要格式化的值。
+// formatInt64 便于日志输出的 int64 字符串。
+// v 要格式化的值
 func formatInt64(v int64) string {
 	return strconv.FormatInt(v, 10)
 }

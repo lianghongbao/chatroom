@@ -19,7 +19,8 @@ type UserCache struct {
 	ttl time.Duration
 }
 
-// NewUserCache 构造 UserCache。d 是存储客户端；
+// NewUserCache 构造 UserCache。
+// d 存储客户端
 // Data / Redis 不可用时返 nil（biz 走降级直接读 DB）。
 // TTL 30s 是 UpdateUser 漏走 invalidate 时的兜底。
 func NewUserCache(d *Data) *UserCache {

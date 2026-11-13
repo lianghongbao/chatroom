@@ -16,7 +16,8 @@ type MemberInvalidationPublisher struct {
 	rdb redis.Cmdable
 }
 
-// NewMemberInvalidationPublisher 构造 publisher。d 是 data 客户端。
+// NewMemberInvalidationPublisher 构造 publisher。
+// d data 客户端
 // Redis 不可用时返 nil（不发通知）。
 func NewMemberInvalidationPublisher(d *Data) *MemberInvalidationPublisher {
 	if d == nil || d.Redis() == nil {

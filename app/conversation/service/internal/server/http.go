@@ -18,8 +18,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// NewHTTPServer 构造 HTTP server。c 是服务配置，ac 是鉴权配置，
-// obs 是观测能力，store 是 token 黑名单查询器，svc 是会话服务。
+// NewHTTPServer 构造 HTTP server。
+// c 服务配置
+// ac 鉴权配置
+// obs 观测能力
+// store token 黑名单查询器
+// svc 会话服务
 func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.ConversationService) *khttp.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),

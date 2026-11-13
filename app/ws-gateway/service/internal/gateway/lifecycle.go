@@ -24,13 +24,17 @@ type Lifecycle struct {
 	started bool
 }
 
-// NewLifecycle 构造 Lifecycle，gw 是网关，subscriber 为 nil 时不订阅。
+// NewLifecycle 构造 Lifecycle。
+// gw 网关
+// subscriber 订阅器，为 nil 时不订阅
 func NewLifecycle(gw *Server, subscriber *Subscriber) *Lifecycle {
 	return &Lifecycle{gw: gw, subscriber: subscriber}
 }
 
-// NewLifecycleWithInvalidator 构造 Lifecycle。gw 是网关，
-// subscriber 是成员失效通知的订阅器。
+// NewLifecycleWithInvalidator 构造 Lifecycle。
+// gw 网关
+// subscriber 订阅器
+// invalidator 成员失效通知的订阅器
 func NewLifecycleWithInvalidator(gw *Server, subscriber *Subscriber, invalidator *InvalidatorSubscriber) *Lifecycle {
 	return &Lifecycle{gw: gw, subscriber: subscriber, invalidator: invalidator}
 }
