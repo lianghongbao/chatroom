@@ -62,9 +62,11 @@ func (c *remoteConversationGRPCClient) UpdateUnreadBatch(ctx context.Context, co
 // 必须带 "discovery:///" 前缀和 ".grpc" 后缀，否则 gRPC 报 "produced zero addresses"。
 const RemoteConversationEndpoint = "discovery:///chatroom-conversation.grpc"
 
-// NewRemoteConversationClient 构造 RemoteConversationClient。discoverer 是服务发现客户端，
-// auth 是鉴权配置（取内部凭证），obs 是观测能力。
-// discoverer == nil 时返 noop。超时 1.5s：发消息是同步链路，下游卡住会拖慢用户请求。
+// NewRemoteConversationClient 构造 RemoteConversationClient。
+// discoverer 服务发现客户端，为 nil 时返 noop
+// auth 鉴权配置，取内部凭证
+// obs 观测能力
+// 超时 1.5s：发消息是同步链路，下游卡住会拖慢用户请求。
 func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteConversationClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteConversationClient{}, func() {}, nil
@@ -209,7 +211,7 @@ func (c *remoteConversationGRPCClient) ListUserConversations(ctx context.Context
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 是内部凭证，为空时不注入 header，下游会 fail closed 返 403。
+// secret 内部凭证
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

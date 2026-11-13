@@ -28,7 +28,8 @@ type conversationRepo struct {
 	cache *ConversationCache // 成员列表缓存（Redis Set）。nil 时降级为每次查库
 }
 
-// NewConversationRepo 构造 biz.ConversationRepo 的 ent 实现。d 是 data 客户端。
+// NewConversationRepo 构造 biz.ConversationRepo 的 ent 实现。
+// d data 客户端
 func NewConversationRepo(d *Data) biz.ConversationRepo {
 	if d == nil {
 		return nil
@@ -128,7 +129,8 @@ func (r *conversationRepo) Save(ctx context.Context, c *biz.Conversation) (*biz.
 
 // singlePairKey 单聊的成员对唯一键。两个 uid 升序拼成 "a,b"，
 // 保证 "a,b" 和 "b,a" 落到同一个键，唯一索引才挡得住反向并发。
-// a、b 是两个成员的 uid。
+// a 成员 uid
+// b 成员 uid
 func singlePairKey(a, b string) string {
 	if a > b {
 		a, b = b, a
@@ -136,7 +138,8 @@ func singlePairKey(a, b string) string {
 	return a + "," + b
 }
 
-// isUniqueConstraintErr 判断 err 是不是唯一约束冲突。err 是待判定的错误。
+// isUniqueConstraintErr 判断 err 是不是唯一约束冲突。
+// err 待判定的错误
 // MySQL 错误码 1062 (ER_DUP_ENTRY) / 1586 (ER_DUP_ENTRY_WITH_KEY_NAME)
 func isUniqueConstraintErr(err error) bool {
 	if err == nil {
@@ -707,7 +710,8 @@ type ConversationCache struct {
 	membersTTL time.Duration // 成员列表缓存 TTL。成员变动时主动删，短 TTL 是漏删时的兜底
 }
 
-// NewConversationCache 构造 ConversationCache。d 是 data 客户端。
+// NewConversationCache 构造 ConversationCache。
+// d data 客户端
 // Redis 不可用时返 nil（降级为每次查库）。
 func NewConversationCache(d *Data) *ConversationCache {
 	if d == nil || d.Redis() == nil {
@@ -716,18 +720,21 @@ func NewConversationCache(d *Data) *ConversationCache {
 	return &ConversationCache{rdb: d.Redis(), membersTTL: 5 * time.Minute}
 }
 
-// convMembersKey 会话成员集合 key。conversationID 是会话 ID。
+// convMembersKey 会话成员集合 key。
+// conversationID 会话 ID
 func convMembersKey(conversationID uint64) string {
 	return "chatroom:conv:" + formatUint(conversationID) + ":members"
 }
 
-// convMembersVerKey 会话成员集合的版本号 key。conversationID 是会话 ID。
+// convMembersVerKey 会话成员集合的版本号 key。
+// conversationID 会话 ID
 // 回填时用 Lua 比对版本，版本变了就放弃回填。
 func convMembersVerKey(conversationID uint64) string {
 	return "chatroom:conv:" + formatUint(conversationID) + ":members:ver"
 }
 
-// formatUint 把 uint64 转成十进制字符串。v 是待转换的值。
+// formatUint 把 uint64 转成十进制字符串。
+// v 待转换的值
 func formatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }

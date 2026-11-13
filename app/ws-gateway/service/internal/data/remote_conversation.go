@@ -42,8 +42,10 @@ type RemoteConversationClient interface {
 const RemoteConversationEndpoint = "discovery:///chatroom-conversation.grpc"
 
 // NewRemoteConversationClient 构造 RemoteConversationClient。
-// discoverer 是服务发现器，auth 是鉴权配置，obs 是观测能力。
-// discoverer 为 nil 时返 noop。超时 1.5s。
+// discoverer 服务发现器，为 nil 时返 noop
+// auth 鉴权配置
+// obs 观测能力
+// 超时 1.5s。
 func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteConversationClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteConversationClient{}, func() {}, nil
@@ -189,7 +191,7 @@ func (c *remoteConversationGRPCClient) ListUserConversations(ctx context.Context
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 是内部凭证，为空时不注入 header —— 下游的内部凭证校验会 fail closed 返 403。
+// secret 内部凭证
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

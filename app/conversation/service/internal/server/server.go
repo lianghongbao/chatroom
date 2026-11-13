@@ -42,7 +42,8 @@ func InternalOps() []string {
 }
 
 // authMiddlewares 返回鉴权相关的两个中间件：用户 JWT 与内部凭证。
-// ac 是鉴权配置，store 是 token 黑名单查询器。
+// ac 鉴权配置
+// store token 黑名单查询器
 // 白名单（免 JWT）由官方 selector 的 Match 圈定 —— selector 是「匹配上才执行」，
 // 所以这里取反：不在白名单里的 operation 走 JWT。
 // 白名单两部分：配置里的 auth.skip_operations、本域内部端点。

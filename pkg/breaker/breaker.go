@@ -47,7 +47,8 @@ func WithFailureRatio(ratio float64) Option {
 	return func(o *options) { o.failureRatio = ratio }
 }
 
-// WithRequest 设置窗口内触发评估的最小请求数。n 是最小请求数。
+// WithRequest 设置窗口内触发评估的最小请求数。
+// n 最小请求数
 func WithRequest(n int64) Option {
 	return func(o *options) { o.request = n }
 }
@@ -57,12 +58,14 @@ func WithWindow(d time.Duration) Option {
 	return func(o *options) { o.window = d }
 }
 
-// WithBucket 设置窗口分桶数。n 是分桶数。
+// WithBucket 设置窗口分桶数。
+// n 分桶数
 func WithBucket(n int) Option {
 	return func(o *options) { o.bucket = n }
 }
 
-// WithOpenDuration 设置熔断打开后的冷却时长。d 是冷却时长。
+// WithOpenDuration 设置熔断打开后的冷却时长。
+// d 冷却时长
 func WithOpenDuration(d time.Duration) Option {
 	return func(o *options) { o.openDuration = d }
 }
@@ -72,7 +75,8 @@ func WithHalfOpenMax(n int64) Option {
 	return func(o *options) { o.halfOpenMax = n }
 }
 
-// Client 返回 gRPC 客户端熔断中间件。opts 是熔断参数。
+// Client 返回 gRPC 客户端熔断中间件。
+// opts 熔断参数
 // 放在客户端中间件链的最内层；只有 5xx 类错误算失败。
 func Client(opts ...Option) middleware.Middleware {
 	o := &options{
@@ -140,7 +144,8 @@ type breaker struct {
 	halfOpenFailed int64
 }
 
-// newBreaker 按参数造一个熔断器。o 是熔断参数。
+// newBreaker 按参数造一个熔断器。
+// o 熔断参数
 func newBreaker(o *options) *breaker {
 	return &breaker{
 		state:        stateClosed,
@@ -243,7 +248,9 @@ type countBucket struct {
 	failure int64
 }
 
-// newRollingCounter 造一个滚动窗口计数器。size 是分桶数，duration 是单桶时长。
+// newRollingCounter 造一个滚动窗口计数器。
+// size 分桶数
+// duration 单桶时长
 func newRollingCounter(size int, duration time.Duration) *rollingCounter {
 	if size < 1 {
 		size = 1

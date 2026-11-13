@@ -76,8 +76,10 @@ type Dependencies struct {
 	Members *MemberCache
 }
 
-// NewDependencies 构造网关依赖，rdb 是 Redis 客户端，members 是会话成员查询器，
-// cfg 是网关配置。rdb 为 nil 时不上报在线状态；members 为 nil 时广播推不出去。
+// NewDependencies 构造网关依赖。
+// rdb Redis 客户端，为 nil 时不上报在线状态
+// members 会话成员查询器，为 nil 时广播推不出去
+// cfg 网关配置
 func NewDependencies(rdb redis.Cmdable, members MemberFetcher, cfg GatewayConfig) *Dependencies {
 	online := NewOnlineReporter(rdb, cfg.InstanceID, cfg.OnlineTTL)
 
@@ -98,15 +100,21 @@ func NewDependencies(rdb redis.Cmdable, members MemberFetcher, cfg GatewayConfig
 	}
 }
 
-// NewMemberCacheFromDependencies 暴露依赖包里的成员缓存。deps 是依赖包。
+// NewMemberCacheFromDependencies 暴露依赖包里的成员缓存。
+// deps 依赖包
 // 成员失效通知的处理要拿到同一个缓存实例 —— 否则失效的是另一个 map。
 func NewMemberCacheFromDependencies(deps *Dependencies) *MemberCache {
 	return deps.Members
 }
 
-// NewServerFromConfig 构造网关服务。cfg 是网关配置，deps 是依赖包，
-// sender 是消息转发器，verify 是握手鉴权器，convs 是「列某用户参与的所有会话」的能力，
-// lister 是增量拉消息的能力，logger 是日志器。
+// NewServerFromConfig 构造网关服务。
+// cfg 网关配置
+// deps 依赖包
+// sender 消息转发器
+// verify 握手鉴权器
+// convs 「列某用户参与的所有会话」的能力
+// lister 增量拉消息的能力
+// logger 日志器
 func NewServerFromConfig(cfg GatewayConfig, deps *Dependencies, sender MessageSender, verify TokenVerifier, convs UserConversationLister, lister MessageLister, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
@@ -132,7 +140,9 @@ func NewServerFromConfig(cfg GatewayConfig, deps *Dependencies, sender MessageSe
 }
 
 // NewSubscriberForServer 构造 Redis 订阅器，回调把消息推给网关。
-// gw 是网关，rdb 为 nil 时返 nil，logger 是日志器。
+// gw 网关
+// rdb Redis 客户端，为 nil 时返 nil
+// logger 日志器
 func NewSubscriberForServer(gw *Server, rdb *redis.Client, logger *slog.Logger) *Subscriber {
 
 	if logger == nil {
@@ -143,8 +153,9 @@ func NewSubscriberForServer(gw *Server, rdb *redis.Client, logger *slog.Logger) 
 	})
 }
 
-// NewTokenVerifierFromConfig 构造 token 校验器，auth 是鉴权配置段。
-// rdb 为 nil 时不查黑名单（降级放行）。
+// NewTokenVerifierFromConfig 构造 token 校验器。
+// auth 鉴权配置段
+// rdb Redis 客户端，为 nil 时不查黑名单（降级放行）
 func NewTokenVerifierFromConfig(auth *conf.Auth, rdb *redis.Client) TokenVerifier {
 	return NewJWTVerifier(auth.GetJwtSecret(), auth.GetTokenIssuer(), NewBlacklistCheckerFromRedis(rdb))
 }

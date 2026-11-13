@@ -163,10 +163,11 @@ type ConversationUsecase struct {
 }
 
 // NewConversationUsecase 构造 ConversationUsecase。
-// repo 是仓储实现，profiles 是成员资料拉取器，existence 是用户存在性校验器，
-// publisher 是成员变更通知器，logger 是日志器。
-// profiles / existence 为 nil 时分别走降级与跳过校验，
-// logger 为 nil 走 slog.Default，publisher 为 nil 时不发成员变更通知。
+// repo 仓储实现
+// profiles 成员资料拉取器，为 nil 时走降级
+// existence 用户存在性校验器，为 nil 时跳过校验
+// publisher 成员变更通知器，为 nil 时不发成员变更通知
+// logger 日志器，为 nil 时用 slog.Default
 func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileFetcher, existence UserExistenceChecker, publisher MemberInvalidationPublisher, logger *slog.Logger) *ConversationUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -317,7 +318,8 @@ func (uc *ConversationUsecase) ListConversations(ctx context.Context, callerID s
 	return items, nextCursor, nil
 }
 
-// encodeCursor 取会话 ID 作为下一页游标，nil 返 0（首页）。c 是会话。
+// encodeCursor 取会话 ID 作为下一页游标，nil 返 0（首页）。
+// c 会话
 func encodeCursor(c *Conversation) uint64 {
 	if c == nil {
 		return 0
@@ -325,7 +327,8 @@ func encodeCursor(c *Conversation) uint64 {
 	return c.ID
 }
 
-// decodeCursor 把 wire 上的 uint64 游标转成 repo 层用的游标，0 视为首页。v 是 wire 游标。
+// decodeCursor 把 wire 上的 uint64 游标转成 repo 层用的游标，0 视为首页。
+// v wire 游标
 func decodeCursor(v uint64) ConversationCursor {
 	if v == 0 {
 		return ConversationCursor{}
@@ -816,7 +819,7 @@ func (uc *ConversationUsecase) fillProfiles(ctx context.Context, convs []*Conver
 }
 
 // fillEmptyProfiles 把每个会话的昵称/头像数组填成与 MemberIDs 等长的空串。
-// convs 是待处理的会话列表。
+// convs 待处理的会话列表
 func fillEmptyProfiles(convs []*Conversation) {
 	for _, c := range convs {
 		if c == nil || len(c.MemberIDs) == 0 {
@@ -828,7 +831,8 @@ func fillEmptyProfiles(convs []*Conversation) {
 }
 
 // normalizeMembers 把调用方并入成员列表，去重并升序。
-// callerID 是调用方 uid，memberIDs 是请求里的成员 uid 列表。
+// callerID 调用方 uid
+// memberIDs 请求里的成员 uid 列表
 func normalizeMembers(callerID string, memberIDs []string) ([]string, error) {
 	seen := make(map[string]struct{}, len(memberIDs)+1)
 	out := make([]string, 0, len(memberIDs)+1)

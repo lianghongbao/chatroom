@@ -37,8 +37,10 @@ type RemoteUserClient interface {
 // 拼出的服务名 "chatroom-user.grpc"。两处写错都会导致 "produced zero addresses"。
 const RemoteUserEndpoint = "discovery:///chatroom-user.grpc"
 
-// NewRemoteUserClient 构造 RemoteUserClient。discoverer 是服务发现客户端，nil 时返 noop；
-// auth 提供内部凭证；obs 提供观测能力。
+// NewRemoteUserClient 构造 RemoteUserClient。
+// discoverer 服务发现客户端，为 nil 时返 noop
+// auth 鉴权配置，提供内部凭证
+// obs 观测能力
 // 超时 1.5s：好友列表 fan-out 调 N 个，单条拖太久会拖累整批。
 func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteUserClient, func(), error) {
 	if discoverer == nil {
@@ -152,7 +154,7 @@ func (noopRemoteUserClient) GetConversationMemberProfiles(_ context.Context, _ [
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 是内部凭证，为空时不注入任何 header，下游校验会 fail closed 返 403。
+// secret 内部凭证
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

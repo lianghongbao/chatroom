@@ -19,8 +19,9 @@ type Subscriber struct {
 	onMessage func(channel string, payload []byte)
 }
 
-// NewSubscriber 构造 Subscriber，onMessage 是收到消息时的回调。
-// rdb 为 nil 时返 nil（不订阅）。
+// NewSubscriber 构造 Subscriber。
+// rdb Redis 客户端，为 nil 时返 nil（不订阅）
+// onMessage 收到消息时的回调
 func NewSubscriber(rdb *redis.Client, onMessage func(channel string, payload []byte)) *Subscriber {
 	if rdb == nil {
 		return nil
@@ -33,7 +34,9 @@ func NewSubscriber(rdb *redis.Client, onMessage func(channel string, payload []b
 }
 
 // NewChannelSubscriber 构造 Subscriber，订阅单个频道（不是模式）。
-// rdb 是 Redis 客户端，channel 是频道名，onMessage 是收到消息时的回调。
+// rdb Redis 客户端
+// channel 频道名
+// onMessage 收到消息时的回调
 func NewChannelSubscriber(rdb *redis.Client, channel string, onMessage func(channel string, payload []byte)) *Subscriber {
 	if rdb == nil {
 		return nil
@@ -90,7 +93,8 @@ type PublishPayload struct {
 	CreatedAt      int64  `json:"created_at"`
 }
 
-// ConversationIDFromChannel 从频道名解析会话 id，channel 是频道名。解析失败返 0。
+// ConversationIDFromChannel 从频道名解析会话 id。
+// channel 频道名
 func ConversationIDFromChannel(channel string) uint64 {
 	idx := strings.LastIndex(channel, ":")
 	if idx < 0 || idx == len(channel)-1 {
@@ -106,7 +110,8 @@ func ConversationIDFromChannel(channel string) uint64 {
 	return id
 }
 
-// DecodePublishPayload 解析广播体，payload 是广播体原文。
+// DecodePublishPayload 解析广播体。
+// payload 广播体原文
 func DecodePublishPayload(payload []byte) (*PublishPayload, error) {
 	var p PublishPayload
 	if err := json.Unmarshal(payload, &p); err != nil {

@@ -22,8 +22,10 @@ type InvalidatorSubscriber struct {
 	*Subscriber
 }
 
-// NewMemberInvalidationSubscriber 构造成员失效通知的订阅器，members 是要失效的
-// 成员缓存，logger 为 nil 时用默认 logger。rdb 为 nil 时返 nil（不订阅）。
+// NewMemberInvalidationSubscriber 构造成员失效通知的订阅器。
+// rdb Redis 客户端，为 nil 时返 nil（不订阅）
+// members 要失效的成员缓存
+// logger 日志器，为 nil 时用默认 logger
 func NewMemberInvalidationSubscriber(rdb *redis.Client, members *MemberCache, logger *slog.Logger) *InvalidatorSubscriber {
 	if rdb == nil {
 		return nil
@@ -37,7 +39,9 @@ func NewMemberInvalidationSubscriber(rdb *redis.Client, members *MemberCache, lo
 }
 
 // HandleMemberInvalidation 处理一条成员变更通知，让对应会话的成员缓存失效。
-// payload 是通知原文，members 是成员缓存，logger 为 nil 时用默认 logger。
+// members 成员缓存
+// payload 通知原文
+// logger 日志器，为 nil 时用默认 logger
 // 解析失败只记日志。
 func HandleMemberInvalidation(members *MemberCache, payload []byte, logger *slog.Logger) {
 	if logger == nil {

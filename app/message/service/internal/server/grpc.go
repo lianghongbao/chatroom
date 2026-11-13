@@ -12,8 +12,12 @@ import (
 	"github.com/go-kratos/kratos/v3/transport/grpc"
 )
 
-// NewGRPCServer 构造 gRPC server。c 是 server 配置段，ac 是鉴权配置，
-// obs 是观测能力，store 是 access token 黑名单查询，svc 是本域的 gRPC 服务实现。
+// NewGRPCServer 构造 gRPC server。
+// c server 配置段
+// ac 鉴权配置
+// obs 观测能力
+// store access token 黑名单查询
+// svc 本域的 gRPC 服务实现
 func NewGRPCServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.MessageService) *grpc.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),

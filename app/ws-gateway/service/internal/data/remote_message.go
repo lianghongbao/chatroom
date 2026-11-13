@@ -33,8 +33,9 @@ type RemoteMessageClient interface {
 const RemoteMessageEndpoint = "discovery:///chatroom-message.grpc"
 
 // NewRemoteMessageClient 构造 RemoteMessageClient。
-// discoverer 是服务发现器，obs 是观测能力。
-// discoverer 为 nil 时返 noop。超时 2s。
+// discoverer 服务发现器，为 nil 时返 noop
+// obs 观测能力
+// 超时 2s。
 func NewRemoteMessageClient(discoverer registry.Discovery, obs *observability.Provider) (RemoteMessageClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteMessageClient{}, func() {}, nil

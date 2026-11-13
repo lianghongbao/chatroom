@@ -19,7 +19,9 @@ type UserService struct {
 	auth *conf.Auth
 }
 
-// NewUserService 构造 UserService。uc 是用户用例，auth 是鉴权配置段。
+// NewUserService 构造 UserService。
+// uc 用户用例
+// auth 鉴权配置段
 func NewUserService(uc *biz.UserUsecase, auth *conf.Auth) *UserService {
 	return &UserService{uc: uc, auth: auth}
 }
@@ -241,7 +243,9 @@ func (s *UserService) GetConversationMemberProfiles(ctx context.Context, req *pb
 	return out, nil
 }
 
-// convertLoginReply DO→DTO。res 是 token 对，uid 是用户 ID；
+// convertLoginReply DO→DTO。
+// res token 对
+// uid 用户 ID
 // 老字段 token / user_id 用 access_token 兜底。
 func convertLoginReply(res *biz.LoginResult, uid string) *pb.LoginReply {
 	if res == nil {
@@ -257,7 +261,8 @@ func convertLoginReply(res *biz.LoginResult, uid string) *pb.LoginReply {
 	}
 }
 
-// convertUserReply DO→DTO。u 是用户资料，PasswordHash 已由 biz 清空。
+// convertUserReply DO→DTO。
+// u 用户资料
 func convertUserReply(u *biz.User) *pb.UserInfo {
 	if u == nil {
 		return nil

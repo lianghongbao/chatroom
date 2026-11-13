@@ -21,7 +21,10 @@ type Presence struct {
 // defaultPresenceTimeout 查在线状态的默认超时。查不到就当离线，不值得让客户端等太久。
 const defaultPresenceTimeout = 500 * time.Millisecond
 
-// NewPresence 构造 Presence。online / pool / members 为 nil 时相应查询不可用。
+// NewPresence 构造 Presence。
+// online 在线状态上报器，为 nil 时在线查询不可用
+// pool 连接池，为 nil 时连接查询不可用
+// members 成员缓存，为 nil 时成员查询不可用
 func NewPresence(online *OnlineReporter, pool *Pool, members *MemberCache) *Presence {
 	return &Presence{
 		online:  online,
@@ -92,7 +95,8 @@ type PresenceData struct {
 	Members map[string]bool `json:"members"`
 }
 
-// EncodePresenceFrame 编一个会话级在线状态帧，statuses 是各成员的在线状态。
+// EncodePresenceFrame 编一个会话级在线状态帧。
+// statuses 各成员的在线状态
 func EncodePresenceFrame(statuses []UserStatus) []byte {
 	members := make(map[string]bool, len(statuses))
 	for _, s := range statuses {

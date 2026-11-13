@@ -13,13 +13,15 @@ type userRepo struct {
 	data *Data
 }
 
-// NewUserRepo 构造 biz.UserRepo 的 ent 实现。data 是共享的存储客户端。
+// NewUserRepo 构造 biz.UserRepo 的 ent 实现。
+// data 共享的存储客户端
 func NewUserRepo(data *Data) biz.UserRepo {
 	return &userRepo{data: data}
 }
 
-// toBizUser ent.User PO → biz.User DO。po 是 ent 记录，
-// clearHash 为 true 时清掉 PasswordHash。
+// toBizUser ent.User PO → biz.User DO。
+// po ent 记录
+// clearHash 为 true 时清掉 PasswordHash
 func toBizUser(po *ent.User, clearHash bool) *biz.User {
 	if po == nil {
 		return nil

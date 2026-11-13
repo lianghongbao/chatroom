@@ -23,8 +23,11 @@ type Connection struct {
 	lastActive atomic.Int64
 }
 
-// NewConnection 构造连接，ws 是底层连接，userID 是所属用户，
-// token 是握手带来的 JWT，sendQueueSize 是写队列长度。
+// NewConnection 构造连接。
+// ws 底层连接
+// userID 所属用户
+// token 握手带来的 JWT
+// sendQueueSize 写队列长度
 func NewConnection(ws *websocket.Conn, userID string, token string, sendQueueSize int) *Connection {
 	if sendQueueSize <= 0 {
 		sendQueueSize = defaultSendQueueSize

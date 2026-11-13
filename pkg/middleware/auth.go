@@ -45,7 +45,8 @@ type options struct {
 	blacklistedReason string
 }
 
-// WithSigningMethod 指定签名算法，默认 HS256。method 是签名算法名。
+// WithSigningMethod 指定签名算法，默认 HS256。
+// method 签名算法名
 func WithSigningMethod(method jwtv5.SigningMethod) Option {
 	return func(o *options) {
 		o.signingMethod = method
@@ -53,14 +54,15 @@ func WithSigningMethod(method jwtv5.SigningMethod) Option {
 }
 
 // WithParserOptions 透传给 jwt.Parser，用于强制校验 iss/sub/exp 等 claim。
-// opts 是 parser 选项。
+// opts parser 选项
 func WithParserOptions(opts ...jwtv5.ParserOption) Option {
 	return func(o *options) {
 		o.parserOptions = opts
 	}
 }
 
-// WithBlacklistedReason 指定「token 已被拉黑」的错误原因。reason 是错误原因枚举。
+// WithBlacklistedReason 指定「token 已被拉黑」的错误原因。
+// reason 错误原因枚举
 func WithBlacklistedReason(reason string) Option {
 	return func(o *options) {
 		if reason != "" {
@@ -76,8 +78,11 @@ type AuthInfo struct {
 	Exp time.Time
 }
 
-// Server 返回 JWT 鉴权中间件。secret 是签名密钥，issuer 是签发方，
-// store 是 token 黑名单查询器，opts 是解析选项。
+// Server 返回 JWT 鉴权中间件。
+// secret 签名密钥
+// issuer 签发方
+// store token 黑名单查询器
+// opts 解析选项
 // 流程：parse → verify → 黑名单 → 写 ctx。生效范围由调用方用 selector 圈定。
 func Server(secret, issuer string, store TokenChecker, opts ...Option) middleware.Middleware {
 	o := &options{signingMethod: jwtv5.SigningMethodHS256}
@@ -124,7 +129,7 @@ func Server(secret, issuer string, store TokenChecker, opts ...Option) middlewar
 const InternalTokenHeader = "X-Internal-Token"
 
 // InternalServer 校验服务间内部凭证（X-Internal-Token 头）。
-// secret 为空时受管辖的端点一律 403。
+// secret 为 空时受管辖的端点一律 403
 // 管辖范围由调用方用 selector 圈定。
 func InternalServer(secret string) middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
@@ -151,7 +156,9 @@ func InternalServer(secret string) middleware.Middleware {
 	}
 }
 
-// OpInList 判断 operation 是否命中列表。op 是 operation 名，list 是候选列表。
+// OpInList 判断 operation 是否命中列表。
+// operation operation 名
+// list 候选列表
 // 精确匹配或前缀匹配。
 func OpInList(operation string, list []string) bool {
 	for _, s := range list {
@@ -165,7 +172,8 @@ func OpInList(operation string, list []string) bool {
 	return false
 }
 
-// bearerToken 提取 Bearer token。h 是请求头，大小写不敏感。
+// bearerToken 提取 Bearer token。
+// h 请求头
 func bearerToken(h string) string {
 	const prefix = "bearer "
 	if len(h) <= len(prefix) {
@@ -180,7 +188,9 @@ func bearerToken(h string) string {
 // authKey 是 ctx 的 key 类型。
 type authKey struct{}
 
-// NewContext 把鉴权信息写入 ctx。ctx 是上下文，info 是鉴权信息。
+// NewContext 把鉴权信息写入 ctx。
+// ctx 上下文
+// info 鉴权信息
 func NewContext(ctx context.Context, info AuthInfo) context.Context {
 	return context.WithValue(ctx, authKey{}, info)
 }
@@ -204,7 +214,10 @@ func ExpFromContext(ctx context.Context) (time.Time, bool) {
 }
 
 // VerifyAccessToken 校验 access token 返 (uid, jti, exp)。
-// raw 是 token 原文，secret 是签名密钥，issuer 是签发方。不查黑名单。
+// raw token 原文
+// secret 签名密钥
+// issuer 签发方
+// 不查黑名单。
 func VerifyAccessToken(raw, secret, issuer string) (uid string, jti string, exp time.Time, err error) {
 	claims, err := verifyAccess(raw, secret, issuer, jwtv5.SigningMethodHS256, nil)
 	if err != nil {
@@ -214,7 +227,9 @@ func VerifyAccessToken(raw, secret, issuer string) (uid string, jti string, exp 
 }
 
 // ParseRefreshToken 解析 refresh token 返 (uid, jti, exp)。
-// raw 是 token 原文，secret 是签名密钥，issuer 是签发方。
+// raw token 原文
+// secret 签名密钥
+// issuer 签发方
 func ParseRefreshToken(raw, secret, issuer string) (uid string, jti string, exp time.Time, err error) {
 	return parseRefresh(raw, secret, issuer)
 }
@@ -262,8 +277,11 @@ func parseRefresh(raw, secret, issuer string) (string, string, time.Time, error)
 }
 
 // verifyAccess 校验 access token：iss / typ / jti / exp / sub。
-// raw 是 token 原文，secret 是签名密钥，issuer 是签发方，
-// method 是签名算法，parserOpts 是 parser 选项。
+// raw token 原文
+// secret 签名密钥
+// issuer 签发方
+// method 签名算法
+// parserOpts parser 选项
 func verifyAccess(raw, secret, issuer string, method jwtv5.SigningMethod, parserOpts []jwtv5.ParserOption) (*AuthInfo, error) {
 	tok, err := jwtv5.Parse(raw, func(t *jwtv5.Token) (any, error) {
 		if t.Method.Alg() != method.Alg() {
@@ -303,7 +321,8 @@ func verifyAccess(raw, secret, issuer string, method jwtv5.SigningMethod, parser
 	return &AuthInfo{UID: uid, JTI: jti, Exp: exp}, nil
 }
 
-// claimToUID 从 sub claim 取 uid。v 是 claim 原文。
+// claimToUID 从 sub claim 取 uid。
+// v claim 原文
 func claimToUID(v any) (string, error) {
 	s, ok := v.(string)
 	if !ok || s == "" {

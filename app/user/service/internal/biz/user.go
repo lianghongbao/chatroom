@@ -38,7 +38,8 @@ const (
 	MaxAvatarLength   = 512
 )
 
-// validatePassword 校验密码长度。password 是明文密码。
+// validatePassword 校验密码长度。
+// password 明文密码
 // 密码不做 trim，只拒绝「全是空白」的密码。
 func validatePassword(password string) error {
 	if password == "" {
@@ -69,7 +70,9 @@ func validateUsername(username string) error {
 	return nil
 }
 
-// validateProfile 校验昵称 / 头像长度。nickname 是昵称，avatar 是头像地址。
+// validateProfile 校验昵称 / 头像长度。
+// nickname 昵称
+// avatar 头像地址
 func validateProfile(nickname, avatar string) error {
 	if len(nickname) > MaxNicknameLength {
 		return ErrUserInvalidArgument
@@ -80,7 +83,8 @@ func validateProfile(nickname, avatar string) error {
 	return nil
 }
 
-// derefOrEmpty 取可空指针的值，s 为 nil 时返空串。
+// derefOrEmpty 取可空指针的值。
+// s 为 nil 时返空串
 func derefOrEmpty(s *string) string {
 	if s == nil {
 		return ""
@@ -89,7 +93,7 @@ func derefOrEmpty(s *string) string {
 }
 
 // hashPassword 算 bcrypt 哈希，把 bcrypt 的错误翻译成 typed error。
-// password 是明文密码。
+// password 明文密码
 func hashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -131,7 +135,8 @@ const (
 	UserStatusBanned UserStatus = 0 // 禁用账号，登录与刷新 token 均被拦截
 )
 
-// IsBanned 判断账号是否被禁用。u 为 nil 时返 false。
+// IsBanned 判断账号是否被禁用。
+// u 为 nil 时返 false
 func (u *User) IsBanned() bool {
 	return u != nil && u.Status == UserStatusBanned
 }
@@ -231,8 +236,14 @@ type UserUsecase struct {
 	logger  *slog.Logger
 }
 
-// NewUserUsecase 构造用户用例。repo 是仓储实现，auth 用于签发 JWT（nil 时关闭登录）；
-// lim / locker / store / cache 传 nil 关闭对应功能；logger 为 nil 时用默认 logger。
+// NewUserUsecase 构造用户用例。
+// repo 仓储实现
+// auth 鉴权配置，用于签发 JWT，为 nil 时关闭登录
+// lim 登录限频器，为 nil 时关闭限频
+// locker 注册锁，为 nil 时关闭加锁
+// store token 存储，为 nil 时关闭持久化
+// cache 用户资料缓存，为 nil 时关闭缓存
+// logger 日志器，为 nil 时用默认 logger
 func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Locker, store TokenStore, cache UserCache, logger *slog.Logger) *UserUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -917,7 +928,8 @@ func (uc *UserUsecase) verify(raw, expectedType string) (string, string, time.Ti
 	return uid, jti, exp, nil
 }
 
-// toUID 从 JWT claim 取出 uid（UUIDv7 字符串）。v 是 claim 原始值。
+// toUID 从 JWT claim 取出 uid（UUIDv7 字符串）。
+// v claim 原始值
 func toUID(v any) (string, error) {
 	s, ok := v.(string)
 	if !ok || s == "" {

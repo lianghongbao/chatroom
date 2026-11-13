@@ -35,7 +35,10 @@ func (f *FakeTransporter) Operation() string               { return "/api.test.v
 func (f *FakeTransporter) RequestHeader() transport.Header { return f.header }
 func (f *FakeTransporter) ReplyHeader() transport.Header   { return &FakeHeader{} }
 
-// JWTFor 用给定密钥给 uid 签 HS256 token。secret 是签名密钥。
+// JWTFor 用给定密钥给 uid 签 HS256 token。
+// t 测试句柄
+// secret 签名密钥
+// uid 用户 ID
 func JWTFor(t *testing.T, secret string, uid string) string {
 	t.Helper()
 	tok := jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, jwtv5.MapClaims{
@@ -54,7 +57,9 @@ func JWTFor(t *testing.T, secret string, uid string) string {
 }
 
 // AuthedCtxWithToken 走一次 auth.Server 中间件，让它把 uid 写到 ctx。
-// secret 是签名密钥，bearer 是 Authorization 头的值（不含 "Bearer " 前缀）。
+// t 测试句柄
+// bearer Authorization 头的值（不含 "Bearer " 前缀）
+// secret 签名密钥
 func AuthedCtxWithToken(t *testing.T, bearer, secret string) context.Context {
 	t.Helper()
 	hdr := &FakeHeader{values: map[string]string{"Authorization": "Bearer " + bearer}}

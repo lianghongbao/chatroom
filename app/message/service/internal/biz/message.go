@@ -81,9 +81,13 @@ type MessageUsecase struct {
 	logger     *slog.Logger
 }
 
-// NewMessageUsecase 构造 MessageUsecase。repo 是消息仓储，membership 是成员校验，
-// publisher 是广播器，unread 是未读数读写，lister 是会话成员列举，
-// logger 为 nil 时用默认 logger。membership 为 nil 时成员校验一律拒绝。
+// NewMessageUsecase 构造 MessageUsecase。
+// repo 消息仓储
+// membership 成员校验，为 nil 时成员校验一律拒绝
+// publisher 广播器
+// unread 未读数读写
+// lister 会话成员列举
+// logger 日志器，为 nil 时用默认 logger
 func NewMessageUsecase(repo MessageRepo, membership ConversationMembershipChecker, publisher MessagePublisher, unread UnreadCounter, lister ConversationMemberLister, logger *slog.Logger) *MessageUsecase {
 	if logger == nil {
 		logger = slog.Default()

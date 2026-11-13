@@ -15,7 +15,8 @@ type TokenStore struct {
 	rdb redis.Cmdable
 }
 
-// NewTokenStore 构造 TokenStore。d 是存储客户端；
+// NewTokenStore 构造 TokenStore。
+// d 存储客户端
 // Redis 不可用时返 nil（黑名单功能降级）。
 func NewTokenStore(d *Data) *TokenStore {
 	if d == nil || d.Redis() == nil {

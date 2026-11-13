@@ -58,7 +58,8 @@ func NewDB(t *testing.T) *DB {
 }
 
 // InjectDBName 把 root DSN（无库名或库名为空）拼上具体库名。
-// rootDSN 是 root 连接串，name 是目标库名。
+// rootDSN root 连接串
+// name 目标库名
 func InjectDBName(rootDSN, name string) string {
 	for i := 0; i < len(rootDSN); i++ {
 		if rootDSN[i] == '/' {

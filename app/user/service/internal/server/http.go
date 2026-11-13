@@ -19,8 +19,11 @@ import (
 )
 
 // NewHTTPServer 构造 HTTP server。
-// c 是 server 配置段，ac 是鉴权配置段，obs 是观测能力，store 是 token 校验器，
-// svc 是本域的业务服务。
+// c server 配置段
+// ac 鉴权配置段
+// obs 观测能力
+// store token 校验器
+// svc 本域的业务服务
 func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.UserService) *khttp.Server {
 	// tracing 必须在最外层：它包住后面的鉴权中间件，401 才会进 trace。
 	// 未鉴权的 span 由 observability 的过滤层按采样率丢弃。
