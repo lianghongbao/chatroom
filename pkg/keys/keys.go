@@ -45,7 +45,7 @@ func LockKey(key string) string {
 	return lockPrefix + key
 }
 
-// FormatUint 把 uint64 转成十进制字符串。
+// FormatUint 把 uint64 转成十进制字符串。v 是要转换的值。
 func FormatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }

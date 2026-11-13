@@ -32,10 +32,7 @@ func userAgentFromContext(ctx context.Context) string {
 }
 
 // ClientIPFromContext 从 transport ctx 取调用方 IP，读不到时返 "unknown"。
-//
-// 优先取 X-Forwarded-For 的第一个地址 —— 服务在网关 / 负载均衡后面时
-// RemoteAddr 是它们的 IP，不是真实客户端的。没有就走 X-Real-IP，
-// 再没有就用 HTTP 请求 RemoteAddr 的 host 部分。
+// 优先取 X-Forwarded-For 的第一个地址，再 X-Real-IP，最后 HTTP RemoteAddr 的 host。
 func ClientIPFromContext(ctx context.Context) string {
 	tr, ok := transport.FromServerContext(ctx)
 	if !ok {

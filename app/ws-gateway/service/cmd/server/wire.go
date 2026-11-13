@@ -29,8 +29,7 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		// 网关不需要业务用例层 —— 它只维护连接 + 转发。
 		gateway.ProviderSet,
 		// nacos：注册本实例 + 发现下游服务。
-		// 三个 provider 共用同一个 naming client —— 注册和发现必须是同一个
-		// client，否则两边状态会不一致。
+		// 三个 provider 共用同一个 naming client，否则两边状态会不一致。
 		nacos.NewNamingClient,
 		nacos.NewRegistrar,
 		nacos.NewDiscovery,

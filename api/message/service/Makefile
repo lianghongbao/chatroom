@@ -4,8 +4,8 @@
 # **没有任何实现** —— 实现住在 app/user/service/。
 #
 # 契约与实现同仓但不同包路径：调用方（friend / message / ws-gateway …）只
-# import `chatroom/api/user/service/v1`，拿不到 user 服务的实现。Go 的
-# internal/ 可见性规则在编译期就卡死了越界引用。
+# import `chatroom/api/<域>/service/v1`，拿不到服务的实现。
+# Go 的 internal/ 可见性规则在编译期就卡死了越界引用。
 
 DOMAIN := message
 

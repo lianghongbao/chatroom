@@ -44,9 +44,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // ConversationService 会话服务。
-//
 // 单聊（type=1）由成员集合唯一确定，重复创建复用同一会话；群聊（type=2）成员可增减，群主唯一。
-// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空并 warn。
+// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
 type ConversationClient interface {
 	// CreateConversation 创建会话。单聊幂等（同一对成员返同一会话），群聊总是新建。
 	CreateConversation(ctx context.Context, in *CreateConversationRequest, opts ...grpc.CallOption) (*CreateConversationReply, error)
@@ -64,7 +63,7 @@ type ConversationClient interface {
 	// UpdateConversation 改群名。仅群主可调用，单聊不支持。
 	UpdateConversation(ctx context.Context, in *UpdateConversationRequest, opts ...grpc.CallOption) (*UpdateConversationReply, error)
 	// TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-	// 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+	// 转让后才能退群。
 	TransferOwner(ctx context.Context, in *TransferOwnerRequest, opts ...grpc.CallOption) (*TransferOwnerReply, error)
 	// DissolveConversation 解散群聊。仅群主可调用，单聊不支持。
 	// 会话连同全部成员记录一起删除，不可恢复。
@@ -288,9 +287,8 @@ func (c *conversationClient) ListUserConversations(ctx context.Context, in *List
 // for forward compatibility.
 //
 // ConversationService 会话服务。
-//
 // 单聊（type=1）由成员集合唯一确定，重复创建复用同一会话；群聊（type=2）成员可增减，群主唯一。
-// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空并 warn。
+// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
 type ConversationServer interface {
 	// CreateConversation 创建会话。单聊幂等（同一对成员返同一会话），群聊总是新建。
 	CreateConversation(context.Context, *CreateConversationRequest) (*CreateConversationReply, error)
@@ -308,7 +306,7 @@ type ConversationServer interface {
 	// UpdateConversation 改群名。仅群主可调用，单聊不支持。
 	UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationReply, error)
 	// TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-	// 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+	// 转让后才能退群。
 	TransferOwner(context.Context, *TransferOwnerRequest) (*TransferOwnerReply, error)
 	// DissolveConversation 解散群聊。仅群主可调用，单聊不支持。
 	// 会话连同全部成员记录一起删除，不可恢复。

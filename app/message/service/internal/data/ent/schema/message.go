@@ -11,11 +11,8 @@ import (
 )
 
 // 消息表。对应 PRD §5.5。
-//
 // 一条记录 = 一条消息。消息不可编辑、不可删除 —— 要撤回也得留痕。
-//
-// 注意：不建外键。conversation_id 指向的会话可能已经被解散，
-// 消息保留着（历史可查）。外键会挡住这件事。
+// 不建外键：conversation_id 指向的会话可能已解散，消息保留着（历史可查）。
 type Message struct {
 	ent.Schema
 }
@@ -48,9 +45,7 @@ func (Message) Fields() []ent.Field {
 func (Message) Indexes() []ent.Index {
 	return []ent.Index{
 		// 历史消息的主查询路径：某个会话的消息，按 id 倒序。
-		//
-		// (conversation_id, id) 复合索引 —— id 是主键，InnoDB 会把它挂在
-		// 二级索引末尾，所以这个索引天然覆盖了 conversation_id + id 的排序，
+		// (conversation_id, id) 复合索引天然覆盖 conversation_id + id 的排序，
 		// 游标分页直接走它，不用回表排序。
 		index.Fields("conversation_id", "id"),
 		// 按发送者查（"我发过的消息"）。会话内查询已经够用，这条留给以后。

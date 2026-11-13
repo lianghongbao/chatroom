@@ -1,12 +1,9 @@
 // Package health 提供服务的健康检查端点。
 //
-// 两个端点语义不同：
-//
-//   - liveness（/healthz）—— 进程是否活着，不碰任何外部依赖。
+//   - liveness（/healthz）—— 进程是否活着，不碰外部依赖。
 //   - readiness（/readyz）—— 依赖是否可用，决定能否接流量。
 //
-// 依赖分硬 / 软两类，判据是「这个依赖挂了，服务还能不能正确处理请求」：
-// 硬依赖挂了 readiness 返 503，软依赖挂了只算 degraded、仍返 200。
+// 依赖分硬 / 软：硬依赖失败返 503，软依赖失败只算 degraded、仍返 200。
 package health
 
 import (
@@ -32,8 +29,7 @@ const (
 	StatusFailed Status = "failed"
 )
 
-// DefaultTimeout 单项依赖检查的默认超时。比 HTTP server 的 timeout 短，
-// 探针要快速给出结论，不能跟客户端请求抢连接池。
+// DefaultTimeout 单项依赖检查的默认超时。
 const DefaultTimeout = 2 * time.Second
 
 // Check 一个依赖的检查。
@@ -70,11 +66,12 @@ type Checker struct {
 	mu     sync.RWMutex
 	checks []Check
 
-	// lastStatus 上一次的整体状态，只在状态变化时记日志。
+	// lastStatus 上一次的整体状态。
 	lastStatus Status
 }
 
-// NewChecker 构造 Checker。timeout 是单项检查超时，<= 0 时用 DefaultTimeout。
+// NewChecker 构造 Checker。timeout 是单项检查超时，<= 0 时用 DefaultTimeout；
+// checks 是要跑的依赖检查。
 func NewChecker(timeout time.Duration, checks ...Check) *Checker {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -93,8 +90,7 @@ func (c *Checker) Add(name string, hard bool, probe func(ctx context.Context) er
 	c.checks = append(c.checks, Check{Name: name, Hard: hard, Probe: probe})
 }
 
-// Run 跑一遍所有检查，返回整体结果。各检查并行跑，
-// 单个依赖超时不会把总耗时拖成 N 倍。
+// Run 跑一遍所有检查，返回整体结果。各检查并行跑。
 func (c *Checker) Run(ctx context.Context) Report {
 	if c == nil {
 		return Report{Status: StatusOK, Checks: map[string]Result{}}
@@ -157,8 +153,7 @@ func (c *Checker) runOne(ctx context.Context, check Check) Result {
 	return result
 }
 
-// Ready 返回 readiness handler。硬依赖全过或只有软依赖失败返 200，
-// 硬依赖失败返 503。
+// Ready 返回 readiness handler。硬依赖失败返 503，其余返 200。
 func (c *Checker) Ready() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		report := c.Run(r.Context())

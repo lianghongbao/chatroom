@@ -8,9 +8,6 @@ import (
 )
 
 // TestApply_TruncatesMessageByRunes 附言按 rune 截断，不能切出半个字符。
-//
-// 旧实现是 message[:200] —— 按字节切。中文一个字 3 字节，
-// 从中间切断会留下半个 UTF-8 字符，MySQL 存进去直接报 1366。
 func TestApply_TruncatesMessageByRunes(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
@@ -75,8 +72,6 @@ func TestApply_ExactlyMaxLength(t *testing.T) {
 }
 
 // TestApply_ReversePendingAutoAccept 反向 PENDING 自动收尾成好友。
-//
-// 覆盖「对方先申请了我，我又申请对方」—— 应该成为好友，而不是报错。
 func TestApply_ReversePendingAutoAccept(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)

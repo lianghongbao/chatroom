@@ -12,11 +12,7 @@ import (
 )
 
 // loginLimiter 失败计数 + 锁定标记两 key：计数 INCR 后只在返回 1 时设 TTL，避免续期。
-//
-// 计数和锁定都按「用户名 + IP」两个维度分桶：
-// 只按用户名锁的话，任何知道别人用户名的人都能试 5 次密码把账号锁 15 分钟 ——
-// 这是现成的拒绝服务。加了 IP 之后，攻击者只能锁住「他自己这个 IP 上的该账号」，
-// 账号本人从别的 IP 照样能登录。
+// 计数和锁定都按「用户名 + IP」两个维度分桶。
 type loginLimiter struct {
 	rdb       redis.Cmdable
 	maxFail   int32

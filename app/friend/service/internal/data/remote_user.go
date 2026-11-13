@@ -84,7 +84,7 @@ func (c *remoteUserGRPCClient) GetUserByID(ctx context.Context, _, targetID stri
 
 // GetFriendProfiles 调 user 的好友资料端点，ids 是目标 uid 列表，
 // 走内部凭证，跳过陌生人可见性。
-// 未配置 internalSecret 时降级返空——好友列表仍能返回，只是昵称/头像为空。
+// 未配置 internalSecret 时降级返空。
 func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
 		return nil, nil
@@ -97,8 +97,7 @@ func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []stri
 }
 
 // GetConversationMemberProfiles 调 user 的会话成员资料端点，ids 是目标 uid 列表，
-// 走内部凭证。
-// 未配置 internalSecret 时降级返空——会话列表仍能返回，只是昵称/头像为空。
+// 走内部凭证。未配置 internalSecret 时降级返空。
 func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
 		return nil, nil
@@ -153,8 +152,7 @@ func (noopRemoteUserClient) GetConversationMemberProfiles(_ context.Context, _ [
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 是内部凭证，为空时不注入任何 header——下游的内部凭证校验会 fail closed 返 403，
-// 调用方（biz）走降级，不影响好友列表主路径。
+// secret 是内部凭证，为空时不注入任何 header，下游校验会 fail closed 返 403。
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

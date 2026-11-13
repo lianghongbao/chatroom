@@ -27,16 +27,16 @@ type MessageHTTPServer interface {
 	// GetUnreadCount GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
 	GetUnreadCount(context.Context, *GetUnreadCountRequest) (*GetUnreadCountReply, error)
 	// ListMessages ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
-	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢。
 	ListMessages(context.Context, *ListMessagesRequest) (*ListMessagesReply, error)
 	// ListMessagesSince ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
-	// 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
-	// 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+	// 断线重连补消息用。跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。
+	// since_id = 0 表示从头拉。
 	ListMessagesSince(context.Context, *ListMessagesSinceRequest) (*ListMessagesSinceReply, error)
 	// MarkRead MarkRead 清零某个会话的未读数。只清调用方自己的。
 	MarkRead(context.Context, *MarkReadRequest) (*MarkReadReply, error)
 	// SendMessage SendMessage 发消息。落库后广播。
-	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播。
 	SendMessage(context.Context, *SendMessageRequest) (*SendMessageReply, error)
 }
 
@@ -148,16 +148,16 @@ type MessageHTTPClient interface {
 	// GetUnreadCount GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
 	GetUnreadCount(ctx context.Context, req *GetUnreadCountRequest, opts ...http.CallOption) (rsp *GetUnreadCountReply, err error)
 	// ListMessages ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
-	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢。
 	ListMessages(ctx context.Context, req *ListMessagesRequest, opts ...http.CallOption) (rsp *ListMessagesReply, err error)
 	// ListMessagesSince ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
-	// 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
-	// 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+	// 断线重连补消息用。跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。
+	// since_id = 0 表示从头拉。
 	ListMessagesSince(ctx context.Context, req *ListMessagesSinceRequest, opts ...http.CallOption) (rsp *ListMessagesSinceReply, err error)
 	// MarkRead MarkRead 清零某个会话的未读数。只清调用方自己的。
 	MarkRead(ctx context.Context, req *MarkReadRequest, opts ...http.CallOption) (rsp *MarkReadReply, err error)
 	// SendMessage SendMessage 发消息。落库后广播。
-	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播。
 	SendMessage(ctx context.Context, req *SendMessageRequest, opts ...http.CallOption) (rsp *SendMessageReply, err error)
 }
 
@@ -187,7 +187,7 @@ func (c *MessageHTTPClientImpl) GetUnreadCount(ctx context.Context, in *GetUnrea
 }
 
 // ListMessages ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
-// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢。
 func (c *MessageHTTPClientImpl) ListMessages(ctx context.Context, in *ListMessagesRequest, opts ...http.CallOption) (*ListMessagesReply, error) {
 	var out ListMessagesReply
 	pattern := "/api/message/list"
@@ -205,8 +205,8 @@ func (c *MessageHTTPClientImpl) ListMessages(ctx context.Context, in *ListMessag
 }
 
 // ListMessagesSince ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
-// 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
-// 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+// 断线重连补消息用。跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。
+// since_id = 0 表示从头拉。
 func (c *MessageHTTPClientImpl) ListMessagesSince(ctx context.Context, in *ListMessagesSinceRequest, opts ...http.CallOption) (*ListMessagesSinceReply, error) {
 	var out ListMessagesSinceReply
 	pattern := "/api/message/since"
@@ -242,7 +242,7 @@ func (c *MessageHTTPClientImpl) MarkRead(ctx context.Context, in *MarkReadReques
 }
 
 // SendMessage SendMessage 发消息。落库后广播。
-// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播。
 func (c *MessageHTTPClientImpl) SendMessage(ctx context.Context, in *SendMessageRequest, opts ...http.CallOption) (*SendMessageReply, error) {
 	var out SendMessageReply
 	pattern := "/api/message/send"

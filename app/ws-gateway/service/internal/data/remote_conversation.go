@@ -43,8 +43,7 @@ const RemoteConversationEndpoint = "discovery:///chatroom-conversation.grpc"
 
 // NewRemoteConversationClient 构造 RemoteConversationClient。
 // discoverer 是服务发现器，auth 是鉴权配置，obs 是观测能力。
-// discoverer 为 nil 时返 noop。
-// 超时 1.5s：发消息是同步链路，下游卡住会拖慢用户请求。
+// discoverer 为 nil 时返 noop。超时 1.5s。
 func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteConversationClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteConversationClient{}, func() {}, nil

@@ -62,9 +62,7 @@ func (a *UnreadAdapter) IncUnread(ctx context.Context, conversationID uint64, us
 
 // ClearUnread 把未读数清零，返回清零后的值。
 // conversationID 是会话 ID，userID 是用户 ID。
-// 走下游的 ClearUnread 端点 —— 服务端一条 UPDATE 清零。
-// 不要在调用方拼「先 GetUnread 再 UpdateUnread(-n)」，那两步之间有窗口，
-// 且 uint32 转 int32 在超过 2^31 时会溢出。
+// 走下游的 ClearUnread 端点，服务端一条 UPDATE 清零。
 func (a *UnreadAdapter) ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if a == nil || a.cli == nil {
 		return 0, errNoRemoteConversation

@@ -49,11 +49,11 @@ message Server {
 
 message Data {
   message Database {
-    // Driver name registered with database/sql, e.g. "mysql".
+    // database/sql 注册的驱动名，如 "mysql"。
     string driver = 1;
-    // Driver-specific DSN. Keep credentials out of version control.
+    // 驱动对应的 DSN。凭证不要提交进版本库。
     string source = 2;
-    // Log every generated statement. Development only.
+    // 打印每条 SQL。仅开发环境开启。
     bool debug = 3;
     // 按 ent schema 增量对齐表结构（启动时只发必要的 ALTER TABLE）。
     // 不删列 —— 废弃的列手工 DROP。

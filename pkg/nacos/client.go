@@ -17,6 +17,7 @@ import (
 const DefaultPort uint64 = 8848
 
 // ParseAddr 解析 "ip:port"，空串或 host 为空时回退到 127.0.0.1。
+// raw 是地址原文。
 func ParseAddr(raw string) (host string, port uint64) {
 	if raw == "" {
 		return "127.0.0.1", DefaultPort

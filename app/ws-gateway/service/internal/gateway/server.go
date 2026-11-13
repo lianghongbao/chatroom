@@ -87,8 +87,9 @@ type Server struct {
 	wg sync.WaitGroup
 }
 
-// NewServer 构造网关。pool 是连接池，sender 是消息转发器，verify 是握手鉴权器，
-// members 是会话成员缓存（算广播目标用），online 是在线状态上报器。
+// NewServer 构造网关。cfg 是网关配置，pool 是连接池，sender 是消息转发器，
+// verify 是握手鉴权器，members 是会话成员缓存（算广播目标用），
+// online 是在线状态上报器，logger 是日志器。
 // members / online 为 nil 时分别不广播、不上报在线状态。
 func NewServer(cfg Config, pool *Pool, sender MessageSender, verify TokenVerifier, members *MemberCache, online *OnlineReporter, logger *slog.Logger) *Server {
 	if logger == nil {
@@ -130,7 +131,8 @@ func NewServer(cfg Config, pool *Pool, sender MessageSender, verify TokenVerifie
 	}
 }
 
-// WithUserConversations 注入「列某用户参与的所有会话」的能力。不注入时不通知在线状态变化。
+// WithUserConversations 注入「列某用户参与的所有会话」的能力。
+// l 是列会话的能力实现，为 nil 时不通知在线状态变化。
 func (s *Server) WithUserConversations(l UserConversationLister) *Server {
 	if s == nil {
 		return s
@@ -139,7 +141,8 @@ func (s *Server) WithUserConversations(l UserConversationLister) *Server {
 	return s
 }
 
-// WithMessageLister 注入「拉增量消息」的能力。不注入时 resume 帧回「服务不可用」。
+// WithMessageLister 注入「拉增量消息」的能力。
+// l 是拉增量消息的能力实现，为 nil 时 resume 帧回「服务不可用」。
 func (s *Server) WithMessageLister(l MessageLister) *Server {
 	if s == nil {
 		return s
@@ -158,7 +161,7 @@ func (s *Server) Path() string {
 	return s.cfg.Path
 }
 
-// handleWS 处理 WS 握手 + 连接生命周期。
+// handleWS 处理 WS 握手 + 连接生命周期。w 是响应写入器，r 是 HTTP 请求。
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// token 在 query 里（浏览器 WebSocket API 不能自定义 header）
 	raw := r.URL.Query().Get("token")
@@ -201,9 +204,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		s.wg.Done()
 		// Remove 会触发 pool 的 onClose 回调 —— 那里已经判断了
-		// 「还有别的连接就不算离线」，在线状态由它统一管。
-		// 这里不要再来一次 MarkOffline：无条件删会把多端登录用户的在线状态错删 ——
-		// 关掉手机端，网页端还连着，别人却查到他离线。
+		// 「还有别的连接就不算离线」，在线状态由它统一管。这里不要再来一次 MarkOffline。
 		s.pool.Remove(conn)
 		// 还有别的连接就不算离线
 		nowOffline := s.pool.Count(uid) == 0
@@ -220,7 +221,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.readPump(conn)
 }
 
-// readPump 读协程：处理客户端上行帧 + 响应 pong。
+// readPump 读协程：处理客户端上行帧 + 响应 pong。conn 是当前连接。
 func (s *Server) readPump(conn *Connection) {
 	defer conn.Close()
 
@@ -251,7 +252,7 @@ func (s *Server) readPump(conn *Connection) {
 	}
 }
 
-// handleFrame 处理一帧客户端上行消息，payload 是帧原文。
+// handleFrame 处理一帧客户端上行消息。conn 是当前连接，payload 是帧原文。
 func (s *Server) handleFrame(conn *Connection, payload []byte) {
 	frame, err := DecodeClientFrame(payload)
 	if err != nil {
@@ -264,8 +265,7 @@ func (s *Server) handleFrame(conn *Connection, payload []byte) {
 		conn.Send(EncodePongFrame())
 	case FrameChat:
 		// 转发到 message 服务是同步调用（最多等 5s），放协程里跑。
-		// 不放的话读协程会被卡住 —— 这条连接期间收不到任何后续帧
-		//（包括 pong），最后被自己的心跳超时踢掉。
+		// 不放的话读协程会被卡住，收不到任何后续帧（包括 pong）。
 		s.dispatchAsync(conn, func() { s.handleChat(conn, frame) })
 	case FrameStatus:
 		// 查在线状态要问下游（Redis / conversation 服务），同样可能慢。
@@ -278,11 +278,8 @@ func (s *Server) handleFrame(conn *Connection, payload []byte) {
 	}
 }
 
-// dispatchAsync 把要访问下游的帧处理丢到协程里跑，fn 是处理函数。
-// 只对「会阻塞」的帧类型用 —— 同步做会把读协程卡住。ping / pong 不走这里：
-// 它必须同步回，否则客户端的心跳会堆积。
-// 写连接是安全的 —— Connection 是单写者模型，协程里只调 conn.Send 往队列塞，
-// 真正写 socket 的还是 writePump。
+// dispatchAsync 把要访问下游的帧处理丢到协程里跑。conn 是当前连接，
+// fn 是处理函数。只对会阻塞的帧类型用；ping / pong 必须同步回。
 func (s *Server) dispatchAsync(conn *Connection, fn func()) {
 	s.wg.Add(1)
 	go func() {
@@ -291,7 +288,8 @@ func (s *Server) dispatchAsync(conn *Connection, fn func()) {
 	}()
 }
 
-// handleStatus 处理查在线状态请求。带 conversation_id 查会话成员，带 user_id 查单个人。
+// handleStatus 处理查在线状态请求。conn 是当前连接，frame 是帧原文。
+// 带 conversation_id 查会话成员，带 user_id 查单个人。
 func (s *Server) handleStatus(conn *Connection, frame *ClientFrame) {
 	if s.presence == nil {
 		conn.Send(EncodeErrorFrame("presence unavailable", "SERVICE_UNAVAILABLE"))
@@ -322,7 +320,7 @@ func (s *Server) handleStatus(conn *Connection, frame *ClientFrame) {
 
 // handleResume 处理断线重连后的补消息：客户端报「我最后看到的是 id=X」，
 // 网关问 message 服务「X 之后有什么」，按顺序推给客户端，再回结果帧。
-// frame 的 conversation_id 是会话 id，last_message_id 是基准消息 id。
+// conn 是当前连接，frame 的 conversation_id 是会话 id，last_message_id 是基准消息 id。
 func (s *Server) handleResume(conn *Connection, frame *ClientFrame) {
 	if frame.ConversationID == 0 {
 		conn.Send(EncodeErrorFrame("conversation_id is required", "INVALID_ARGUMENT"))
@@ -370,7 +368,8 @@ func (s *Server) handleResume(conn *Connection, frame *ClientFrame) {
 const resumePageSize = 50
 
 // handleChat 处理客户端发来的聊天帧 —— 转发到 message 服务落库。
-// frame 的 conversation_id 是会话 id，msg_type 是消息类型，content 是消息内容。
+// conn 是当前连接，frame 的 conversation_id 是会话 id，msg_type 是消息类型，
+// content 是消息内容。
 func (s *Server) handleChat(conn *Connection, frame *ClientFrame) {
 	if frame.ConversationID == 0 {
 		conn.Send(EncodeErrorFrame("conversation_id is required", "INVALID_ARGUMENT"))
@@ -404,10 +403,9 @@ func (s *Server) handleChat(conn *Connection, frame *ClientFrame) {
 	}))
 }
 
-// writePump 写协程：唯一的写者。gorilla/websocket 不允许并发写，
-// 其它地方都通过 Send 往队列塞。
-// gorilla/websocket 的读超时不可恢复 —— 一旦触发连接就永久废了，
-// 所以这里只写不设读超时，等新帧要靠后台读协程。
+// writePump 写协程：唯一的写者。conn 是当前连接。
+// gorilla/websocket 不允许并发写，其它地方都通过 Send 往队列塞。
+// 这里只写不设读超时 —— 读超时一触发连接就永久废了。
 func (s *Server) writePump(conn *Connection) {
 	ticker := time.NewTicker(s.cfg.PingInterval)
 	defer func() {
@@ -524,8 +522,8 @@ func (s *Server) Shutdown() {
 }
 
 // clientFacingSendError 把下游错误翻成给客户端看的话。
-// 跨进程后拿到的是 gRPC status 错误，不是 kratos 的 *errors.Error，所以按 gRPC 码判。
-// 映射：PermissionDenied → 不是会话成员，InvalidArgument → 消息非法，
+// 跨进程后拿到的是 gRPC status 错误，所以按 gRPC 码判：
+// PermissionDenied → 不是会话成员，InvalidArgument → 消息非法，
 // NotFound → 会话不存在，Unavailable → message 服务不可用，其余一律 send failed。
 func clientFacingSendError(err error) string {
 	if err == nil {

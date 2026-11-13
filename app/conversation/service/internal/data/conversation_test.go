@@ -13,7 +13,6 @@ import (
 )
 
 // newTestConvRepo 构造接真实 MySQL 的 conversationRepo。
-//
 // 返回 biz.ConversationRepo 接口，与 wire 里注入的类型一致。
 func newTestConvRepo(t *testing.T) (*Data, biz.ConversationRepo) {
 	t.Helper()
@@ -478,8 +477,7 @@ func TestConversationRepo_SingleChatUniqueConstraint(t *testing.T) {
 }
 
 // TestConversationRepo_GroupsShareNullPairKey 多个群聊的 pair_key 都是 NULL。
-//
-// MySQL 唯一索引允许存在多个 NULL —— 群聊之间不该互相冲突。
+// MySQL 唯一索引允许存在多个 NULL。
 func TestConversationRepo_GroupsShareNullPairKey(t *testing.T) {
 	d, repo := newTestConvRepo(t)
 	ctx := context.Background()
@@ -673,8 +671,6 @@ func TestConversationRepo_AddMembersEnforcesLimit(t *testing.T) {
 }
 
 // TestConversationRepo_AddMembersEmptyListStillCounts 传空列表时也要返回真实成员数。
-//
-// biz 的「要加的人全在会里」分支靠这个拿一个准确的数 —— 和正常路径同一个口径。
 func TestConversationRepo_AddMembersEmptyListStillCounts(t *testing.T) {
 	d, repo := newTestConvRepo(t)
 	ctx := context.Background()

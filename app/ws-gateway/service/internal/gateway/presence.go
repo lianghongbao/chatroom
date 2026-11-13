@@ -109,7 +109,7 @@ func EncodePresenceFrame(statuses []UserStatus) []byte {
 // NotifyOnlineStateChange 通知会话同伴「某人的在线状态变了」。
 // userID 是状态变化的用户，online 是变化后的状态。
 // 流程：查出这个人在哪些会话 → 每个会话取出其它成员 → 推 online 帧。
-// 返回推给了几个人。出错只记日志不返回错误 —— 推不出去不该影响连接流程。
+// 返回推给了几个人。出错只记日志不返回错误。
 func (s *Server) NotifyOnlineStateChange(userID string, online bool) int {
 	if s == nil || s.pool == nil || s.presence == nil {
 		return 0

@@ -72,7 +72,7 @@ type ConversationHTTPServer interface {
 	// RemoveMember RemoveMember 踢人。仅群主可调用，且不能踢自己。
 	RemoveMember(context.Context, *RemoveMemberRequest) (*RemoveMemberReply, error)
 	// TransferOwner TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-	// 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+	// 转让后才能退群。
 	TransferOwner(context.Context, *TransferOwnerRequest) (*TransferOwnerReply, error)
 	// UpdateConversation UpdateConversation 改群名。仅群主可调用，单聊不支持。
 	UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationReply, error)
@@ -484,7 +484,7 @@ type ConversationHTTPClient interface {
 	// RemoveMember RemoveMember 踢人。仅群主可调用，且不能踢自己。
 	RemoveMember(ctx context.Context, req *RemoveMemberRequest, opts ...http.CallOption) (rsp *RemoveMemberReply, err error)
 	// TransferOwner TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-	// 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+	// 转让后才能退群。
 	TransferOwner(ctx context.Context, req *TransferOwnerRequest, opts ...http.CallOption) (rsp *TransferOwnerReply, err error)
 	// UpdateConversation UpdateConversation 改群名。仅群主可调用，单聊不支持。
 	UpdateConversation(ctx context.Context, req *UpdateConversationRequest, opts ...http.CallOption) (rsp *UpdateConversationReply, err error)
@@ -760,7 +760,7 @@ func (c *ConversationHTTPClientImpl) RemoveMember(ctx context.Context, in *Remov
 }
 
 // TransferOwner TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-// 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+// 转让后才能退群。
 func (c *ConversationHTTPClientImpl) TransferOwner(ctx context.Context, in *TransferOwnerRequest, opts ...http.CallOption) (*TransferOwnerReply, error) {
 	var out TransferOwnerReply
 	pattern := "/api/conversation/owner/transfer"

@@ -87,8 +87,8 @@ func NewData(c *conf.Data) (*Data, func(), error) {
 }
 
 // Redis 返回共享 redis client；可能为 nil。
-// 必须显式判 d.rdb == nil 再返回：直接 return d.rdb 会把 nil 的 *redis.Client
-// 装进 redis.Cmdable 接口，下游 `rdb == nil` 判不出来。
+// 必须显式判 d.rdb == nil 再返回，否则会把 nil 的 *redis.Client 装进
+// redis.Cmdable 接口，下游的 nil 判断就失效了。
 func (d *Data) Redis() redis.Cmdable {
 	if d == nil || d.rdb == nil {
 		return nil

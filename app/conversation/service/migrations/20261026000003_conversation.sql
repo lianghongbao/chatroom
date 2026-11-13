@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS `conversations` (
     `name`        VARCHAR(128) NOT NULL DEFAULT '' COMMENT '群名, 单聊为空, ≤ 128 字符',
     `owner_id`    CHAR(36) NOT NULL DEFAULT '' COMMENT '群主 uid, 单聊为空',
     -- 单聊的成员对键 "uid1,uid2"（两个 uid 升序）。群聊为 NULL。
-    -- 唯一索引就是"单聊唯一"的数据库级约束 —— 并发建同一对成员的单聊时，
-    -- 后到的一方被索引挡下。MySQL 唯一索引不约束 NULL，所以群聊互不冲突。
+    -- 唯一索引是「单聊唯一」的数据库级约束，并发建单聊时后到的一方被索引挡下。
+    -- MySQL 唯一索引不约束 NULL，所以群聊互不冲突。
     `pair_key`    VARCHAR(80) DEFAULT NULL COMMENT '单聊成员对键 ''uid1,uid2'', 群聊为 NULL',
     `created_at`  TIMESTAMP NOT NULL COMMENT '创建时间',
     -- datetime(6) 微秒精度：秒精度下同一秒建的会话排序分不出先后。
@@ -30,5 +30,5 @@ CREATE TABLE IF NOT EXISTS `conversation_members` (
     UNIQUE KEY `conversationmember_conversation_id_user_id` (`conversation_id`, `user_id`),
     KEY `conversationmember_user_id_conversation_id` (`user_id`, `conversation_id`)
     -- 故意不建外键。引用完整性靠应用层保证：成员行由 repo 在同一事务里
-    -- 跟着会话一起写 / 删。与 ent 的 schema.WithForeignKeys(false) 一致。
+    -- 跟着会话一起写 / 删。
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '会话成员表';

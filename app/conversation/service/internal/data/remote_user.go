@@ -41,7 +41,7 @@ const RemoteUserEndpoint = "discovery:///chatroom-user.grpc"
 // NewRemoteUserClient 构造 RemoteUserClient。
 // discoverer 是服务发现器，auth 是鉴权配置，obs 是观测能力。
 // discoverer 为 nil 时返 noop，所有调用降级返 (nil/nil, nil)。
-// 超时 1.5s：fan-out 调 N 个，单条拖太久会拖累整批。
+// 超时 1.5s。
 func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteUserClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteUserClient{}, func() {}, nil
@@ -154,8 +154,7 @@ func (noopRemoteUserClient) GetConversationMemberProfiles(_ context.Context, _ [
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 是内部凭证，为空时不注入任何 header —— 下游校验会 fail closed 返 403，
-// 调用方走降级。
+// secret 是内部凭证，为空时不注入任何 header，下游校验会 fail closed 返 403。
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

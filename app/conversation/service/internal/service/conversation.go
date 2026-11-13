@@ -249,8 +249,7 @@ func (s *ConversationService) UpdateUnread(ctx context.Context, req *pb.UpdateUn
 }
 
 // UpdateUnreadBatch 批量增减多个成员的会话级未读数，返回成功更新的成员数。
-// req 是请求，delta 是增减量。
-// 消息服务发消息后的 fan-out 用它 —— 逐个调 UpdateUnread 是 N 次跨进程调用。
+// req 是请求，delta 是增减量。消息服务发消息后的 fan-out 用它。
 func (s *ConversationService) UpdateUnreadBatch(ctx context.Context, req *pb.UpdateUnreadBatchRequest) (*pb.UpdateUnreadBatchReply, error) {
 	if req == nil || req.GetConversationId() == 0 || len(req.GetUserIds()) == 0 {
 		return nil, biz.ErrConversationInvalidArgument

@@ -38,9 +38,7 @@ const (
 const MaxApplyMessageLen = 200
 
 // truncateRunes 按 rune 截断字符串。s 是待截断文本，max 是保留的 rune 数上限。
-//
-// 不能用 s[:n] —— 那是按字节切的，中文 / emoji 一个字符 3~4 字节，
-// 从中间切断会留下半个字符，MySQL 存进去直接报 1366（非法 UTF-8）。
+// 不能用 s[:n] —— 那是按字节切的，会切出半个 UTF-8 字符。
 func truncateRunes(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -100,9 +98,6 @@ type FriendRepo interface {
 	CountPendingByRecipientID(ctx context.Context, recipientID string) (uint64, error)
 	// UpdateStatusIfRecipient 带鉴权 + 状态条件的一次性 UPDATE。
 	// 命中 0 行折叠 ErrFriendNotFound，避免 TOCTOU 和越权读。
-	//
-	// 没有「只按主键改状态」的无鉴权版本 —— 那种接口一旦被误用
-	// 就会把已经 rejected 的申请改回 accepted。
 	UpdateStatusIfRecipient(ctx context.Context, id uint64, recipientID string, from, to FriendStatus) (*Friend, error)
 	// GetRecipientAndStatus 鉴权失败后的最小探测，只读 friend_id + status 两列。
 	GetRecipientAndStatus(ctx context.Context, id uint64) (recipientID string, status FriendStatus, err error)
@@ -226,10 +221,9 @@ func (uc *FriendUsecase) Apply(ctx context.Context, callerID, targetID string, m
 	})
 	if err != nil {
 		if errors.Is(err, ErrFriendAlreadyApplied) {
-			// 撞唯一索引 —— 说明并发下已经有人建了这条「两人对」。
-			// 可能是同向（同一个人申请两次），也可能是反向
-			// （对方同时也在申请我）。反向的话应该自动收尾成好友，
-			// 而不是报「已申请」。
+			// 撞唯一索引 —— 并发下已经有人建了这条「两人对」。
+			// 同向是同一个人申请两次；反向（对方同时也在申请我）
+			// 应该自动收尾成好友，而不是报「已申请」。
 			return uc.resolveApplyConflict(ctx, callerID, targetID, 3)
 		}
 		return nil, err
@@ -239,12 +233,7 @@ func (uc *FriendUsecase) Apply(ctx context.Context, callerID, targetID string, m
 
 // resolveApplyConflict 处理 Save 撞唯一索引的情况。callerID 是申请人 ID，
 // targetID 是被申请人 ID，retries 是剩余重试次数。
-//
-// 并发下（a→b 与 b→a 同时发起）唯一索引挡下了第二条写入，
-// 但那不代表「已申请」—— 反向的那条 PENDING 应该收尾成好友。
-//
-// retries 限制重试次数：每次重试都是一次状态快照，
-// 并发下状态可能一直在变，无限重试会变成活锁。
+// retries 限制重试次数，避免并发下状态一直变导致活锁。
 func (uc *FriendUsecase) resolveApplyConflict(ctx context.Context, callerID, targetID string, retries int) (*FriendApplyResult, error) {
 	forward, reverse, err := uc.repo.FindBothDirections(ctx, callerID, targetID)
 	if err != nil {
@@ -281,8 +270,7 @@ func (uc *FriendUsecase) resolveApplyConflict(ctx context.Context, callerID, tar
 }
 
 // Accept 接受申请。callerID 是操作者 ID，requestID 是申请记录的主键。
-// callerID 必须是 PENDING 的目标方 (friend_id == callerID)，
-// 否则折叠 PENDING_NOT_FOUND 或 NOT_RECIPIENT。
+// callerID 必须是 PENDING 的目标方，否则折叠 PENDING_NOT_FOUND 或 NOT_RECIPIENT。
 func (uc *FriendUsecase) Accept(ctx context.Context, callerID string, requestID uint64) (*Friend, error) {
 	if uc.repo == nil {
 		return nil, ErrFriendInvalidArgument
@@ -383,8 +371,7 @@ func (uc *FriendUsecase) Remove(ctx context.Context, callerID, friendID string) 
 
 // List 列出 caller 的所有 ACCEPTED 好友，cursor 分页。callerID 是操作者 ID，
 // cursor 是上一页末位 ID，limit 是每页条数。
-// 双向语义：好友关系只存单条记录，caller 可能命中 user_id 列也可能命中 friend_id 列，
-// 两种都要出现在列表里，这里把每条记录的「对方」归一化到 FriendID。
+// 好友关系只存单条记录，每条记录的「对方」归一化到 FriendID。
 // limit <= 0 走默认 50，末位 ID 即 next_cursor。
 func (uc *FriendUsecase) List(ctx context.Context, callerID string, cursor uint64, limit int) ([]*Friend, uint64, error) {
 	if uc.repo == nil {
@@ -426,8 +413,7 @@ func (uc *FriendUsecase) List(ctx context.Context, callerID string, cursor uint6
 
 // normalizePeer 把记录的「对方」归一化到 FriendID，返回副本（不改原对象）。
 // f 是原记录，callerID 是操作者 ID。
-// 好友关系只存单条记录 (user_id=发起方, friend_id=接收方)，caller 落在
-// 哪一列取决于谁先发起，所以对 caller 而言「对方」是另一列。
+// 好友关系只存单条记录，caller 落在哪一列取决于谁先发起。
 func normalizePeer(f *Friend, callerID string) *Friend {
 	if f == nil {
 		return nil
@@ -470,8 +456,7 @@ func (uc *FriendUsecase) ListPendingRequests(ctx context.Context, callerID strin
 	}
 	var nextCursor uint64
 	// 游标要取本页最后一条返回的记录的 id（out[len(out)-1]），
-	// 不是 all[len(all)-1] —— 后者是多取出来的那条哨兵记录，不在响应里，
-	// 拿它当游标会让它永远被跳过（下一页从 id > 哨兵 id 开始）。
+	// 不是 all[len(all)-1] —— 后者是多取出来的哨兵记录，不在响应里。
 	if len(all) > limit && len(out) > 0 {
 		nextCursor = out[len(out)-1].ID
 	}

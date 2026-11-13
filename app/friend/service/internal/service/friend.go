@@ -142,9 +142,7 @@ func (s *FriendService) CountPending(ctx context.Context, req *pb.CountPendingRe
 }
 
 // convertFriendInfo 把 biz.Friend 折成 proto.FriendInfo。f == nil 时返 nil。
-//
 // friend_id 始终是「对方」的 uid：正向关系取 FriendID，反向关系取 UserID。
-// biz 层不映射这层语义 —— 它只知道关系记录的两端是谁。
 func convertFriendInfo(f *biz.Friend) *pb.FriendInfo {
 	if f == nil {
 		return nil

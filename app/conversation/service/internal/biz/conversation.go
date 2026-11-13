@@ -66,8 +66,7 @@ var (
 )
 
 // ConversationCursor 会话列表的游标。
-// 列表按 (updated_at DESC, id DESC) 排序，但 wire 上的游标只带会话 ID ——
-// repo 层拿到 ID 后反查那一行的 updated_at，自己拼出复合谓词。
+// wire 上的游标只带会话 ID，repo 层拿到 ID 后反查那一行的 updated_at。
 type ConversationCursor struct {
 	ID uint64 // 上一页最后一条的会话 ID。0 表示首页
 }
@@ -112,9 +111,8 @@ type ConversationRepo interface {
 	// conversationID 是会话 ID，userID 是成员 uid。
 	UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error)
 	// UpdateUnreadBatch 批量增减多个成员的未读数，返回成功更新的成员数。
-	// 消息服务发消息后的 fan-out 用它 —— 逐个调 UpdateUnread 是 N 次跨进程调用。
-	// 不是成员的 uid 跳过，不算失败。
 	// conversationID 是会话 ID，userIDs 是成员 uid 列表，delta 是增减量。
+	// 消息服务发消息后的 fan-out 用它；不是成员的 uid 跳过，不算失败。
 	UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error)
 	// GetUnread 查某成员的会话级未读数。成员不存在返 ErrConversationNotFound。
 	// conversationID 是会话 ID，userID 是成员 uid。
@@ -149,11 +147,7 @@ type UserProfile struct {
 }
 
 // MemberInvalidationPublisher 成员变更通知（Redis Pub/Sub）。
-//
-// 通知 ws-gateway 失效它的本地成员缓存 —— 否则新人加群后最长一个 TTL
-// （默认 1 分钟）收不到消息，退群的人还会继续收到。
-//
-// 发布失败不影响成员变更本身的结果。
+// 通知 ws-gateway 失效本地成员缓存。发布失败不影响成员变更本身的结果。
 type MemberInvalidationPublisher interface {
 	// Publish 通知「会话 X 的成员变了」。conversationID 是会话 ID。
 	Publish(ctx context.Context, conversationID uint64) error
@@ -171,8 +165,8 @@ type ConversationUsecase struct {
 // NewConversationUsecase 构造 ConversationUsecase。
 // repo 是仓储实现，profiles 是成员资料拉取器，existence 是用户存在性校验器，
 // publisher 是成员变更通知器，logger 是日志器。
-// profiles / existence 为 nil 时分别走降级与跳过校验，logger 为 nil 走 slog.Default。
-// publisher 为 nil 时不发成员变更通知。
+// profiles / existence 为 nil 时分别走降级与跳过校验，
+// logger 为 nil 走 slog.Default，publisher 为 nil 时不发成员变更通知。
 func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileFetcher, existence UserExistenceChecker, publisher MemberInvalidationPublisher, logger *slog.Logger) *ConversationUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -180,9 +174,8 @@ func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileF
 	return &ConversationUsecase{repo: repo, profiles: profiles, existence: existence, publisher: publisher, logger: logger}
 }
 
-// notifyMemberChange 通知网关「这个会话的成员变了」。
-// 失败只记日志 —— 通知只是让网关少缓存一会儿，不通知的后果只是缓存过期后自然回源。
-// conversationID 是会话 ID。
+// notifyMemberChange 通知网关「这个会话的成员变了」。conversationID 是会话 ID。
+// 失败只记日志。
 func (uc *ConversationUsecase) notifyMemberChange(ctx context.Context, conversationID uint64) {
 	if uc.publisher == nil {
 		return
@@ -290,9 +283,8 @@ func (uc *ConversationUsecase) CreateConversation(ctx context.Context, callerID 
 }
 
 // ListConversations 列出调用方参与的所有会话，按最后活动时间倒序。
-// limit <= 0 走默认 50。
 // callerID 是调用方 uid，cursor 是上一页返回的游标（0 表示首页），limit 是单页条数。
-// 返回会话列表与下一页游标，末页游标为 0。
+// 返回会话列表与下一页游标，末页游标为 0。limit <= 0 走默认 50。
 func (uc *ConversationUsecase) ListConversations(ctx context.Context, callerID string, cursor uint64, limit int) ([]*Conversation, uint64, error) {
 	if uc.repo == nil {
 		return nil, 0, ErrConversationInvalidArgument
@@ -490,8 +482,7 @@ func (uc *ConversationUsecase) RemoveMember(ctx context.Context, callerID string
 	return uint32(total), nil
 }
 
-// LeaveConversation 主动退群。
-// 单聊不支持退群。群主不能退群，需先转让群主或解散群聊。
+// LeaveConversation 主动退群。单聊不支持退群，群主需先转让群主或解散群聊。
 // callerID 是调用方 uid，conversationID 是会话 ID。
 func (uc *ConversationUsecase) LeaveConversation(ctx context.Context, callerID string, conversationID uint64) error {
 	if uc.repo == nil {
@@ -609,8 +600,7 @@ func (uc *ConversationUsecase) ListMembers(ctx context.Context, callerID string,
 		return nil, err
 	}
 	// 非成员看不到会话 —— 折叠成 NOT_FOUND，不泄露「会话存在但你不是成员」。
-	// 和 GetConversation 保持一致：同一个「不是成员」的事实，两个接口
-	// 给出不同的状态码，客户端没法用统一逻辑处理。
+	// 和 GetConversation 保持一致。
 	if !isMember {
 		return nil, ErrConversationNotFound
 	}
@@ -680,8 +670,8 @@ func (uc *ConversationUsecase) UpdateUnread(ctx context.Context, conversationID 
 }
 
 // UpdateUnreadBatch 批量增减多个成员的会话级未读数，返回成功更新的成员数。
-// 不是成员的 uid 直接跳过 —— 未读数只是角标，少算一个不该让整批失败。
 // conversationID 是会话 ID，userIDs 是成员 uid 列表，delta 是增减量。
+// 不是成员的 uid 直接跳过 —— 未读数只是角标，少算一个不该让整批失败。
 func (uc *ConversationUsecase) UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if uc.repo == nil {
 		return 0, ErrConversationInvalidArgument

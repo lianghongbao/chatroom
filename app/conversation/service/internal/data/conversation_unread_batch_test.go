@@ -8,8 +8,6 @@ import (
 )
 
 // TestConversationRepo_UpdateUnreadBatch 批量加未读数。
-//
-// 消息服务发一条消息要给所有非发送方成员加未读 —— 逐个调是 N 次跨进程调用。
 func TestConversationRepo_UpdateUnreadBatch(t *testing.T) {
 	d, repo := newTestConvRepo(t)
 	ctx := context.Background()

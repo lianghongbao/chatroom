@@ -10,12 +10,8 @@ import (
 )
 
 // MemberInvalidationPublisher biz.MemberInvalidationPublisher 的 Redis Pub/Sub 实现。
-//
-// 成员变了就通知 ws-gateway 失效它的本地成员缓存 —— 否则新人加群后最长
-// 一个 TTL（默认 1 分钟）收不到消息，退群的人还会继续收到。
-//
-// Pub/Sub 不持久化：网关没订阅时通知会丢，那它下次回源查成员就是新的
-// —— 不影响正确性，只影响时效。
+// 成员变了就通知 ws-gateway 失效本地成员缓存。
+// Pub/Sub 不持久化，网关没订阅时通知会丢，不影响正确性只影响时效。
 type MemberInvalidationPublisher struct {
 	rdb redis.Cmdable
 }

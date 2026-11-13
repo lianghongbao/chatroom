@@ -6,11 +6,7 @@ import (
 )
 
 // TestFriendUsecase_ListPendingRequests_CursorDoesNotDuplicate
-// 收件箱翻页不该重复返回同一条记录。
-//
-// ListPendingRequests 用 limit+1 的哨兵多取一条判断还有没有下一页，
-// 但 next_cursor 若取「多取的那条」的 id —— 下一页从 id > cursor 开始，
-// 那条哨兵记录会被再返回一次。
+// 收件箱翻页不该重复返回同一条记录（next_cursor 不能取哨兵那条的 id）。
 func TestFriendUsecase_ListPendingRequests_CursorDoesNotDuplicate(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)

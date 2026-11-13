@@ -10,9 +10,7 @@ import (
 )
 
 // TokenStore biz.TokenStore 的 Redis 实现。
-//
-// 同时实现 middleware.TokenChecker —— 中间件查黑名单问的是同一份数据，
-// 复制一份只会让两份状态漂移。
+// 同时实现 middleware.TokenChecker —— 中间件查黑名单问的是同一份数据。
 type TokenStore struct {
 	rdb redis.Cmdable
 }

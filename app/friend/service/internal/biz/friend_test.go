@@ -216,9 +216,7 @@ func (r *fakeFriendRepo) DeleteByEitherPair(_ context.Context, callerID, otherID
 }
 
 // fakeFriendLimiter 是 biz.FriendLimiter 的内存替身，可在测试里按需
-// 触发 ErrFriendRateLimited。
-//
-// 默认零值表现：三条路径都返 nil（放行）。需要命中频控时设对应字段。
+// 触发 ErrFriendRateLimited。默认零值表现：三条路径都返 nil（放行）。
 type fakeFriendLimiter struct {
 	rejectApply        bool
 	rejectAcceptReject bool
@@ -627,9 +625,8 @@ func TestFriendUsecase_List_Pagination(t *testing.T) {
 	}
 }
 
-// cursor 必须基于未过滤序列，否则掺杂 PENDING/REJECTED 的
-// 中间行被剔掉，旧逻辑会让 next_cursor 跳过记录。建一条 PENDING
-// 夹在 4 个 ACCEPTED 中间，验证第一页/第二页均不丢、不重。
+// cursor 必须基于未过滤序列，否则掺杂 PENDING/REJECTED 的中间行被剔掉后，
+// next_cursor 会跳过记录。
 func TestFriendUsecase_List_CursorSkipsFilteredRows(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
@@ -749,7 +746,6 @@ func TestFriendUsecase_LimiterNilFallsBack(t *testing.T) {
 
 // TestFriendUsecase_ListPendingRequests 验证：
 //   - 只返回 caller 作为目标方（friend_id == callerID）的 PENDING 行
-//   - 排除 caller 自己发出去的 PENDING（自己发的是 user_id == callerID）
 //   - 排除 ACCEPTED / REJECTED
 //   - cursor 分页正确
 func TestFriendUsecase_ListPendingRequests(t *testing.T) {

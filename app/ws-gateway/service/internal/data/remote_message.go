@@ -34,8 +34,7 @@ const RemoteMessageEndpoint = "discovery:///chatroom-message.grpc"
 
 // NewRemoteMessageClient 构造 RemoteMessageClient。
 // discoverer 是服务发现器，obs 是观测能力。
-// discoverer 为 nil 时返 noop。
-// 超时 2s：网关转发是同步链路，下游慢会拖住 WS 读协程。
+// discoverer 为 nil 时返 noop。超时 2s。
 func NewRemoteMessageClient(discoverer registry.Discovery, obs *observability.Provider) (RemoteMessageClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteMessageClient{}, func() {}, nil
@@ -62,7 +61,8 @@ type remoteMessageGRPCClient struct {
 	cli messagev1.MessageClient
 }
 
-// SendMessage 发消息。token 是发起方的用户 JWT。
+// SendMessage 发消息。token 是发起方的用户 JWT，conversationID 是会话 ID，
+// typ 是消息类型，content 是消息内容。
 func (c *remoteMessageGRPCClient) SendMessage(ctx context.Context, token string, conversationID uint64, typ uint8, content string) (*messagev1.MessageInfo, error) {
 	req := &messagev1.SendMessageRequest{
 		ConversationId: conversationID,
@@ -76,7 +76,8 @@ func (c *remoteMessageGRPCClient) SendMessage(ctx context.Context, token string,
 	return reply.GetMessage(), nil
 }
 
-// ListMessages 拉历史消息。cursor 为 0 表示从最新开始。
+// ListMessages 拉历史消息。token 是发起方的用户 JWT，conversationID 是会话 ID，
+// cursor 为 0 表示从最新开始，limit 是单页条数。
 func (c *remoteMessageGRPCClient) ListMessages(ctx context.Context, token string, conversationID uint64, cursor uint64, limit int32) ([]*messagev1.MessageInfo, uint64, error) {
 	req := &messagev1.ListMessagesRequest{
 		ConversationId: conversationID,
@@ -90,7 +91,9 @@ func (c *remoteMessageGRPCClient) ListMessages(ctx context.Context, token string
 	return reply.GetMessages(), reply.GetNextCursor(), nil
 }
 
-// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序。sinceID 为基准消息 id。
+// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序。
+// token 是发起方的用户 JWT，conversationID 是会话 ID，sinceID 为基准消息 id，
+// limit 是单页条数。
 func (c *remoteMessageGRPCClient) ListMessagesSince(ctx context.Context, token string, conversationID, sinceID uint64, limit int32) ([]*messagev1.MessageInfo, uint64, bool, error) {
 	req := &messagev1.ListMessagesSinceRequest{
 		ConversationId: conversationID,

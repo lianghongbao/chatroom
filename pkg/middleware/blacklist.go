@@ -19,7 +19,7 @@ func NewBlacklistChecker(rdb redis.Cmdable) *BlacklistChecker {
 	return &BlacklistChecker{rdb: rdb}
 }
 
-// blacklistKey 黑名单 key，与写入方共用。
+// blacklistKey 黑名单 key，与写入方共用。jti 是 token 的唯一标识。
 func blacklistKey(jti string) string {
 	return keys.TokenBlacklistKey(jti)
 }

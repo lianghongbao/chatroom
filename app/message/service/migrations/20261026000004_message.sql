@@ -12,9 +12,9 @@ CREATE TABLE IF NOT EXISTS `messages` (
     PRIMARY KEY (`id`),
     -- 历史消息的主查询路径：某会话的消息按 id 倒序。
     -- id 是主键，InnoDB 会把它挂在二级索引末尾，所以这个索引天然覆盖
-    -- conversation_id + id 的排序 —— 游标分页直接走它，不用回表排序。
+    -- conversation_id + id 的排序，游标分页不用回表。
     KEY `message_conversation_id_id` (`conversation_id`, `id`),
     KEY `message_sender_id` (`sender_id`)
     -- 故意不建外键。conversation_id 指向的会话可能已被解散，消息保留着
-    -- （历史可查）。外键会挡住这件事。与 ent 的 schema.WithForeignKeys(false) 一致。
+    -- （历史可查）。外键会挡住这件事。
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '消息表';

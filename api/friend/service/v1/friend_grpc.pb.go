@@ -33,8 +33,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // FriendService 好友服务。
-//
-// 跨服务:通过 nacos 调 user.GetUserByID 拉取好友公开资料。
+// 跨服务：通过 nacos 调 user.GetUserByID 拉取好友公开资料。
 type FriendClient interface {
 	// ApplyFriend 发起好友申请。
 	// 幂等：自申请 / 已好友 / 重复申请 / 反向 PENDING 合并 / 覆盖 REJECTED。
@@ -137,8 +136,7 @@ func (c *friendClient) CountPending(ctx context.Context, in *CountPendingRequest
 // for forward compatibility.
 //
 // FriendService 好友服务。
-//
-// 跨服务:通过 nacos 调 user.GetUserByID 拉取好友公开资料。
+// 跨服务：通过 nacos 调 user.GetUserByID 拉取好友公开资料。
 type FriendServer interface {
 	// ApplyFriend 发起好友申请。
 	// 幂等：自申请 / 已好友 / 重复申请 / 反向 PENDING 合并 / 覆盖 REJECTED。

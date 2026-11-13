@@ -27,7 +27,7 @@ var reasonName = map[int32]string{
 	7: "COMMON_TIMEOUT",
 }
 
-// Reason 取枚举值名字符串。
+// Reason 取枚举值名字符串。r 是枚举值。
 func Reason(r ErrorReason) string {
 	return reasonName[int32(r)]
 }

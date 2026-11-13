@@ -14,8 +14,7 @@ import (
 )
 
 // messageRepo biz.MessageRepo 的 ent 实现。
-// 表 messages 上挂 (conversation_id, id) 复合索引 —— 历史消息按会话倒序拉，
-// 这条索引直接覆盖排序，cursor 翻页不用回表。
+// 表 messages 上挂 (conversation_id, id) 复合索引，覆盖历史消息的排序。
 type messageRepo struct {
 	data *Data
 }

@@ -9,13 +9,7 @@ import (
 )
 
 // TestConversationRepo_UpdateUnreadConcurrent 加未读数不能丢更新。
-//
-// 旧实现是「读出来 → 算一下 → 带条件写回去」的乐观锁重试。但 MySQL 默认
-// REPEATABLE READ 下，事务里重读拿到的是同一个快照，条件 UPDATE 的
-// WHERE unread_count = <旧值> 永远匹配不上 —— 每次重试都是 0 行，
-// 5 轮走完直接返回冲突错误。加的未读数就这么静默丢了。
-//
-// 正确做法是把加减放到数据库端做（SET unread_count = unread_count + ?），
+// 加减必须放到数据库端做（SET unread_count = unread_count + ?），
 // 让并发写由 InnoDB 的行锁串行化。
 func TestConversationRepo_UpdateUnreadConcurrent(t *testing.T) {
 	d, repo := newTestConvRepo(t)
