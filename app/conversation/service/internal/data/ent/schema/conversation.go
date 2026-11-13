@@ -12,13 +12,11 @@ import (
 )
 
 // 会话表。对应 PRD §5.3。
-//
 // 一条记录 = 一个会话（单聊或群聊）。
 //   - type=1 单聊：固定两个成员，由 member_ids 唯一确定，重复创建复用同一条。
 //   - type=2 群聊：成员可增减，owner_id 指向群主。
 //
-// 成员本身存在 conversation_members 表（PRD §5.4），
-// 本表只存会话自身的元信息。
+// 成员本身存在 conversation_members 表，本表只存会话自身的元信息。
 type Conversation struct {
 	ent.Schema
 }
@@ -43,24 +41,15 @@ func (Conversation) Fields() []ent.Field {
 		// 群主 uid（UUIDv7 字符串）。单聊为空串。
 		field.String("owner_id").Default("").MaxLen(36).Comment("群主 uid (UUIDv7 字符串), 单聊为空串"),
 		// 单聊的成员对键，形如 "uid1,uid2"（两个 uid 升序拼接）。
-		//
-		// 群聊为 NULL。这列的唯一索引就是"单聊唯一"的数据库级约束 ——
-		// 并发建同一对成员的单聊时，两个请求都会尝试插入同一个 pair_key，
-		// 第二个被唯一索引挡下。事务外的预查挡不住并发，真正的仲裁在索引上。
-		//
-		// MySQL 唯一索引允许存在多个 NULL，所以群聊之间不会互相冲突。
-		//
+		// 群聊为 NULL。这列的唯一索引是「单聊唯一」的数据库级约束 ——
+		// 并发建同一对成员的单聊时，第二个请求被唯一索引挡下。
+		// MySQL 唯一索引允许存在多个 NULL，群聊之间不会互相冲突。
 		// 长度按 UUIDv7 字符串算：两个 uid 各 36 字符 + 一个逗号 = 73。
-		// 之前留的是 32 —— 那是数字 uid 时代的长度，改用字符串 uid 后
-		// auto_migrate 要把列缩窄，就会撞上「存量行比新列长」而报错。
 		field.String("pair_key").Optional().Nillable().MaxLen(73).Comment("单聊成员对键 'uid1,uid2', 群聊为 NULL"),
 		field.Time("created_at").Immutable().Default(time.Now).Comment("创建时间"),
 		// 最后活动时间。成员变动 / 改名 / 有新消息时更新，会话列表按它倒序。
-		//
-		// SchemaType(TimeMicro) 让 MySQL 列是 DATETIME(6) 而不是 DATETIME。
-		// 默认的 DATETIME 只到秒精度 —— 会话列表按 updated_at 倒序，
-		// 同一秒内建的多个会话排序会退化到 id tiebreak，updated_at 本身
-		// 分不出先后。微秒精度让排序键真正可用。
+		// SchemaType(TimeMicro) 让 MySQL 列是 DATETIME(6)，
+		// 同一秒内建的多个会话才能分出先后。
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now).
 			SchemaType(map[string]string{"mysql": "datetime(6)"}).Comment("最后活动时间"),
 	}

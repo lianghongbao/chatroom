@@ -45,9 +45,8 @@ fi
 
 # protoc 从仓库根跑，--proto_path=app —— 注册进 protobuf 全局注册表的
 # 路径是 <服务>/service/internal/conf/conf.proto。
-# 路径必须全局唯一：整仓是单个 Go module，多个服务的 conf 包会被链进同一
-# 个二进制，注册表按「相对 proto_path 根的路径」做 key，同名会在 init 期 panic。
-# 加上服务名这一层前缀就天然避开了。
+# 路径必须全局唯一：整仓是单个 Go module，注册表按「相对 proto_path 根的路径」
+# 做 key，同名会在 init 期 panic。加上服务名这一层前缀就天然避开了。
 cd "${ROOT}"
 protoc \
 	--proto_path=app \

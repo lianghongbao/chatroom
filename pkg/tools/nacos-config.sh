@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # 把某服务的 configs/config.yaml 同步到 nacos 配置中心。
 #
-# 本地 config.yaml 和 nacos 上的 chatroom-{svc}.yaml 是同一份配置的两份拷贝，
-# 靠人肉记得改就会漂移（改了本地没推 → 服务读的还是 nacos 上的旧值）。
-#
 # 分层约定：
 #   configs/bootstrap.yaml   引导配置：连哪个 nacos、哪条 dataId。只在本地，
 #                            永远不进 nacos —— 「连哪个 nacos」不能由 nacos
@@ -51,9 +48,8 @@ access_token() {
 		python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])'
 }
 
-# 从 configs/bootstrap.yaml 读 dataId。服务启动时读的是同一份，所以必须
-# 同源。留空时回退到 <service_name>.yaml，跟服务端的回退规则一致
-# （chatroom/pkg/nacos.Options.DataIDOrDefault）。
+# 从 configs/bootstrap.yaml 读 dataId。服务启动时读的是同一份，所以必须同源。
+# 留空时回退到 <service_name>.yaml，跟服务端的回退规则一致。
 data_id_of() {
 	python3 - "$ROOT/configs/bootstrap.yaml" <<'PYEOF'
 import sys, yaml
@@ -73,7 +69,7 @@ PYEOF
 
 # 把本地 config.yaml 转成 nacos 上要放的内容。
 # 断言 config.yaml 里没有 registry 段 —— 万一有人写回去，推上去就会形成
-# 「nacos 决定连哪个 nacos」的循环依赖。宁可推失败也不要静默推坏。
+# 「nacos 决定连哪个 nacos」的循环依赖。
 build_content() {
 	python3 - "$1" <<'PYEOF'
 import sys, yaml
@@ -85,8 +81,7 @@ sys.stdout.write(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False, defaul
 PYEOF
 }
 
-# 从 nacos 拉一份配置内容。dataId 不存在时服务端返回 data 为字符串，
-# 这里统一当成空内容。
+# 从 nacos 拉一份配置内容。dataId 不存在时统一当成空内容。
 fetch_content() {
 	local data_id="$1"
 	curl -s -m 10 "$API/admin/cs/config?accessToken=$TOKEN&dataId=$data_id&groupName=$NACOS_GROUP&namespaceId=$NACOS_NAMESPACE" |

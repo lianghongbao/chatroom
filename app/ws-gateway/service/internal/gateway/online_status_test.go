@@ -173,11 +173,7 @@ func (f *fakeOnlineRedis) get(key string) (string, bool) {
 }
 
 // TestOnlineStatusKeptWhileOtherConnectionRemains
-// 同一个用户开两条连接（多端登录），关掉其中一条时，在线状态必须保留 ——
-// 用户还在线（另一条连接连着）。
-//
-// 这是审查发现的真 bug：handleWS 的 defer 里无条件 MarkOffline，
-// 把在线状态错删了。
+// 同一用户开两条连接，关掉其中一条时在线状态必须保留（另一条还连着）。
 func TestOnlineStatusKeptWhileOtherConnectionRemains(t *testing.T) {
 	f := newFakeOnlineRedis()
 	rdb := f.client()

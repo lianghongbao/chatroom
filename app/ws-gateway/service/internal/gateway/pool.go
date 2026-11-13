@@ -19,7 +19,7 @@ func NewPool(onClose func(userID string, c *Connection)) *Pool {
 	return &Pool{conns: make(map[string][]*Connection), onClose: onClose}
 }
 
-// Add 加一条连接。同一用户的多个连接都留着，消息推给所有端。
+// Add 加一条连接。c 是要加入的连接。同一用户的多个连接都留着，消息推给所有端。
 func (p *Pool) Add(c *Connection) {
 	if c == nil {
 		return
@@ -29,7 +29,8 @@ func (p *Pool) Add(c *Connection) {
 	p.conns[c.UserID] = append(p.conns[c.UserID], c)
 }
 
-// Remove 移除一条连接。按指针匹配，只删这一条；确实是池子里的连接时才触发 onClose。
+// Remove 移除一条连接。c 是要移除的连接。按指针匹配，只删这一条；
+// 确实是池子里的连接时才触发 onClose。
 func (p *Pool) Remove(c *Connection) {
 	if c == nil {
 		return

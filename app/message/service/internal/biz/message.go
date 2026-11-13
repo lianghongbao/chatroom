@@ -82,8 +82,8 @@ type MessageUsecase struct {
 }
 
 // NewMessageUsecase 构造 MessageUsecase。repo 是消息仓储，membership 是成员校验，
-// publisher 是广播器，unread 是未读数读写，lister 是会话成员列举，logger 为 nil 时用默认 logger。
-// membership 为 nil 时成员校验一律拒绝，生产环境必须注入。
+// publisher 是广播器，unread 是未读数读写，lister 是会话成员列举，
+// logger 为 nil 时用默认 logger。membership 为 nil 时成员校验一律拒绝。
 func NewMessageUsecase(repo MessageRepo, membership ConversationMembershipChecker, publisher MessagePublisher, unread UnreadCounter, lister ConversationMemberLister, logger *slog.Logger) *MessageUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -212,7 +212,7 @@ func (uc *MessageUsecase) ListMessages(ctx context.Context, callerID string, con
 
 // ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序。callerID 是调用者 ID，
 // conversationID 是会话 ID，sinceID 是断线前看到的最后一条消息 id，limit 是单页条数。
-// 断线重连补消息用：与 ListMessages 方向相反，那个往前翻历史，这个往后补增量。
+// 断线重连补消息用，与 ListMessages 方向相反。
 // 返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
 func (uc *MessageUsecase) ListMessagesSince(ctx context.Context, callerID string, conversationID, sinceID uint64, limit int) ([]*Message, uint64, bool, error) {
 	if uc.repo == nil {
@@ -260,11 +260,7 @@ type UnreadCounter interface {
 	// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。delta 是增量。
 	IncUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error)
 	// IncUnreadBatch 给一批成员的会话级未读数加 delta。conversationID 是会话 ID，
-	// userIDs 是成员 ID 列表，delta 是增量。
-	//
-	// 发一条消息要给除发送方外的所有成员加未读 —— 逐个调 IncUnread 是
-	// N 次跨进程调用（500 人的群 = 500 次往返）。这个接口把整个 fan-out
-	// 压成一次。
+	// userIDs 是成员 ID 列表，delta 是增量。整个 fan-out 压成一次调用。
 	IncUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error)
 	// ClearUnread 把调用方在该会话的未读数清零，返回清零后的值。
 	ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
@@ -304,11 +300,8 @@ func (uc *MessageUsecase) unreadDownstreamError(ctx context.Context, err error, 
 		return nil
 	}
 	// 「成员不存在」保留原始 404。
-	//
-	// 必须用 kratoserrors.FromError 而不是 errors.As —— 下游是跨进程的
-	// gRPC 调用，返回的是 *status.Error，它没有 Unwrap()，
-	// errors.As(err, &*kratoserrors.Error) 永远匹配不上，
-	// 404 会被错判成 503。
+	// 必须用 kratoserrors.FromError 而不是 errors.As —— 下游返回的
+	// *status.Error 没有 Unwrap()，errors.As 匹配不上。
 	if se := kratoserrors.FromError(err); se != nil && se.Code == 404 {
 		return err
 	}

@@ -6,8 +6,7 @@ info:
     title: Friend API
     description: |-
         FriendService 好友服务。
-
-         跨服务:通过 nacos 调 user.GetUserByID 拉取好友公开资料。
+         跨服务：通过 nacos 调 user.GetUserByID 拉取好友公开资料。
     version: 0.0.1
 paths:
     /api/friend/accept:
@@ -218,9 +217,8 @@ components:
                     description: 申请附言（最多 200 字符）。
             description: |-
                 FriendInfo 单条好友关系。
-
-                 friend_id 是「对方」的 uid。昵称/头像等资料由 service 层
-                 调 user.GetUserByID 填充, 不可达时降级为空并 warn。
+                 friend_id 是「对方」的 uid。昵称/头像等资料由 service 层调 user.GetUserByID
+                 填充，不可达时降级为空。
         api.friend.v1.ListFriendsReply:
             type: object
             properties:

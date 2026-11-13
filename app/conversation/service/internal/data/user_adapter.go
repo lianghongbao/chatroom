@@ -13,13 +13,14 @@ type ConversationAdapter struct {
 	cli RemoteUserClient
 }
 
-// NewConversationAdapter wire 注入 RemoteUserClient。nil 时仍可用。
+// NewConversationAdapter wire 注入 RemoteUserClient。cli 是远程用户客户端，
+// nil 时仍可用。
 func NewConversationAdapter(cli RemoteUserClient) *ConversationAdapter {
 	return &ConversationAdapter{cli: cli}
 }
 
 // FetchProfiles 把 GetConversationMemberProfiles 结果折成 []*biz.UserProfile。
-// 整批 err 透传，由 biz 走降级（昵称/头像留空，不阻断会话列表）。
+// ids 是要查的用户 ID 列表。整批 err 透传，由 biz 走降级。
 func (a *ConversationAdapter) FetchProfiles(ctx context.Context, ids []string) ([]*biz.UserProfile, error) {
 	if a == nil || a.cli == nil {
 		return nil, nil

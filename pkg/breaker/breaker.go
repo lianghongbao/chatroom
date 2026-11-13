@@ -1,16 +1,5 @@
 // Package breaker 提供跨服务 gRPC 调用的熔断中间件。
-//
-// 下游宕机或变慢时，调用方每次调用都要等满超时才失败，而上游请求
-// 源源不断进来 —— goroutine、连接、内存都在堆积，这叫「故障放大」。
-// 熔断器在下游明显不健康时直接拒掉，请求快速失败，上游的降级逻辑
-// 立刻生效。
-//
-// 熔断按 operation 粒度（Kratos 内部按 gRPC method 分组）——
-// 下游某一个端点挂了，不该把同一个下游的其它端点一起拒掉。
-//
-// 不用 Kratos 内置 SRE 熔断器的原因：它窗口只有 3s 且要求窗口内
-// 至少 20 个请求才评估，5 QPS 的服务永远达不到 20，等于没有熔断。
-// 这里窗口放宽到 10s，最少请求数也可按服务调。
+// 按 operation 粒度统计（Kratos 内部按 gRPC method 分组）。
 package breaker
 
 import (
@@ -30,11 +19,8 @@ const (
 	// DefaultFailureRatio 触发熔断的失败率阈值。
 	DefaultFailureRatio = 0.5
 	// DefaultRequest 窗口内至少要有多少请求才评估失败率。
-	// 流量低时不该因三五次失败就熔断 —— 样本太少，统计没意义。
 	DefaultRequest = 20
-	// DefaultWindow 滚动统计窗口。比 Kratos 内置的 3s 长：跨服务调用
-	// 本来就慢，下游发版时短暂失败率会明显升高，3s 窗口容易误判成
-	// 「挂了」。
+	// DefaultWindow 滚动统计窗口。
 	DefaultWindow = 10 * time.Second
 	// DefaultBucket 窗口分桶数。桶越细，窗口边界越平滑。
 	DefaultBucket = 10
@@ -56,12 +42,12 @@ type options struct {
 	halfOpenMax  int64
 }
 
-// WithFailureRatio 设置失败率阈值。取值 (0,1)，越接近 1 越保守（越晚熔断）。
+// WithFailureRatio 设置失败率阈值。ratio 取值 (0,1)，越接近 1 越保守（越晚熔断）。
 func WithFailureRatio(ratio float64) Option {
 	return func(o *options) { o.failureRatio = ratio }
 }
 
-// WithRequest 设置窗口内触发评估的最小请求数。
+// WithRequest 设置窗口内触发评估的最小请求数。n 是最小请求数。
 func WithRequest(n int64) Option {
 	return func(o *options) { o.request = n }
 }
@@ -71,12 +57,12 @@ func WithWindow(d time.Duration) Option {
 	return func(o *options) { o.window = d }
 }
 
-// WithBucket 设置窗口分桶数。
+// WithBucket 设置窗口分桶数。n 是分桶数。
 func WithBucket(n int) Option {
 	return func(o *options) { o.bucket = n }
 }
 
-// WithOpenDuration 设置熔断打开后的冷却时长。
+// WithOpenDuration 设置熔断打开后的冷却时长。d 是冷却时长。
 func WithOpenDuration(d time.Duration) Option {
 	return func(o *options) { o.openDuration = d }
 }
@@ -87,12 +73,7 @@ func WithHalfOpenMax(n int64) Option {
 }
 
 // Client 返回 gRPC 客户端熔断中间件。opts 是熔断参数。
-//
-// 放进客户端中间件链的最内层（紧挨着真正的 RPC 调用）：放外面的话
-// 被熔断拒绝的请求进不到 tracing 中间件，trace 里看不到这次拒绝。
-//
-// 只有 5xx 类错误算失败（Kratos 内部按 500/503/504 判定）：
-// 下游返 404「用户不存在」是业务结果，不该计入熔断统计。
+// 放在客户端中间件链的最内层；只有 5xx 类错误算失败。
 func Client(opts ...Option) middleware.Middleware {
 	o := &options{
 		failureRatio: DefaultFailureRatio,
@@ -139,8 +120,7 @@ const (
 )
 
 // breaker 三态熔断器：closed → open → halfOpen → closed。
-// 实现 Kratos 的 circuitbreaker.CircuitBreaker 接口，挂进
-// circuitbreaker.Client 的分组机制里 —— 每个 operation 一个实例。
+// 实现 Kratos 的 circuitbreaker.CircuitBreaker 接口。
 type breaker struct {
 	mu sync.Mutex
 
@@ -160,6 +140,7 @@ type breaker struct {
 	halfOpenFailed int64
 }
 
+// newBreaker 按参数造一个熔断器。o 是熔断参数。
 func newBreaker(o *options) *breaker {
 	return &breaker{
 		state:        stateClosed,
@@ -262,6 +243,7 @@ type countBucket struct {
 	failure int64
 }
 
+// newRollingCounter 造一个滚动窗口计数器。size 是分桶数，duration 是单桶时长。
 func newRollingCounter(size int, duration time.Duration) *rollingCounter {
 	if size < 1 {
 		size = 1
@@ -279,6 +261,7 @@ func (c *rollingCounter) currentSlot() int64 {
 	return time.Now().UnixNano() / int64(c.duration)
 }
 
+// add 记一次调用。success 是这次调用是否成功。
 func (c *rollingCounter) add(success bool) {
 	slot := c.currentSlot()
 	idx := slot % int64(len(c.buckets))

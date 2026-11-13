@@ -35,10 +35,9 @@ func NewRedisClient(d *Data) *redis.Client {
 // Data 持有 db / rdb 长连接客户端。
 type Data struct {
 	db *ent.Client
-	// sqlDB 是 db 背后的同一个连接池。ent 的类型化 builder 表达不了
-	// 「SET unread_count = GREATEST(unread_count + ?, 0)」这种带表达式的
-	// 原子更新，而未读数必须一次性原子改完（见 conversation.go 的 UpdateUnread），
-	// 所以留一条原生 SQL 的口子。两者共用一个池，不额外占连接。
+	// sqlDB 是 db 背后的同一个连接池。ent 的类型化 builder 表达不了带表达式的
+	// 原子更新（如 GREATEST(unread_count + ?, 0)），所以留一条原生 SQL 的口子。
+	// 两者共用一个池，不额外占连接。
 	sqlDB *sql.DB
 	rdb   *redis.Client
 }
@@ -98,8 +97,8 @@ func NewData(c *conf.Data) (*Data, func(), error) {
 }
 
 // Redis 返回共享 redis client；可能为 nil。
-// 必须显式判 d.rdb == nil 再返回：直接 return d.rdb 会把 nil 的 *redis.Client
-// 装进 redis.Cmdable 接口，下游 `rdb == nil` 判不出来。
+// 必须显式判 d.rdb == nil 再返回，否则会把 nil 的 *redis.Client 装进
+// redis.Cmdable 接口，下游的 nil 判断就失效了。
 func (d *Data) Redis() redis.Cmdable {
 	if d == nil || d.rdb == nil {
 		return nil

@@ -14,7 +14,7 @@ import (
 // user_id 是发起方, friend_id 是目标方, 由 service 层根据 caller_id
 // 决定哪条记录是 "正向"、哪条是 "反向"。
 //
-// 状态机 (status 字段, 0/1/2 沿用 PRD §5.2):
+// 状态机 (status 字段, 沿用 PRD §5.2):
 //
 //	0 PENDING  - 申请待确认
 //	1 ACCEPTED - 已是好友

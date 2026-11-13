@@ -76,9 +76,8 @@ func (FriendStatus) EnumDescriptor() ([]byte, []int) {
 }
 
 // FriendInfo 单条好友关系。
-//
-// friend_id 是「对方」的 uid。昵称/头像等资料由 service 层
-// 调 user.GetUserByID 填充, 不可达时降级为空并 warn。
+// friend_id 是「对方」的 uid。昵称/头像等资料由 service 层调 user.GetUserByID
+// 填充，不可达时降级为空。
 type FriendInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 关系记录 ID。

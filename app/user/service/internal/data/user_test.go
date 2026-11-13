@@ -34,9 +34,7 @@ func newTestUserRepo(t *testing.T) biz.UserRepo {
 }
 
 // TestUserRepo_FindByIDWithHash_KeepsHash FindByIDWithHash 必须带回密码哈希。
-// FindByID 会把哈希清掉（对外展示不需要）。改密要拿哈希跟旧密码比对，
-// 拿的是 FindByID 的结果就必然失败 —— 表现为「旧密码永远不对」，
-// 而密码本身没问题。这条测试钉住两个方法的差别。
+// FindByID 会把哈希清掉，改密拿的是它的结果就必然失败。
 func TestUserRepo_FindByIDWithHash_KeepsHash(t *testing.T) {
 	repo := newTestUserRepo(t)
 	ctx := context.Background()

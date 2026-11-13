@@ -14,17 +14,8 @@ import (
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
 )
 
-// TestProbeEndpointsBypassAuthMiddleware 锁住一个关键假设：
-//
-// 探针端点**必须**用 srv.Handle 注册，不能用 srv.Route。
-//
-// srv.Route 是 proto 服务的注册方式 —— 生成的 handler 会调
-// ctx.Middleware(...)，于是整条 Kratos 中间件链（含 JWT 鉴权）都会跑。
-// 探针不带 token，走那条路会被 401 挡掉，K8s 就会认为 pod 挂了。
-// srv.Handle 注册的是裸 http.Handler，完全绕过中间件链。
-//
-// 这个假设一旦被改坏（比如有人「顺手」把探针改成 Route），症状是
-// 「pod 一直 NotReady」，很难第一时间联想到鉴权中间件。所以用测试钉死。
+// TestProbeEndpointsBypassAuthMiddleware 探针端点必须用 srv.Handle 注册，
+// 不能用 srv.Route —— Route 会跑 Kratos 中间件链（含 JWT），探针不带 token 会被 401 挡掉。
 func TestProbeEndpointsBypassAuthMiddleware(t *testing.T) {
 	const secret = "test-secret-at-least-32-bytes-long-value"
 

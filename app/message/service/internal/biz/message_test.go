@@ -557,9 +557,7 @@ func TestMessage_GetUnreadCountSingleConversationRejectsNonMember(t *testing.T) 
 	}
 }
 
-// 发消息要给会话里其它成员加未读 —— 收消息的人得看到红点。
-//
-// 用批量端点一次加完 —— 逐个调是 N 次跨进程调用（500 人的群 = 500 次往返）。
+// 发消息要给会话里其它成员加未读。用批量端点一次加完。
 func TestMessage_SendMessageIncreasesUnreadForOtherMembers(t *testing.T) {
 	uc, membership, unread, lister := newTestMessageUsecaseWithLister()
 	membership.add(7, "uid-42")
@@ -672,8 +670,6 @@ func TestMessage_SendMessageWithoutListerSkipsUnread(t *testing.T) {
 }
 
 // 未读数下游不可达时返 503，不是 500。
-//
-// 500 会让调用方以为是自己请求写错了，实际是服务端的问题，调用方可以重试。
 func TestMessage_UnreadDownstreamFailureIs503(t *testing.T) {
 	uc, _, membership, _, unread := newTestMessageUsecase()
 	membership.add(7, "uid-42")

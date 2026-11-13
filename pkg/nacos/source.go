@@ -24,7 +24,7 @@ func WithGroup(group string) Option {
 	return func(o *options) { o.group = group }
 }
 
-// WithDataID 设置 nacos dataId。
+// WithDataID 设置 nacos dataId。dataID 是配置项的 dataId。
 func WithDataID(dataID string) Option {
 	return func(o *options) { o.dataID = dataID }
 }
@@ -38,7 +38,7 @@ type Source struct {
 	content string
 }
 
-// NewSource 构造 Source。
+// NewSource 构造 Source。client 是 nacos 客户端，opts 是配置项选项。
 func NewSource(client config_client.IConfigClient, opts ...Option) config.Source {
 	_opts := options{}
 	for _, o := range opts {
@@ -95,7 +95,8 @@ type watcher struct {
 	contentCh chan string
 }
 
-// publish 把新配置塞进 channel，不阻塞。缓冲区满则丢掉旧值（最新值优先）。
+// publish 把新配置塞进 channel，不阻塞。data 是配置内容。
+// 缓冲区满则丢掉旧值（最新值优先）。
 func (w *watcher) publish(data string) {
 	for {
 		select {

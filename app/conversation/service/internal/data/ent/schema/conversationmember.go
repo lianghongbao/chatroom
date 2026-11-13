@@ -12,13 +12,9 @@ import (
 )
 
 // 会话成员表。对应 PRD §5.4。
-//
-// 一条记录 = "某人在某会话里"。unread_count 记该成员在这个会话里的
-// 未读消息数（消息服务 P4 落地写入逻辑；P3 先建好字段）。
-//
-// 下面的 edge 会在 DDL 里生成外键约束，但 migrate 时用
-// schema.WithForeignKeys(false) 关掉了 —— 引用完整性靠 repo 在事务里保证，
-// 成员表可以不被父表约束绑住。详见 README「表结构变更」。
+// 一条记录 = "某人在某会话里"。unread_count 记该成员在这个会话里的未读消息数。
+// migrate 时用 schema.WithForeignKeys(false) 关掉外键约束，
+// 引用完整性靠 repo 在事务里保证。
 type ConversationMember struct {
 	ent.Schema
 }
@@ -57,11 +53,8 @@ func (ConversationMember) Indexes() []ent.Index {
 func (ConversationMember) Edges() []ent.Edge {
 	return []ent.Edge{
 		// 到会话的边。与 Conversation.Members 构成一对多。
-		//
 		// edge.Field("conversation_id") 把边绑到已有的标量外键列上，
-		// 而不是让 ent 再生成一列同名外键（那会与标量字段的方法名冲突）。
-		// Required() 与 conversation_id 字段的"非可选"保持一致 ——
-		// ent 要求 edge 与其绑定字段的可选性匹配。
+		// 避免 ent 再生成一列同名外键。
 		edge.From("conversation", Conversation.Type).
 			Ref("members").
 			Unique().

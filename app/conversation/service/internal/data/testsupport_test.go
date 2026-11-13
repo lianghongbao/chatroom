@@ -11,10 +11,8 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 )
 
-// newTestDB 为每个测试创建一个独立的临时库，跑 schema migrate，
-// 测试结束后自动 DROP。互不污染，也避免和 config.yaml 里共享的
-// `test` 库冲突。需要 CHATROOM_TEST_ROOT_DSN 环境变量（root DSN，不带库名）；
-// 没设置时 skip —— `go test ./...` 应该在没有 MySQL 的机器上也能跑。
+// newTestDB 为每个测试创建独立临时库，跑 schema migrate，结束后自动 DROP。
+// 需要 CHATROOM_TEST_ROOT_DSN 环境变量（root DSN，不带库名），没设置时 skip。
 func newTestDB(t *testing.T) (*Data, func()) {
 	t.Helper()
 

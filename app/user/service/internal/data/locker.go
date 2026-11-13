@@ -12,9 +12,7 @@ import (
 )
 
 // Locker biz.Locker 的 Redis 实现。
-//
-// 按 key 的非重入互斥 —— SET NX + TTL。Redis 不可用时退化成 no-op：
-// 拿不到锁不等于业务失败，让调用方自己决定降级。
+// 按 key 的非重入互斥 —— SET NX + TTL。Redis 不可用时退化成 no-op。
 type Locker struct {
 	rdb redis.Cmdable
 }
@@ -29,10 +27,7 @@ func NewLocker(d *Data) *Locker {
 }
 
 // Acquire 取 key 的互斥锁。key 是业务侧的 key，ttl 是锁的存活时间；
-// 拿不到时返 (nil, errLockBusy)。
-//
-// TTL 是「崩溃时锁不会永久占住」的兜底 —— 进程被 kill -9 时 SET NX 不会
-// 自动释放。所以 TTL 必须覆盖临界区的最坏耗时。
+// 拿不到时返 (nil, errLockBusy)。TTL 必须覆盖临界区的最坏耗时。
 func (l *Locker) Acquire(ctx context.Context, key string, ttl time.Duration) (biz.Release, error) {
 	if l == nil || l.rdb == nil {
 		return func() {}, nil

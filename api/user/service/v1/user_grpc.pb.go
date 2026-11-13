@@ -37,7 +37,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // 全域约定：uid 由 Authorization Bearer 派生，未携带 token 返 401；
-// email / phone 仅「自己看自己」时填充，GetUserByID 查他人永远为空（防社工库）。
+// email / phone 仅「自己看自己」时填充，查他人永远为空（防社工库）。
 // UserService 用户服务。
 type UserClient interface {
 	// 注册（username 必填；nickname 留空回退 username）。
@@ -59,11 +59,8 @@ type UserClient interface {
 	// 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
 	GetUsersByIDs(ctx context.Context, in *GetUsersByIDsRequest, opts ...grpc.CallOption) (*GetUsersByIDsReply, error)
 	// GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
-	//
-	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
-	//
-	// 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
-	// 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
+	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 	GetFriendProfiles(ctx context.Context, in *GetFriendProfilesRequest, opts ...grpc.CallOption) (*GetFriendProfilesReply, error)
 	// GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation 服务补全会话成员列表。
 	//
@@ -197,7 +194,7 @@ func (c *userClient) GetConversationMemberProfiles(ctx context.Context, in *GetC
 // for forward compatibility.
 //
 // 全域约定：uid 由 Authorization Bearer 派生，未携带 token 返 401；
-// email / phone 仅「自己看自己」时填充，GetUserByID 查他人永远为空（防社工库）。
+// email / phone 仅「自己看自己」时填充，查他人永远为空（防社工库）。
 // UserService 用户服务。
 type UserServer interface {
 	// 注册（username 必填；nickname 留空回退 username）。
@@ -219,11 +216,8 @@ type UserServer interface {
 	// 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
 	GetUsersByIDs(context.Context, *GetUsersByIDsRequest) (*GetUsersByIDsReply, error)
 	// GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
-	//
-	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
-	//
-	// 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
-	// 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
+	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 	GetFriendProfiles(context.Context, *GetFriendProfilesRequest) (*GetFriendProfilesReply, error)
 	// GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation 服务补全会话成员列表。
 	//

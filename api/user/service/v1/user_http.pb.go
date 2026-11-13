@@ -40,11 +40,8 @@ type UserHTTPServer interface {
 	// 鉴权：仅供服务间调用，需带 X-Internal-Token。返回的 UserInfo 不含 email / phone。
 	GetConversationMemberProfiles(context.Context, *GetConversationMemberProfilesRequest) (*GetConversationMemberProfilesReply, error)
 	// GetFriendProfiles GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
-	//
-	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
-	//
-	// 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
-	// 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
+	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 	GetFriendProfiles(context.Context, *GetFriendProfilesRequest) (*GetFriendProfilesReply, error)
 	// GetUser 当前用户资料。
 	GetUser(context.Context, *GetUserRequest) (*UserInfo, error)
@@ -302,11 +299,8 @@ type UserHTTPClient interface {
 	// 鉴权：仅供服务间调用，需带 X-Internal-Token。返回的 UserInfo 不含 email / phone。
 	GetConversationMemberProfiles(ctx context.Context, req *GetConversationMemberProfilesRequest, opts ...http.CallOption) (rsp *GetConversationMemberProfilesReply, err error)
 	// GetFriendProfiles GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
-	//
-	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
-	//
-	// 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
-	// 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
+	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 	GetFriendProfiles(ctx context.Context, req *GetFriendProfilesRequest, opts ...http.CallOption) (rsp *GetFriendProfilesReply, err error)
 	// GetUser 当前用户资料。
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
@@ -376,11 +370,8 @@ func (c *UserHTTPClientImpl) GetConversationMemberProfiles(ctx context.Context, 
 }
 
 // GetFriendProfiles GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
-//
-// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友，不是陌生人。
-//
-// 鉴权：仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。端用户可直接调用就等于绕过
-// 陌生人可见性批量拉取任意用户资料。返回的 UserInfo 不含 email / phone。
+// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
+// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 func (c *UserHTTPClientImpl) GetFriendProfiles(ctx context.Context, in *GetFriendProfilesRequest, opts ...http.CallOption) (*GetFriendProfilesReply, error) {
 	var out GetFriendProfilesReply
 	pattern := "/api/user/friend_profiles"

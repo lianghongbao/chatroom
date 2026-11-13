@@ -36,10 +36,7 @@ func TestLoginLimiter_LocksAfterMaxFail(t *testing.T) {
 }
 
 // TestLoginLimiter_IPDimensionPreventsLockoutDoS 攻击者不能锁掉别人的账号。
-//
-// 只按用户名锁的话，任何知道用户名的人试 5 次密码就能把账号锁 15 分钟。
-// 加了 IP 维度之后，攻击者只能锁住「他自己这个 IP 上的该账号」，
-// 账号本人从别的 IP 照样能登录。
+// 加了 IP 维度后，攻击者只能锁住「他自己这个 IP 上的该账号」。
 func TestLoginLimiter_IPDimensionPreventsLockoutDoS(t *testing.T) {
 	l, _ := newTestLoginLimiter(t)
 	ctx := context.Background()

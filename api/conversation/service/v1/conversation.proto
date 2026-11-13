@@ -10,9 +10,8 @@ option java_package = "api.conversation.v1";
 option objc_class_prefix = "APIConversationV1";
 
 // ConversationService 会话服务。
-//
 // 单聊（type=1）由成员集合唯一确定，重复创建复用同一会话；群聊（type=2）成员可增减，群主唯一。
-// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空并 warn。
+// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
 service Conversation {
     // CreateConversation 创建会话。单聊幂等（同一对成员返同一会话），群聊总是新建。
     rpc CreateConversation (CreateConversationRequest) returns (CreateConversationReply) {
@@ -70,7 +69,7 @@ service Conversation {
     }
 
     // TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-    // 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+    // 转让后才能退群。
     rpc TransferOwner (TransferOwnerRequest) returns (TransferOwnerReply) {
         option (google.api.http) = {
             post: "/api/conversation/owner/transfer"
@@ -95,7 +94,7 @@ service Conversation {
     }
 
     // ── 仅供服务间调用 ──
-    // 走内部凭证 X-Internal-Token，不走用户 JWT。message 服务用它们确认成员身份和维护未读数。
+    // 走内部凭证 X-Internal-Token，不走用户 JWT。
 
     // CheckMembership 查某个 uid 是不是会话成员。
     // 会话不存在和「不是成员」都返 is_member=false。

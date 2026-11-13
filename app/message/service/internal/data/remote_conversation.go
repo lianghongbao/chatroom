@@ -27,8 +27,7 @@ type RemoteConversationClient interface {
 	// UpdateUnread 增减某成员的会话级未读数，返回更新后的值。delta 是增量。
 	UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error)
 	// UpdateUnreadBatch 批量增减多个成员的会话级未读数。conversationID 是会话 ID，
-	// userIDs 是成员 ID 列表，delta 是增量。
-	// 发消息后的未读 fan-out 用它 —— 逐个调 UpdateUnread 是 N 次跨进程调用。
+	// userIDs 是成员 ID 列表，delta 是增量。发消息后的未读 fan-out 用它。
 	UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error)
 	// GetUnread 查某成员的会话级未读数。conversationID 是会话 ID，userID 是用户 ID。
 	GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
@@ -43,8 +42,7 @@ type RemoteConversationClient interface {
 }
 
 // UpdateUnreadBatch 批量增减多个成员的会话级未读数。conversationID 是会话 ID，
-// userIDs 是成员 ID 列表，delta 是增量。
-// 发一条消息要给所有非发送方成员加未读 —— 一次调用搞定整个 fan-out。
+// userIDs 是成员 ID 列表，delta 是增量。一次调用搞定整个 fan-out。
 func (c *remoteConversationGRPCClient) UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if c.internalSecret == "" {
 		return 0, errNoRemoteSecret
@@ -80,8 +78,7 @@ func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth,
 		grpc.WithDiscovery(discoverer),
 		grpc.WithEndpoint(RemoteConversationEndpoint),
 		// WithMiddleware 是「赋值」不是「追加」—— 调多次后者会覆盖前者。
-		// 内部凭证和 trace 两个中间件必须放进同一次调用，
-		// 分成两次写的话后一次会盖掉前一次，下游收到的是「没有内部凭证」的请求。
+		// 内部凭证和 trace 两个中间件必须放进同一次调用。
 		grpc.WithMiddleware(
 			internalForwarding(internalSecret),
 			oteltrace.Client(

@@ -47,8 +47,7 @@ func (r *friendRepo) Save(ctx context.Context, f *biz.Friend) (uint64, error) {
 			return 0, biz.ErrFriendAlreadyApplied
 		}
 		// 并发插同一条 pair_key 时 InnoDB 可能报死锁（1213）而不是
-		// 唯一索引冲突（1062）—— 两边同时持有对方要等的间隙锁。
-		// 这两种情况语义一样：这条「两人对」已经有人建了。
+		// 唯一索引冲突（1062）。这两种情况语义一样：这条「两人对」已经有人建了。
 		if isDeadlockErr(err) {
 			return 0, biz.ErrFriendAlreadyApplied
 		}
@@ -58,8 +57,7 @@ func (r *friendRepo) Save(ctx context.Context, f *biz.Friend) (uint64, error) {
 }
 
 // isDeadlockErr 判断 err 是不是 InnoDB 死锁（1213）或锁等待超时（1205）。
-//
-// MySQL 错误码 1213 = ER_LOCK_DEADLOCK，1205 = ER_LOCK_WAIT_TIMEOUT。
+// 1213 = ER_LOCK_DEADLOCK，1205 = ER_LOCK_WAIT_TIMEOUT。
 func isDeadlockErr(err error) bool {
 	if err == nil {
 		return false
@@ -72,8 +70,7 @@ func isDeadlockErr(err error) bool {
 }
 
 // pairKey 归一化的「两人对」唯一键。a、b 是两个 uid，升序拼成 "a,b"，
-// 保证 (a,b) 和 (b,a) 落到同一个键 —— 只有归一化之后，
-// 唯一索引才挡得住反向并发（A 申请 B 的同时 B 也申请 A）。
+// 保证 (a,b) 和 (b,a) 落到同一个键，唯一索引才挡得住反向并发。
 func pairKey(a, b string) string {
 	if a > b {
 		a, b = b, a
@@ -133,8 +130,7 @@ func (r *friendRepo) FindBothDirections(ctx context.Context, a, b string) (*biz.
 
 // FindAcceptedByUserIDAndID 数据库层过滤 status=ACCEPTED 且 id>cursor，按 id 升序。
 // userID 是操作者 ID，cursor 是上一页末位 ID，limit 是每页条数。
-// 双向命中：好友关系只存单条记录，caller 既可能在 user_id 列也可能在 friend_id 列，
-// 只查 user_id 会漏掉「对方主动加我、我通过了」这类关系。
+// 双向命中：caller 既可能在 user_id 列也可能在 friend_id 列。
 func (r *friendRepo) FindAcceptedByUserIDAndID(ctx context.Context, userID string, cursor uint64, limit int) ([]*biz.Friend, error) {
 	q := r.data.db.Friend.Query().
 		Where(

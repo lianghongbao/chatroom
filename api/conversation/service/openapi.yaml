@@ -6,9 +6,8 @@ info:
     title: Conversation API
     description: |-
         ConversationService 会话服务。
-
          单聊（type=1）由成员集合唯一确定，重复创建复用同一会话；群聊（type=2）成员可增减，群主唯一。
-         成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空并 warn。
+         成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
     version: 0.0.1
 paths:
     /api/conversation/create:
@@ -221,7 +220,7 @@ paths:
                 - Conversation
             description: |-
                 TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
-                 转让后才能退群（LeaveConversation 对群主返 OWNER_CANNOT_LEAVE）。
+                 转让后才能退群。
             operationId: Conversation_TransferOwner
             requestBody:
                 content:

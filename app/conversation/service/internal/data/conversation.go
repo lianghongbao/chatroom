@@ -36,10 +36,10 @@ func NewConversationRepo(d *Data) biz.ConversationRepo {
 	return &conversationRepo{data: d, cache: NewConversationCache(d)}
 }
 
-// Save 新建会话 + 成员。事务内完成，保证 uk_conv_user 不冲突。
-// 单聊复用：先在事务外查一次已有单聊，命中直接返回（reused=true）。并发时真正的仲裁在
-// pair_key 的唯一索引上，插入冲突的一方回查并复用已有会话。
-// c 是待落库的会话。
+// Save 新建会话 + 成员。c 是待落库的会话。
+// 事务内完成，保证 uk_conv_user 不冲突。
+// 单聊复用：先在事务外查一次已有单聊，命中直接返回（reused=true）；
+// 并发时真正的仲裁在 pair_key 的唯一索引上。
 func (r *conversationRepo) Save(ctx context.Context, c *biz.Conversation) (*biz.Conversation, bool, error) {
 	if c == nil {
 		return nil, false, biz.ErrConversationInvalidArgument
@@ -183,7 +183,7 @@ func (r *conversationRepo) FindSingleByMembers(ctx context.Context, a, b string)
 }
 
 // ListByUserID 列出该用户参与的会话，按 updated_at DESC, id DESC。
-// 排序键是 (updated_at, id) 复合键，所以「下一页」的谓词是
+// 排序键是 (updated_at, id) 复合键，下一页谓词为
 // (updated_at < c.updated_at) OR (updated_at = c.updated_at AND id < c.id)。
 // 游标只带 id，c.updated_at 由 repo 反查。
 // userID 是用户 uid，cursor 零值表示首页，limit 是单页条数。
@@ -250,16 +250,8 @@ func (r *conversationRepo) IsMember(ctx context.Context, conversationID uint64, 
 
 // UpdateUnread 增减某成员的会话级未读数，返回更新后的值。不会减到 0 以下。
 // conversationID 是会话 ID，userID 是成员 uid，delta 是增减量。
-//
-// 必须一条语句做完，不能拆成「读出来 → 算一下 → 写回去」：
-//   - 乐观锁重试（带 unread_count = 旧值 的条件 UPDATE）在 MySQL 默认
-//     REPEATABLE READ 下必然失败 —— 事务内重读拿到的是同一个快照，
-//     条件永远匹配不上，5 轮走完直接返回冲突，并发加的未读数静默丢失。
-//   - 拆成「先加后钳」两步也不行 —— 中间会出现负数，别的并发写看到负值
-//     会把结果搅乱（实测 6 个并发 -10 得到 31 而不是 0）。
-//
-// 所以用数据库端的原子表达式：SET unread_count = GREATEST(unread_count + ?, 0)。
-// ent 的类型化 builder 表达不了这种带表达式的更新，走原生 SQL。
+// 走原生 SQL 的原子表达式 SET unread_count = GREATEST(unread_count + ?, 0)，
+// 避免读-改-写丢失更新。
 func (r *conversationRepo) UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if r.data.sqlDB == nil {
 		return 0, errors.New("data.sqlDB 未初始化")
@@ -275,9 +267,8 @@ func (r *conversationRepo) UpdateUnread(ctx context.Context, conversationID uint
 		return 0, err
 	}
 
-	// 不能靠 RowsAffected 判断成员在不在 —— 它是「值变了多少行」：
-	// 已经是 0 再减，GREATEST 把它钳回 0，值没变，affected 就是 0。
-	// 查一次行在不在，顺带把新值取回来。
+	// 不能靠 RowsAffected 判断成员在不在 —— 已经是 0 再减，GREATEST 把它钳回 0，
+	// 值没变，affected 就是 0。查一次行在不在，顺带把新值取回来。
 	po, err := r.data.db.ConversationMember.Query().
 		Where(
 			conversationmember.ConversationIDEQ(conversationID),
@@ -298,14 +289,8 @@ func (r *conversationRepo) UpdateUnread(ctx context.Context, conversationID uint
 
 // UpdateUnreadBatch 批量增减多个成员的未读数，返回成功更新的成员数。
 // conversationID 是会话 ID，userIDs 是成员 uid 列表，delta 是增减量。
-//
-// 一条 UPDATE ... WHERE user_id IN (...) 搞定 —— 逐个调 UpdateUnread 是
-// N 条语句（N 次网络往返）。语义跟单个的 UpdateUnread 一致：
-// 原子加、钳到 0、不出现负数。
-//
-// 不是成员的 uid 不算失败（未读数只是角标）—— 用 RowsAffected 近似，
-// 但它是「值变了多少行」，已经是 0 再减的行不算进去。
-// 所以单独查一次成员数作为准确计数。
+// 一条 UPDATE ... WHERE user_id IN (...) 搞定，语义跟 UpdateUnread 一致。
+// 不是成员的 uid 不算失败；准确计数单独查成员数，不用 RowsAffected 近似。
 func (r *conversationRepo) UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if r.data.sqlDB == nil {
 		return 0, errors.New("data.sqlDB 未初始化")
@@ -383,11 +368,8 @@ func (r *conversationRepo) GetUnread(ctx context.Context, conversationID uint64,
 // 成员不存在返 ErrConversationNotFound。
 // conversationID 是会话 ID，userID 是成员 uid。
 func (r *conversationRepo) ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
-	// 先确认成员行存在。
-	//
-	// 不能靠 UPDATE 的 affected 行数判断成员存在与否：ent 的 UPDATE 只统计
-	// 「值真的变了」的行，未读数本来就是 0 时 affected 为 0，会被误判成
-	// 「会话不存在」—— 于是「重复清零」报错，而清零本身是幂等操作。
+	// 先确认成员行存在。不能靠 UPDATE 的 affected 行数判断 ——
+	// ent 的 UPDATE 只统计「值真的变了」的行，未读数本来就是 0 时 affected 为 0。
 	exists, err := r.data.db.ConversationMember.Query().
 		Where(
 			conversationmember.ConversationIDEQ(conversationID),
@@ -480,10 +462,8 @@ func (r *conversationRepo) AddMembers(ctx context.Context, conversationID uint64
 		if n > 0 {
 			continue
 		}
-		// 上限是「最多 MaxGroupMembers 人」。判断的是**加完之后的**人数：
+		// 上限是「最多 MaxGroupMembers 人」。判断的是加完之后的人数：
 		// current+added+1 > Max 才算超限。
-		// 写成 current+added > Max 的话，等到 current+added == Max 时
-		// 检查会放行，然后真的加进去 —— 结果变成 Max+1 人。
 		if current+added+1 > biz.MaxGroupMembers {
 			return 0, 0, biz.ErrConversationMemberLimit
 		}
@@ -742,10 +722,7 @@ func convMembersKey(conversationID uint64) string {
 }
 
 // convMembersVerKey 会话成员集合的版本号 key。conversationID 是会话 ID。
-//
-// 成员集合是「读时回填」的：读路径查库查完再写回缓存。这中间要是有人
-// 加/减了成员，写回的就是陈旧数据。版本号挡这个 —— 回填时带上
-// **读库之前**取到的版本，写入时用 Lua 比对版本，版本变了就放弃回填。
+// 回填时用 Lua 比对版本，版本变了就放弃回填。
 func convMembersVerKey(conversationID uint64) string {
 	return "chatroom:conv:" + formatUint(conversationID) + ":members:ver"
 }
@@ -756,9 +733,8 @@ func formatUint(v uint64) string {
 }
 
 // Members 读会话成员 uid 列表（升序）。conversationID 是会话 ID。
-// 未命中返 (nil, nil) —— 调用方回源查库。
-//
-// 第二个返回值是回填时该带的版本号（读成员列表**之前**取）。
+// 未命中返 (nil, nil)，调用方回源查库。
+// 第二个返回值是回填时该带的版本号（读成员列表之前取）。
 func (c *ConversationCache) Members(ctx context.Context, conversationID uint64) ([]string, int64, error) {
 	if c == nil || c.rdb == nil {
 		return nil, 0, nil
@@ -792,11 +768,8 @@ func (c *ConversationCache) MembersVersion(ctx context.Context, conversationID u
 	return n
 }
 
-// SetMembers 回填会话成员集合。
-//
-// ver 是回源**之前**取到的版本号。回填时用 Lua 原子比对：版本没变才写，
-// 变了就放弃 —— 说明这期间有人改过成员，写回的就是陈旧数据。
-// conversationID 是会话 ID，members 是成员 uid 列表，ver 是回填前的版本号。
+// SetMembers 回填会话成员集合。conversationID 是会话 ID，members 是成员 uid 列表，
+// ver 是回源之前取到的版本号；版本变了就放弃回填。
 func (c *ConversationCache) SetMembers(ctx context.Context, conversationID uint64, members []string, ver int64) {
 	if c == nil || c.rdb == nil || len(members) == 0 {
 		return
@@ -807,8 +780,7 @@ func (c *ConversationCache) SetMembers(ctx context.Context, conversationID uint6
 	}
 
 	// Lua：比对版本 → 一致才 Del + SAdd + Expire。
-	// 用 Lua 是因为「比对」和「写」必须是一个原子步骤 ——
-	// 分开做的话，比对通过之后、写入之前还是可能有人改成员。
+	// 「比对」和「写」必须是一个原子步骤，所以用 Lua。
 	const setIfVersionMatches = `
 local cur = redis.call('GET', KEYS[2])
 if cur == false then
@@ -839,9 +811,7 @@ func (c *ConversationCache) InvalidateMembers(ctx context.Context, conversationI
 	if c == nil || c.rdb == nil {
 		return
 	}
-	// 版本号先 +1 —— 让正在进行的回填（带着旧版本）失败。
-	// 顺序很重要：先加版本再删集合。反过来的话，中间读到的旧集合
-	// 会被当成有效缓存返回。
+	// 版本号先 +1，让正在进行的回填（带着旧版本）失败。顺序不能反。
 	if err := c.rdb.Incr(ctx, convMembersVerKey(conversationID)).Err(); err != nil {
 		slog.WarnContext(ctx, "会话成员缓存版本递增降级", "err", err, "conversation_id", conversationID)
 	}

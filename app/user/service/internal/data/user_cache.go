@@ -38,11 +38,8 @@ func verKey(uid string) string {
 }
 
 // cacheEntry 是缓存里存的用户资料。
-//
-// 字段必须跟 biz.User 对齐 —— 少存一个字段，读出来就少一个值：
-//   - Status 少了会变成 0 = UserStatusBanned（正常账号被当成已禁用）
-//   - IsVisibleToStranger 少了会变成 false（陌生人可见性判断反了）
-//   - Email / Phone 少了会变成空串（本人看自己的资料时是空的）
+// 字段必须跟 biz.User 对齐 —— 少存一个字段，读出来就少一个值
+// （Status 变 0 即已禁用，IsVisibleToStranger 变 false，Email / Phone 变空串）。
 type cacheEntry struct {
 	ID                  string    `json:"id"`
 	Username            string    `json:"username"`

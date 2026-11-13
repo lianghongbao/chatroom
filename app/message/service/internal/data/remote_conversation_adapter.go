@@ -48,7 +48,8 @@ func (a *UnreadAdapter) GetUnread(ctx context.Context, conversationID uint64, us
 	return a.cli.GetUnread(ctx, conversationID, userID)
 }
 
-// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。delta 是增量。
+// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。
+// conversationID 是会话 ID，userID 是成员 uid，delta 是增量。
 func (a *UnreadAdapter) IncUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if a == nil || a.cli == nil {
 		return 0, errNoRemoteConversation

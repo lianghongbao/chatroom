@@ -19,9 +19,7 @@ func gatewayRedisAddr() string {
 }
 
 // newGatewayTestRedis 构造接真实 Redis 的客户端。
-// 用 DB 14 —— 测试专用，跟应用的 DB 0 隔开。注意：**Redis Pub/Sub 不按 DB 隔离**
-// —— DB 14 上的订阅照样收得到 DB 15 上发的消息。所以「换 DB」挡不住跨包串扰，
-// 只能靠频道名区分（见下面的订阅测试）。
+// 用 DB 14（测试专用）。Redis Pub/Sub 不按 DB 隔离，跨包串扰只能靠频道名区分。
 // Redis 不可达时 skip。
 func newGatewayTestRedis(t *testing.T) *redis.Client {
 	t.Helper()
@@ -67,11 +65,8 @@ func TestSubscriber_ReceivesPublishedMessage(t *testing.T) {
 		t.Fatalf("publish: %v", err)
 	}
 
-	// 循环读，直到收到**自己**发的那条。不能只读第一条：生产代码的模式订阅是
-	// `chatroom:msg:*`，会收到所有会话频道的消息，而 **Redis Pub/Sub 不按 DB 隔离**
-	// —— DB 14 上的订阅照样收得到 DB 15 上发的消息。所以别的包（比如
-	// internal/data 的 publisher 测试）并行跑时，会先塞一条别人的消息进来。
-	// 跳过它们，只认自己的。
+	// 循环读直到收到自己发的那条。Redis Pub/Sub 不按 DB 隔离，
+	// 别的包并行跑时会先塞进别人的消息。
 	deadline := time.After(3 * time.Second)
 	for {
 		select {

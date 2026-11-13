@@ -11,10 +11,7 @@ import (
 )
 
 // TestFriendRepo_ConcurrentOppositeApplyCreatesOneRow 反向并发申请只能建一条记录。
-//
-// A 申请 B 的同时 B 也申请 A —— 两条记录的方向相反，
-// uk_user_friend 只挡同向重复，挡不住这个。真正的仲裁者是归一化的
-// pair_key 唯一索引（"a,b" 和 "b,a" 落到同一个键）。
+// uk_user_friend 只挡同向重复，归一化的 pair_key 唯一索引才是仲裁者。
 func TestFriendRepo_ConcurrentOppositeApplyCreatesOneRow(t *testing.T) {
 	d, _ := newTestDB(t)
 	repo := NewFriendRepo(d)

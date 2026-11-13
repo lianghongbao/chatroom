@@ -22,7 +22,6 @@ const (
 )
 
 // 错误原因。biz 层折叠为对应 kratos error。
-//
 // 命名沿用 api.user.v1 / api.friend.v1 的风格：<DOMAIN>_<CAUSE>。
 type ErrorReason int32
 
@@ -37,8 +36,7 @@ const (
 	// 调用方不是该会话成员。ListMembers 用它明确告知「你不是成员」；
 	// 会话详情/列表走另一套语义 —— 存在与否都折叠成 CONVERSATION_NOT_FOUND。
 	ErrorReason_CONVERSATION_NOT_MEMBER ErrorReason = 3
-	// 已经是该会话成员（重复添加）。批量加成员对已在会里的 uid 幂等跳过（added_count 不计）；
-	// 转让群主时把群主转给自己才返这个错。
+	// 已经是该会话成员（重复添加）。批量加成员对已在会里的 uid 幂等跳过（added_count 不计）。
 	ErrorReason_CONVERSATION_ALREADY_MEMBER ErrorReason = 4
 	// 已是群主，不能移除自己（群主需先转让或解散）。
 	ErrorReason_CONVERSATION_OWNER_CANNOT_LEAVE ErrorReason = 5

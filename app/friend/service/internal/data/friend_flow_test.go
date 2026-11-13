@@ -56,10 +56,8 @@ func (c *fakeRemoteUserClient) GetConversationMemberProfiles(ctx context.Context
 var _ RemoteUserClient = (*fakeRemoteUserClient)(nil)
 
 // TestFriendFlow_ApplyAcceptThenBothSeeEachOther 覆盖 PRD 验收标准
-// 「两个用户能注册、登录、加好友」里 friend 域的部分。全链路：A 申请 B → B 收件箱看到申请
+// 「两个用户能注册、登录、加好友」里 friend 域的部分：A 申请 B → B 收件箱看到申请
 // → B 接受 → 双方好友列表都能看到对方，且昵称/头像已跨服务补全。
-// 走的是生产路径：biz.FriendUsecase → data.Adapter → data.RemoteUserClient
-// （这里用 fake 替身）→ proto → DO。
 func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 	d, _ := newTestDB(t)
 	ctx := context.Background()
@@ -150,8 +148,6 @@ func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 
 // TestFriendFlow_UserServiceDownDegradesGracefully 覆盖
 // 「user 服务不可达时好友列表降级 —— 关系还在，昵称留空」。
-//
-// 降级不能让主路径挂掉 —— 拉资料失败只该让昵称/头像空着。
 func TestFriendFlow_UserServiceDownDegradesGracefully(t *testing.T) {
 	d, _ := newTestDB(t)
 	ctx := context.Background()

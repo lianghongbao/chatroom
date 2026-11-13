@@ -98,15 +98,15 @@ func NewDependencies(rdb redis.Cmdable, members MemberFetcher, cfg GatewayConfig
 	}
 }
 
-// NewMemberCacheFromDependencies 暴露依赖包里的成员缓存。
+// NewMemberCacheFromDependencies 暴露依赖包里的成员缓存。deps 是依赖包。
 // 成员失效通知的处理要拿到同一个缓存实例 —— 否则失效的是另一个 map。
 func NewMemberCacheFromDependencies(deps *Dependencies) *MemberCache {
 	return deps.Members
 }
 
-// NewServerFromConfig 构造网关服务。deps 是依赖包，sender 是消息转发器，
-// verify 是握手鉴权器，convs 是「列某用户参与的所有会话」的能力，
-// lister 是增量拉消息的能力。
+// NewServerFromConfig 构造网关服务。cfg 是网关配置，deps 是依赖包，
+// sender 是消息转发器，verify 是握手鉴权器，convs 是「列某用户参与的所有会话」的能力，
+// lister 是增量拉消息的能力，logger 是日志器。
 func NewServerFromConfig(cfg GatewayConfig, deps *Dependencies, sender MessageSender, verify TokenVerifier, convs UserConversationLister, lister MessageLister, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
@@ -131,7 +131,8 @@ func NewServerFromConfig(cfg GatewayConfig, deps *Dependencies, sender MessageSe
 	return srv
 }
 
-// NewSubscriberForServer 构造 Redis 订阅器，回调把消息推给网关。rdb 为 nil 时返 nil。
+// NewSubscriberForServer 构造 Redis 订阅器，回调把消息推给网关。
+// gw 是网关，rdb 为 nil 时返 nil，logger 是日志器。
 func NewSubscriberForServer(gw *Server, rdb *redis.Client, logger *slog.Logger) *Subscriber {
 
 	if logger == nil {

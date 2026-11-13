@@ -98,8 +98,8 @@ func main() {
 	log.SetDefault(base)
 
 	// 第一阶段：只用 bootstrap.yaml + env 加载一份引导配置，从中取出
-	// registry.nacos 段。这一步刻意不读业务配置 —— 业务配置在 nacos 上，
-	// 而「连哪个 nacos」必须在连上之前就知道。两份文件拆开正是为了断掉这个循环依赖。
+	// registry.nacos 段。这一步不读业务配置 —— 业务配置在 nacos 上，
+	// 而「连哪个 nacos」必须在连上之前就知道。
 	bootstrapOnly := config.New(
 		config.WithSource(
 			file.NewSource(flagbootstrap),
@@ -118,10 +118,9 @@ func main() {
 
 	opts := conf.NacosOptions(bootstrap.Registry)
 
-	// 第二阶段：构造完整 config。优先级从低到高：file < nacos < env。
-	// Kratos 的合并语义是后注册的源覆盖前面的，所以注册顺序 file → nacos → env。
-	// file 源用 flagconf（业务配置）而非 flagbootstrap —— bootstrap 段只用来定位
-	// nacos，不参与业务配置合并，否则 nacos 上的旧值永远盖不掉本地的 registry 段。
+	// 第二阶段：构造完整 config。优先级从低到高：file < nacos < env，
+	// Kratos 后注册的源覆盖前面的，所以注册顺序是 file → nacos → env。
+	// file 源用 flagconf（业务配置）而非 flagbootstrap。
 	var sources []config.Source
 	sources = append(sources, file.NewSource(flagconf))
 	if len(opts.ServerAddresses) > 0 {

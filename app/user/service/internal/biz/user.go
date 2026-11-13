@@ -39,11 +39,7 @@ const (
 )
 
 // validatePassword 校验密码长度。password 是明文密码。
-//
-// 密码不做 trim —— 它是不透明的字节串，注册时怎么存的就得怎么比对。
-// 任何一处 trim 都会让「注册时带空格」的老用户再也改不了密码：
-// 存的哈希是 " pass "，比对时却拿 "pass" 去比。
-// 唯一被拒的是「全是空白」—— 那种密码等价于没设。
+// 密码不做 trim，只拒绝「全是空白」的密码。
 func validatePassword(password string) error {
 	if password == "" {
 		return ErrUserInvalidArgument
@@ -94,10 +90,6 @@ func derefOrEmpty(s *string) string {
 
 // hashPassword 算 bcrypt 哈希，把 bcrypt 的错误翻译成 typed error。
 // password 是明文密码。
-//
-// 不翻译的话，超长密码（>72 字节）会返回 bcrypt.ErrPasswordTooLong ——
-// service 层不认得它，会当成未知错误报 500。输入校验已经挡住了大部分，
-// 这里兜底。
 func hashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -149,8 +141,7 @@ type UserRepo interface {
 	Save(ctx context.Context, u *User) (string, error)
 	FindByID(ctx context.Context, id string) (*User, error)
 	// FindByIDWithHash 与 FindByID 同义，但保留 PasswordHash。
-	// 改密要拿哈希跟旧密码比对，走 FindByID 会拿到空哈希 —— 比对必然失败，
-	// 表现为「旧密码永远不对」。
+	// 改密要拿哈希跟旧密码比对，走 FindByID 会拿到空哈希。
 	FindByIDWithHash(ctx context.Context, id string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	// 批量查；找不到的 id 在结果中不出现，不返错。返回顺序与 ids 无关
@@ -170,10 +161,7 @@ type UserUpdateFields struct {
 }
 
 // LoginLimiter 登录频控抽象。
-//
-// clientIP 是调用方 IP —— 限频要按「用户名 + IP」两个维度：
-// 只按用户名锁的话，任何人知道别人的用户名就能把他锁在门外
-// （5 次错密码就锁 15 分钟），这是现成的 DoS。
+// clientIP 是调用方 IP —— 限频按「用户名 + IP」两个维度分桶。
 type LoginLimiter interface {
 	// Allow 在 Login 入口调用，命中锁定返回 ErrUserLoginLocked。
 	// username 是用户名，clientIP 是调用方 IP。
@@ -243,7 +231,7 @@ type UserUsecase struct {
 	logger  *slog.Logger
 }
 
-// NewUserUsecase 构造用户用例。auth 用于签发 JWT（nil 时关闭登录）；
+// NewUserUsecase 构造用户用例。repo 是仓储实现，auth 用于签发 JWT（nil 时关闭登录）；
 // lim / locker / store / cache 传 nil 关闭对应功能；logger 为 nil 时用默认 logger。
 func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Locker, store TokenStore, cache UserCache, logger *slog.Logger) *UserUsecase {
 	if logger == nil {
@@ -258,9 +246,7 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Loc
 
 // Register 注册用户并返回新用户 ID。username 是用户名，password 是明文密码，
 // nickname 是昵称（可空，留空时回退成 username）。
-//
-// 流程是锁 + FindByUsername 快速路径 + bcrypt + Save；撞 username 唯一索引
-// 兜底并发竞态。username trim 后小写化，nickname trim 空格。
+// username trim 后小写化，nickname trim 空格。
 func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname string) (string, error) {
 	username = strings.TrimSpace(username)
 	nickname = strings.TrimSpace(nickname)
@@ -308,9 +294,6 @@ func (uc *UserUsecase) acquireRegisterLock(ctx context.Context, username string)
 
 // Login 校验凭据，签发 access + refresh 并落 TokenStore。username 是用户名，
 // password 是明文密码，clientIP 是调用方 IP。返回 token 对与用户 ID。
-//
-// 限频在前，减少无效锁竞争。clientIP 参与登录限频 —— 只按用户名锁的话，
-// 知道用户名的人就能把账号锁在门外。
 func (uc *UserUsecase) Login(ctx context.Context, username, password, clientIP string) (*LoginResult, string, error) {
 	if uc.tokenFn == nil {
 		return nil, "", ErrUserBadCredentials
@@ -393,6 +376,7 @@ func (uc *UserUsecase) acquireLoginLock(ctx context.Context, username string) (R
 }
 
 // notifyFailure 凭据校验失败时调；username 为空（参数非法路径）不调，防止空刷。
+// clientIP 是调用方 IP。
 func (uc *UserUsecase) notifyFailure(ctx context.Context, username, clientIP string) {
 	if uc.lim != nil {
 		uc.lim.OnFailure(ctx, username, clientIP)
@@ -400,6 +384,7 @@ func (uc *UserUsecase) notifyFailure(ctx context.Context, username, clientIP str
 }
 
 // notifySuccess 凭据校验通过后调；清掉 LoginLimiter 失败计数。
+// username 是用户名，clientIP 是调用方 IP。
 func (uc *UserUsecase) notifySuccess(ctx context.Context, username, clientIP string) {
 	if uc.lim != nil {
 		uc.lim.OnSuccess(ctx, username, clientIP)
@@ -407,8 +392,7 @@ func (uc *UserUsecase) notifySuccess(ctx context.Context, username, clientIP str
 }
 
 // Refresh 用 refresh token 换新的一对 token。refreshToken 是旧的 refresh token。
-//
-// 流程是解析 → ConsumeRefresh 删旧 → 签发新对 → SaveRefresh。
+// 流程：解析 → ConsumeRefresh 删旧 → 签发新对 → SaveRefresh。
 func (uc *UserUsecase) Refresh(ctx context.Context, refreshToken string) (*LoginResult, error) {
 	if uc.tokenFn == nil || uc.store == nil {
 		return nil, ErrRefreshInvalid
@@ -460,7 +444,6 @@ func (uc *UserUsecase) Refresh(ctx context.Context, refreshToken string) (*Login
 // Logout 把当前会话的 token 作废：access 进黑名单 + refresh 删除。
 // accessJTI 是 access token 的 JTI，refreshJTI 是 refresh token 的 JTI，
 // accessExp 是 access token 的过期时间。均 warn 不返错。
-// accessJTI 由 middleware 从 ctx 注入；refreshJTI 解析失败留空。
 func (uc *UserUsecase) Logout(ctx context.Context, accessJTI, refreshJTI string, accessExp time.Time) error {
 	if uc.store == nil {
 		return nil
@@ -482,7 +465,7 @@ func (uc *UserUsecase) Logout(ctx context.Context, accessJTI, refreshJTI string,
 	return nil
 }
 
-// parseRefresh 解析校验 refresh token，返回 JTI 与用户 ID。
+// parseRefresh 解析校验 refresh token，返回 JTI 与用户 ID。raw 是 token 原文。
 // 失败一律折叠 ErrRefreshInvalid，不区分原因避免暴露服务端行为。
 func (uc *UserUsecase) parseRefresh(raw string) (jti string, uid string, err error) {
 	uid, jti, _, err = uc.verify(raw, tokenTypeRefresh)
@@ -499,14 +482,8 @@ func (uc *UserUsecase) GetUser(ctx context.Context, id string) (*User, error) {
 		return nil, ErrUserInvalidArgument
 	}
 
-	// 版本号要在**读 DB 之前**取。
-	//
-	// 反过来（先读 DB 再取版本）会有个窗口：读 DB 之后、读版本之前，
-	// 有人改了资料 —— 版本号 +1，然后我们把**旧的 DB 数据**配上**新的版本号**
-	// 写回缓存。这份陈旧数据从此看起来是新鲜的，永远不会被失效。
-	//
-	// 先取版本就不一样了：改动会把版本推高，我们写回的是旧版本，
-	// 下次读缓存时版本对不上 → 重新读 DB。
+	// 版本号要在读 DB 之前取 —— 否则可能把旧 DB 数据配上新版本号写回缓存，
+	// 这份陈旧数据从此看起来是新鲜的。
 	var ver int64
 	if uc.cache != nil {
 		cached, cachedVer, err := uc.cache.Get(ctx, id)
@@ -785,15 +762,12 @@ const maxBatchIDs = 200
 // ChangePassword 修改密码。uid 是用户 ID，oldPassword 是旧明文密码，
 // newPassword 是新明文密码，accessJTI / refreshJTI 是当前会话的 token 标识，
 // accessExp 是 access token 的过期时间。
-//
 // 旧密码错 / 用户不存在折叠 ErrUserBadCredentials；改完强制登出当前会话。
 func (uc *UserUsecase) ChangePassword(ctx context.Context, uid string, oldPassword, newPassword, accessJTI, refreshJTI string, accessExp time.Time) error {
 	if uid == "" {
 		return ErrUserInvalidArgument
 	}
-	// 密码不 trim —— 它是不透明的字节串，注册时怎么存的就得怎么比对。
-	// 这里一旦 trim，注册时带空格的老用户就再也改不了密码
-	//（存的哈希是 " pass "，这里却拿 "pass" 去比）。
+	// 密码不 trim —— 注册时怎么存的就得怎么比对。
 	if oldPassword == "" {
 		return ErrUserInvalidArgument
 	}
@@ -889,7 +863,6 @@ func (uc *UserUsecase) sign(uid string, typ string, ttl time.Duration, issuer st
 }
 
 // signToken 签发 access token 并只返回 token 串。uid 是用户 ID。
-// 保留为 nil-safe（NewUserUsecase 的 tokenFn 赋值处使用）。
 //
 //nolint:unused
 func (uc *UserUsecase) signToken(uid string) (string, error) {

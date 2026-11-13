@@ -21,8 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 错误原因。biz 层在 internal/friend/.../biz/ 折叠为对应 kratos error。
-//
+// 错误原因。biz 层折叠为对应 kratos error。
 // 命名沿用 api.user.v1.ErrorReason 的风格：<DOMAIN>_<CAUSE>。
 type ErrorReason int32
 

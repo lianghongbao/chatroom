@@ -6,9 +6,7 @@ import (
 )
 
 // TestConversationCache_StaleWriteBackRejected 陈旧的回填要被拒绝。
-// 场景：读者查库拿到成员列表（版本 v），这期间有人加 / 减了成员
-// （版本变成 v+1），读者这时才回填 —— 写进去的是陈旧数据。
-// 版本号比对就是挡这个的：回填带的版本跟当前版本对不上就放弃。
+// 回填带的版本跟当前版本对不上就放弃。
 func TestConversationCache_StaleWriteBackRejected(t *testing.T) {
 	c, _ := newTestConvCache(t)
 	ctx := context.Background()

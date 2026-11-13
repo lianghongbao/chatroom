@@ -337,9 +337,8 @@ func (f *fakeConvFetcher) FetchProfiles(_ context.Context, ids []string) ([]*Use
 }
 
 // fakeExistenceChecker 是 biz.UserExistenceChecker 的内存替身。
-//
-//	existing 存在的 uid 集合；为空时视为「全部存在」（跳过校验）。
-//	err 非 nil 时模拟 user 服务不可达 —— biz 应该放行而不是拦下。
+// existing 是存在的 uid 集合，为空时视为「全部存在」；
+// err 非 nil 时模拟 user 服务不可达。
 type fakeExistenceChecker struct {
 	existing map[string]struct{}
 	err      error
@@ -396,8 +395,7 @@ func TestConversation_CreateSingleChatReusesExisting(t *testing.T) {
 }
 
 // TestConversation_CreateSingleChatReuseFillsProfiles 复用单聊时也要带昵称/头像。
-// 复用路径不走 Save，直接返回 repo 查到的会话。如果这里不补资料，同一个会话
-// 首次建出来有 member_nicknames、重复建就没有 —— 字段形状随调用时机变化。
+// 复用路径不走 Save，直接返回 repo 查到的会话。
 func TestConversation_CreateSingleChatReuseFillsProfiles(t *testing.T) {
 	repo := newFakeConvRepo()
 	fetcher := &fakeConvFetcher{profiles: map[string]*UserProfile{
@@ -962,8 +960,6 @@ func TestConversation_TransferOwnerToSelfRejected(t *testing.T) {
 }
 
 // TestConversation_TransferOwnerUnlocksLeaving 转让后原群主才能退群。
-//
-// 这是「群主被困死」的回归测试 —— 转让是唯一逃生口。
 func TestConversation_TransferOwnerUnlocksLeaving(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 
@@ -1075,10 +1071,7 @@ func TestConversation_ListMembers(t *testing.T) {
 }
 
 // TestConversation_ListMembersRejectsNonMember 非成员列成员被拒。
-//
-// 返的是 NOT_FOUND 而不是 FORBIDDEN —— 跟 GetConversation 一致，
-// 不泄露「会话存在但你不是成员」。同一个事实两个接口给不同状态码，
-// 客户端没法写统一逻辑。
+// 返 NOT_FOUND 而不是 FORBIDDEN，跟 GetConversation 一致。
 func TestConversation_ListMembersRejectsNonMember(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 
@@ -1111,8 +1104,6 @@ func TestConversation_AddMembersRejectsUnknownUser(t *testing.T) {
 }
 
 // TestConversation_AddMembersAllowsWhenCheckerDown user 服务不可达时放行。
-//
-// 挡不住正常业务比放进幽灵成员更糟。
 func TestConversation_AddMembersAllowsWhenCheckerDown(t *testing.T) {
 	repo := newFakeConvRepo()
 	existence := &fakeExistenceChecker{err: errors.New("user service down")}
@@ -1132,9 +1123,8 @@ func TestConversation_AddMembersAllowsWhenCheckerDown(t *testing.T) {
 	}
 }
 
-// TestConversation_RemoveMemberReturnsRepoCount 踢人后的成员数取 repo 的值。
-//
-// 不该由调用方拿旧快照自己减 —— 并发踢人时那个数会错。
+// TestConversation_RemoveMemberReturnsRepoCount 踢人后的成员数取 repo 的值，
+// 不该由调用方拿旧快照自己减。
 func TestConversation_RemoveMemberReturnsRepoCount(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 
@@ -1174,8 +1164,6 @@ func TestConversation_AddMembersReturnsRepoCount(t *testing.T) {
 }
 
 // TestConversation_UpdateNameNonOwnerGetsNotOwner 非群主改群名报 NOT_OWNER。
-//
-// 不是 INVALID_ARGUMENT —— 参数校验不该抢在权限校验前面。
 func TestConversation_UpdateNameNonOwnerGetsNotOwner(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 
@@ -1214,9 +1202,7 @@ func TestConversation_RemoveMemberNonOwnerGetsNotOwner(t *testing.T) {
 }
 
 // TestConversation_AddMembersAllAlreadyMemberReturnsFreshCount 要加的人全在会里时，
-// 成员数取 repo 的事务内计数，不是 AddMembers 之前 FindByID 读到的快照。
-//
-// 两条分支的数必须同一个口径 —— 否则并发下会给出不一致的 member_count。
+// 成员数取 repo 的事务内计数，不是 AddMembers 之前读到的快照。
 func TestConversation_AddMembersAllAlreadyMemberReturnsFreshCount(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 
@@ -1240,8 +1226,6 @@ func TestConversation_AddMembersAllAlreadyMemberReturnsFreshCount(t *testing.T) 
 
 // TestConversation_RemoveMemberKeepsOwner 群主 + 1 个成员时踢掉那个人是合法的 ——
 // 会话还剩群主，不算空。
-//
-// 回归测试：守卫曾经写成 count<=2，把这种最常见的情况也拦了。
 func TestConversation_RemoveMemberKeepsOwner(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 

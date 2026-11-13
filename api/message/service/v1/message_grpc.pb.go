@@ -31,19 +31,18 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // MessageService 消息服务：消息落库 + 历史消息分页 + 未读数。
-//
 // 实时推送不在这里做 —— 发消息时发到 Redis Pub/Sub 频道，ws-gateway 订阅后推给目标连接。
-// 网关无状态，靠 Pub/Sub 天然支持多实例水平扩展（PRD §四）。
+// 网关无状态，靠 Pub/Sub 支持多实例水平扩展。
 type MessageClient interface {
 	// SendMessage 发消息。落库后广播。
-	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播。
 	SendMessage(ctx context.Context, in *SendMessageRequest, opts ...grpc.CallOption) (*SendMessageReply, error)
 	// ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
-	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢。
 	ListMessages(ctx context.Context, in *ListMessagesRequest, opts ...grpc.CallOption) (*ListMessagesReply, error)
 	// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
-	// 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
-	// 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+	// 断线重连补消息用。跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。
+	// since_id = 0 表示从头拉。
 	ListMessagesSince(ctx context.Context, in *ListMessagesSinceRequest, opts ...grpc.CallOption) (*ListMessagesSinceReply, error)
 	// MarkRead 清零某个会话的未读数。只清调用方自己的。
 	MarkRead(ctx context.Context, in *MarkReadRequest, opts ...grpc.CallOption) (*MarkReadReply, error)
@@ -114,19 +113,18 @@ func (c *messageClient) GetUnreadCount(ctx context.Context, in *GetUnreadCountRe
 // for forward compatibility.
 //
 // MessageService 消息服务：消息落库 + 历史消息分页 + 未读数。
-//
 // 实时推送不在这里做 —— 发消息时发到 Redis Pub/Sub 频道，ws-gateway 订阅后推给目标连接。
-// 网关无状态，靠 Pub/Sub 天然支持多实例水平扩展（PRD §四）。
+// 网关无状态，靠 Pub/Sub 支持多实例水平扩展。
 type MessageServer interface {
 	// SendMessage 发消息。落库后广播。
-	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+	// 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播。
 	SendMessage(context.Context, *SendMessageRequest) (*SendMessageReply, error)
 	// ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
-	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+	// 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢。
 	ListMessages(context.Context, *ListMessagesRequest) (*ListMessagesReply, error)
 	// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
-	// 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
-	// 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+	// 断线重连补消息用。跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。
+	// since_id = 0 表示从头拉。
 	ListMessagesSince(context.Context, *ListMessagesSinceRequest) (*ListMessagesSinceReply, error)
 	// MarkRead 清零某个会话的未读数。只清调用方自己的。
 	MarkRead(context.Context, *MarkReadRequest) (*MarkReadReply, error)

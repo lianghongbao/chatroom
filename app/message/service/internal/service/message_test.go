@@ -163,8 +163,7 @@ func (f fakeMemberLister) ListConversationMembers(context.Context, uint64) ([]st
 }
 
 // newService 用 fake 造一个真实 usecase + service。t 是测试用例。
-//
-// membership 默认放行（调用方在会里），unread / lister 默认空。
+// membership 默认放行，unread / lister 默认空。
 func newService(repo *fakeMessageRepo) *MessageService {
 	return newServiceWith(repo, fakeMembership{isMember: true}, &fakePublisher{}, &fakeUnread{}, fakeMemberLister{})
 }

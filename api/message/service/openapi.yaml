@@ -6,9 +6,8 @@ info:
     title: Message API
     description: |-
         MessageService 消息服务：消息落库 + 历史消息分页 + 未读数。
-
          实时推送不在这里做 —— 发消息时发到 Redis Pub/Sub 频道，ws-gateway 订阅后推给目标连接。
-         网关无状态，靠 Pub/Sub 天然支持多实例水平扩展（PRD §四）。
+         网关无状态，靠 Pub/Sub 支持多实例水平扩展。
     version: 0.0.1
 paths:
     /api/message/list:
@@ -17,7 +16,7 @@ paths:
                 - Message
             description: |-
                 ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
-                 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢（PRD §十三）。
+                 用游标而非 OFFSET —— 页码深了 OFFSET 会越来越慢。
             operationId: Message_ListMessages
             parameters:
                 - name: conversationId
@@ -70,7 +69,7 @@ paths:
                 - Message
             description: |-
                 SendMessage 发消息。落库后广播。
-                 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播，保证「收到推送 = 已经存下来了」。
+                 调用方必须是会话成员（由 conversation 服务判定）。落库成功后才广播。
             operationId: Message_SendMessage
             requestBody:
                 content:
@@ -91,8 +90,8 @@ paths:
                 - Message
             description: |-
                 ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
-                 断线重连补消息用：客户端拿断线前最后一条消息 id 当 since_id，补回断线期间漏掉的消息。
-                 跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。since_id = 0 表示从头拉。
+                 断线重连补消息用。跟 ListMessages 方向相反 —— 一个往前翻历史，一个往后补增量。
+                 since_id = 0 表示从头拉。
             operationId: Message_ListMessagesSince
             parameters:
                 - name: conversationId

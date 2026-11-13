@@ -28,7 +28,7 @@ type filteringExporter struct {
 	rate float64
 }
 
-// ExportSpans 过滤后交给内层导出器。
+// ExportSpans 过滤后交给内层导出器。spans 是待导出的 span 列表。
 func (e *filteringExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
 	kept := make([]sdktrace.ReadOnlySpan, 0, len(spans))
 	for _, s := range spans {

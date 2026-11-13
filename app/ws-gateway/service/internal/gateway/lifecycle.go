@@ -29,7 +29,8 @@ func NewLifecycle(gw *Server, subscriber *Subscriber) *Lifecycle {
 	return &Lifecycle{gw: gw, subscriber: subscriber}
 }
 
-// NewLifecycleWithInvalidator 构造 Lifecycle，invalidator 是成员失效通知的订阅器。
+// NewLifecycleWithInvalidator 构造 Lifecycle。gw 是网关，
+// subscriber 是成员失效通知的订阅器。
 func NewLifecycleWithInvalidator(gw *Server, subscriber *Subscriber, invalidator *InvalidatorSubscriber) *Lifecycle {
 	return &Lifecycle{gw: gw, subscriber: subscriber, invalidator: invalidator}
 }
@@ -84,8 +85,7 @@ func (l *Lifecycle) runSubscriber(ctx context.Context, sub *Subscriber) {
 		}
 
 		// 退避 —— 不管 Run 是正常返回还是报错，都要等一下再重连。
-		// 少了这一步就是热循环：订阅的 channel 干净关闭时 Run 返 nil（不是错误），
-		// 循环立刻重来，CPU 打满还疯狂打 Redis —— 恰好是 Redis 抖动时最需要它稳住的场景。
+		// 少了这一步就是热循环。
 		select {
 		case <-ctx.Done():
 			return

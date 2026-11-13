@@ -4,7 +4,7 @@
 #   docker build -t chatroom-ws-gateway -f app/ws-gateway/service/Dockerfile .
 FROM golang:1.26 AS builder
 
-# 镜像里的 go 可能比 go.mod 要求的 patch 版本旧（golang:1.26 会浮到最新的 1.26.x）。
+# 镜像里的 go 可能比 go.mod 要求的 patch 版本旧。
 # GOTOOLCHAIN=auto 让 go 自己下载 go.mod 指定的那个版本 —— 钉死 FROM 的 patch
 # 版本不可行，镜像仓库只暴露 major.minor tag。
 ENV GOTOOLCHAIN=auto \
@@ -35,7 +35,7 @@ COPY --from=builder /src/bin/chatroom-ws-gateway /app/server
 # 这里只放非敏感的业务默认值。
 COPY app/ws-gateway/service/configs/config.yaml /data/conf/config.yaml
 # 引导配置：连哪个 nacos、哪条 dataId。**不进 nacos** ——
-# 「连哪个 nacos」不能由 nacos 自己决定，否则本地改了地址不生效。
+# 「连哪个 nacos」不能由 nacos 自己决定。
 COPY app/ws-gateway/service/configs/bootstrap.yaml /data/conf/bootstrap.yaml
 
 WORKDIR /app
