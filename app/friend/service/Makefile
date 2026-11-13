@@ -6,6 +6,8 @@
 # 跨服务的动作（跑全量测试、编排五个服务）走仓库根的 Makefile。
 
 SERVICE := friend
+# nacos 上这条配置的显示名（写进 config 的 desc 字段）
+DESC := 好友服务
 BINARY  := chatroom-friend
 
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
@@ -78,7 +80,7 @@ all: config generate
 # 常见）会报 "No module named 'yaml'" —— 系统的 /usr/bin/python3 有，
 # 用 PATH="/usr/bin:$PATH" make nacos-config 跑。
 nacos-config:
-	SERVICE_DIR=$(CURDIR) SERVICE=$(SERVICE) bash ../../../pkg/tools/nacos-config.sh diff
+	SERVICE_DIR=$(CURDIR) SERVICE=$(SERVICE) DESC='$(DESC)' bash ../../../pkg/tools/nacos-config.sh diff
 
 .PHONY: nacos-config-push
 # 把本地 configs/config.yaml 推到 nacos 配置中心
@@ -87,7 +89,7 @@ nacos-config:
 # bootstrap.yaml 不推：「连哪个 nacos」必须由本地文件决定,不能由 nacos
 # 自己决定(本地改了没重推时,nacos 里的旧 registry 会盖掉新值)。
 nacos-config-push:
-	SERVICE_DIR=$(CURDIR) SERVICE=$(SERVICE) bash ../../../pkg/tools/nacos-config.sh push
+	SERVICE_DIR=$(CURDIR) SERVICE=$(SERVICE) DESC='$(DESC)' bash ../../../pkg/tools/nacos-config.sh push
 
 .PHONY: clean
 # 清理 build 产物 + go test 缓存
