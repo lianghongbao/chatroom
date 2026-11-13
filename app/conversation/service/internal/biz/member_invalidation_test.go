@@ -20,7 +20,7 @@ func (p *fakeMemberPublisher) Publish(_ context.Context, conversationID uint64) 
 	return nil
 }
 
-// newGroupWithMembers 造一个已落库的群聊。
+// newGroupWithMembers 造一个已落库的群聊。owner 是群主 uid，members 是成员 uid 列表。
 func newGroupWithMembers(t *testing.T, owner string, members []string) (*ConversationUsecase, *fakeConvRepo, uint64) {
 	t.Helper()
 	repo := newFakeConvRepo()

@@ -78,53 +78,66 @@ func (c ConversationCursor) IsZero() bool { return c.ID == 0 }
 // ConversationRepo 会话仓储接口。
 type ConversationRepo interface {
 	// Save 新建会话 + 成员，返回落库后的会话（含 created_at / updated_at）。
-	// 单聊复用已存在的会话时返回 (已有会话, true, nil)
+	// 单聊复用已存在的会话时返回 (已有会话, true, nil)。c 是待落库的会话。
 	Save(ctx context.Context, c *Conversation) (saved *Conversation, reused bool, err error)
-	// FindByID 按 id 查会话（含成员列表）。找不到返 ErrConversationNotFound。
+	// FindByID 按 id 查会话（含成员列表）。找不到返 ErrConversationNotFound。id 是会话 ID。
 	FindByID(ctx context.Context, id uint64) (*Conversation, error)
 	// FindSingleByMembers 查两个成员之间的单聊。找不到返 ErrConversationNotFound。
+	// a、b 是两个成员的 uid。
 	FindSingleByMembers(ctx context.Context, a, b string) (*Conversation, error)
-	// ListByUserID 列出该用户参与的会话，按 updated_at DESC, id DESC。cursor 零值表示首页
+	// ListByUserID 列出该用户参与的会话，按 updated_at DESC, id DESC。
+	// userID 是用户 uid，cursor 零值表示首页，limit 是单页条数。
 	ListByUserID(ctx context.Context, userID string, cursor ConversationCursor, limit int) ([]*Conversation, error)
 	// IsMember 判断 user 是否是会话成员。非成员返 (false, nil)。
+	// conversationID 是会话 ID，userID 是用户 uid。
 	IsMember(ctx context.Context, conversationID uint64, userID string) (bool, error)
 	// AddMembers 批量加成员，返回 (新增数, 加完后的成员总数)。成员数由 repo 在事务内数出来。
+	// conversationID 是会话 ID，userIDs 是要加的用户 uid。
 	AddMembers(ctx context.Context, conversationID uint64, userIDs []string) (added int, total int, err error)
 	// RemoveMember 踢人，返回踢完后的成员总数。找不到成员返 ErrConversationNotFound。
+	// conversationID 是会话 ID，userID 是被踢的用户 uid。
 	RemoveMember(ctx context.Context, conversationID uint64, userID string) (total int, err error)
-	// UpdateName 改群名。找不到会话返 ErrConversationNotFound。
+	// UpdateName 改群名。找不到会话返 ErrConversationNotFound。id 是会话 ID，name 是新群名。
 	UpdateName(ctx context.Context, id uint64, name string) (*Conversation, error)
 	// TransferOwner 转让群主。新群主不在会里返 ErrConversationNotFound。
+	// conversationID 是会话 ID，newOwnerID 是新群主的 uid。
 	TransferOwner(ctx context.Context, conversationID uint64, newOwnerID string) (*Conversation, error)
 	// Dissolve 解散会话：连同全部成员记录一起删掉。找不到会话返 ErrConversationNotFound。
+	// conversationID 是会话 ID。
 	Dissolve(ctx context.Context, conversationID uint64) error
-	// TouchConversation 更新会话的活跃时间（成员变动时调用）。
+	// TouchConversation 更新会话的活跃时间（成员变动时调用）。id 是会话 ID。
 	TouchConversation(ctx context.Context, id uint64) error
 	// UpdateUnread 增减某成员的会话级未读数，返回更新后的值。
-	// delta 为正表示新增未读，为负表示扣减，不会减到 0 以下
+	// delta 为正表示新增未读，为负表示扣减，不会减到 0 以下。
+	// conversationID 是会话 ID，userID 是成员 uid。
 	UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error)
 	// UpdateUnreadBatch 批量增减多个成员的未读数，返回成功更新的成员数。
 	// 消息服务发消息后的 fan-out 用它 —— 逐个调 UpdateUnread 是 N 次跨进程调用。
 	// 不是成员的 uid 跳过，不算失败。
+	// conversationID 是会话 ID，userIDs 是成员 uid 列表，delta 是增减量。
 	UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error)
 	// GetUnread 查某成员的会话级未读数。成员不存在返 ErrConversationNotFound。
+	// conversationID 是会话 ID，userID 是成员 uid。
 	GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
 	// ClearUnread 把某成员的会话级未读数清零，返回清零后的值。
+	// conversationID 是会话 ID，userID 是成员 uid。
 	ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
 	// ListUnread 查某 uid 在所有会话的未读数（key = conversation_id），只返回未读数 > 0 的会话。
+	// userID 是用户 uid。
 	ListUnread(ctx context.Context, userID string) (map[uint64]uint32, error)
 }
 
 // ConversationProfileFetcher 批量拉成员公开资料（跨服务 user 服务）。
 // 整批失败返 (nil, nil, nil)，biz 走降级。
 type ConversationProfileFetcher interface {
+	// FetchProfiles 拉取给定 uid 的公开资料。ids 是要拉的 uid 列表。
 	FetchProfiles(ctx context.Context, ids []string) ([]*UserProfile, error)
 }
 
 // UserExistenceChecker 校验一批 uid 是否都是真实存在的用户（跨服务 user 服务）。
 // 校验失败时放行，user 服务不可达不能挡住正常业务。
 type UserExistenceChecker interface {
-	// CheckUsersExist 返回 id 集合中不存在的 uid 列表。
+	// CheckUsersExist 返回 id 集合中不存在的 uid 列表。ids 是待校验的 uid 列表。
 	CheckUsersExist(ctx context.Context, ids []string) ([]string, error)
 }
 
@@ -135,7 +148,6 @@ type UserProfile struct {
 	Avatar   string
 }
 
-// ConversationUsecase 会话用例编排。
 // MemberInvalidationPublisher 成员变更通知（Redis Pub/Sub）。
 //
 // 通知 ws-gateway 失效它的本地成员缓存 —— 否则新人加群后最长一个 TTL
@@ -143,10 +155,11 @@ type UserProfile struct {
 //
 // 发布失败不影响成员变更本身的结果。
 type MemberInvalidationPublisher interface {
-	// Publish 通知「会话 X 的成员变了」。
+	// Publish 通知「会话 X 的成员变了」。conversationID 是会话 ID。
 	Publish(ctx context.Context, conversationID uint64) error
 }
 
+// ConversationUsecase 会话用例编排。
 type ConversationUsecase struct {
 	repo      ConversationRepo
 	profiles  ConversationProfileFetcher
@@ -156,6 +169,8 @@ type ConversationUsecase struct {
 }
 
 // NewConversationUsecase 构造 ConversationUsecase。
+// repo 是仓储实现，profiles 是成员资料拉取器，existence 是用户存在性校验器，
+// publisher 是成员变更通知器，logger 是日志器。
 // profiles / existence 为 nil 时分别走降级与跳过校验，logger 为 nil 走 slog.Default。
 // publisher 为 nil 时不发成员变更通知。
 func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileFetcher, existence UserExistenceChecker, publisher MemberInvalidationPublisher, logger *slog.Logger) *ConversationUsecase {
@@ -167,6 +182,7 @@ func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileF
 
 // notifyMemberChange 通知网关「这个会话的成员变了」。
 // 失败只记日志 —— 通知只是让网关少缓存一会儿，不通知的后果只是缓存过期后自然回源。
+// conversationID 是会话 ID。
 func (uc *ConversationUsecase) notifyMemberChange(ctx context.Context, conversationID uint64) {
 	if uc.publisher == nil {
 		return
@@ -178,6 +194,7 @@ func (uc *ConversationUsecase) notifyMemberChange(ctx context.Context, conversat
 
 // CreateConversation 创建会话。单聊幂等：同一对成员重复调用返回同一个会话（reused=true）。
 // 群聊总是新建。typ 为 UNSPECIFIED 时按成员数推断（2 人=单聊，>2 人=群聊）。
+// callerID 是调用方 uid，memberIDs 是要拉进会话的成员 uid，typ 是会话类型，name 是群名。
 func (uc *ConversationUsecase) CreateConversation(ctx context.Context, callerID string, memberIDs []string, typ ConversationType, name string) (*Conversation, bool, error) {
 	if uc.repo == nil {
 		return nil, false, ErrConversationInvalidArgument
@@ -274,6 +291,8 @@ func (uc *ConversationUsecase) CreateConversation(ctx context.Context, callerID 
 
 // ListConversations 列出调用方参与的所有会话，按最后活动时间倒序。
 // limit <= 0 走默认 50。
+// callerID 是调用方 uid，cursor 是上一页返回的游标（0 表示首页），limit 是单页条数。
+// 返回会话列表与下一页游标，末页游标为 0。
 func (uc *ConversationUsecase) ListConversations(ctx context.Context, callerID string, cursor uint64, limit int) ([]*Conversation, uint64, error) {
 	if uc.repo == nil {
 		return nil, 0, ErrConversationInvalidArgument
@@ -306,7 +325,7 @@ func (uc *ConversationUsecase) ListConversations(ctx context.Context, callerID s
 	return items, nextCursor, nil
 }
 
-// encodeCursor 取会话 ID 作为下一页游标，nil 返 0（首页）。
+// encodeCursor 取会话 ID 作为下一页游标，nil 返 0（首页）。c 是会话。
 func encodeCursor(c *Conversation) uint64 {
 	if c == nil {
 		return 0
@@ -314,7 +333,7 @@ func encodeCursor(c *Conversation) uint64 {
 	return c.ID
 }
 
-// decodeCursor 把 wire 上的 uint64 游标转成 repo 层用的游标，0 视为首页。
+// decodeCursor 把 wire 上的 uint64 游标转成 repo 层用的游标，0 视为首页。v 是 wire 游标。
 func decodeCursor(v uint64) ConversationCursor {
 	if v == 0 {
 		return ConversationCursor{}
@@ -323,6 +342,7 @@ func decodeCursor(v uint64) ConversationCursor {
 }
 
 // GetConversation 会话详情。仅会话成员可见，非成员折叠成 NOT_FOUND。
+// callerID 是调用方 uid，conversationID 是会话 ID。
 func (uc *ConversationUsecase) GetConversation(ctx context.Context, callerID string, conversationID uint64) (*Conversation, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -349,6 +369,8 @@ func (uc *ConversationUsecase) GetConversation(ctx context.Context, callerID str
 }
 
 // AddMembers 往群聊加成员。仅群主可调用。
+// callerID 是调用方 uid，conversationID 是会话 ID，memberIDs 是要加的用户 uid。
+// 返回 (加完后的成员总数, 本次新增数)。
 func (uc *ConversationUsecase) AddMembers(ctx context.Context, callerID string, conversationID uint64, memberIDs []string) (uint32, uint32, error) {
 	if uc.repo == nil {
 		return 0, 0, ErrConversationInvalidArgument
@@ -427,6 +449,8 @@ func (uc *ConversationUsecase) AddMembers(ctx context.Context, callerID string, 
 }
 
 // RemoveMember 踢人。仅群主可调用，且不能踢自己。
+// callerID 是调用方 uid，conversationID 是会话 ID，memberID 是被踢的用户 uid。
+// 返回踢完后的成员总数。
 func (uc *ConversationUsecase) RemoveMember(ctx context.Context, callerID string, conversationID uint64, memberID string) (uint32, error) {
 	if uc.repo == nil {
 		return 0, ErrConversationInvalidArgument
@@ -468,6 +492,7 @@ func (uc *ConversationUsecase) RemoveMember(ctx context.Context, callerID string
 
 // LeaveConversation 主动退群。
 // 单聊不支持退群。群主不能退群，需先转让群主或解散群聊。
+// callerID 是调用方 uid，conversationID 是会话 ID。
 func (uc *ConversationUsecase) LeaveConversation(ctx context.Context, callerID string, conversationID uint64) error {
 	if uc.repo == nil {
 		return ErrConversationInvalidArgument
@@ -503,6 +528,7 @@ func (uc *ConversationUsecase) LeaveConversation(ctx context.Context, callerID s
 }
 
 // TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
+// callerID 是调用方 uid，conversationID 是会话 ID，newOwnerID 是新群主的 uid。
 func (uc *ConversationUsecase) TransferOwner(ctx context.Context, callerID string, conversationID uint64, newOwnerID string) (*Conversation, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -536,6 +562,7 @@ func (uc *ConversationUsecase) TransferOwner(ctx context.Context, callerID strin
 
 // DissolveConversation 解散群聊。仅群主可调用，单聊不支持。
 // 解散后会话连同全部成员记录一起删除。
+// callerID 是调用方 uid，conversationID 是会话 ID。
 func (uc *ConversationUsecase) DissolveConversation(ctx context.Context, callerID string, conversationID uint64) error {
 	if uc.repo == nil {
 		return ErrConversationInvalidArgument
@@ -564,6 +591,7 @@ func (uc *ConversationUsecase) DissolveConversation(ctx context.Context, callerI
 }
 
 // ListMembers 列出会话成员。仅会话成员可见，非成员返 ErrConversationNotFound。
+// callerID 是调用方 uid，conversationID 是会话 ID。
 func (uc *ConversationUsecase) ListMembers(ctx context.Context, callerID string, conversationID uint64) (*Conversation, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -593,6 +621,7 @@ func (uc *ConversationUsecase) ListMembers(ctx context.Context, callerID string,
 }
 
 // UpdateConversation 改群名。仅群主可调用，单聊不支持。
+// callerID 是调用方 uid，conversationID 是会话 ID，name 是新群名。
 func (uc *ConversationUsecase) UpdateConversation(ctx context.Context, callerID string, conversationID uint64, name string) (*Conversation, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -625,7 +654,8 @@ func (uc *ConversationUsecase) UpdateConversation(ctx context.Context, callerID 
 	return updated, nil
 }
 
-// CheckMembership 查某 uid 是不是会话成员。会话不存在和"不是成员"都返 false。
+// CheckMembership 查某 uid 是不是会话成员。会话不存在和「不是成员」都返 false。
+// conversationID 是会话 ID，userID 是待查的用户 uid。
 func (uc *ConversationUsecase) CheckMembership(ctx context.Context, conversationID uint64, userID string) (bool, error) {
 	if uc.repo == nil {
 		return false, ErrConversationInvalidArgument
@@ -638,6 +668,7 @@ func (uc *ConversationUsecase) CheckMembership(ctx context.Context, conversation
 
 // UpdateUnread 增减某成员的会话级未读数，返回更新后的值。
 // delta 为正表示新增未读，为负表示扣减，不会减到 0 以下。
+// conversationID 是会话 ID，userID 是成员 uid，delta 是增减量。
 func (uc *ConversationUsecase) UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if uc.repo == nil {
 		return 0, ErrConversationInvalidArgument
@@ -650,6 +681,7 @@ func (uc *ConversationUsecase) UpdateUnread(ctx context.Context, conversationID 
 
 // UpdateUnreadBatch 批量增减多个成员的会话级未读数，返回成功更新的成员数。
 // 不是成员的 uid 直接跳过 —— 未读数只是角标，少算一个不该让整批失败。
+// conversationID 是会话 ID，userIDs 是成员 uid 列表，delta 是增减量。
 func (uc *ConversationUsecase) UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if uc.repo == nil {
 		return 0, ErrConversationInvalidArgument
@@ -661,6 +693,7 @@ func (uc *ConversationUsecase) UpdateUnreadBatch(ctx context.Context, conversati
 }
 
 // GetUnread 查某成员的会话级未读数。
+// conversationID 是会话 ID，userID 是成员 uid。
 func (uc *ConversationUsecase) GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if uc.repo == nil {
 		return 0, ErrConversationInvalidArgument
@@ -672,6 +705,7 @@ func (uc *ConversationUsecase) GetUnread(ctx context.Context, conversationID uin
 }
 
 // ClearUnread 把某成员的会话级未读数清零。
+// conversationID 是会话 ID，userID 是成员 uid。
 func (uc *ConversationUsecase) ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if uc.repo == nil {
 		return 0, ErrConversationInvalidArgument
@@ -683,6 +717,7 @@ func (uc *ConversationUsecase) ClearUnread(ctx context.Context, conversationID u
 }
 
 // ListUnread 查某 uid 在所有会话的未读数（key = conversation_id），只返回未读数 > 0 的会话。
+// userID 是用户 uid。
 func (uc *ConversationUsecase) ListUnread(ctx context.Context, userID string) (map[uint64]uint32, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -694,6 +729,7 @@ func (uc *ConversationUsecase) ListUnread(ctx context.Context, userID string) (m
 }
 
 // ListConversationMembers 列出会话的全部成员（服务间内部接口）。
+// conversationID 是会话 ID。
 func (uc *ConversationUsecase) ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -709,7 +745,7 @@ func (uc *ConversationUsecase) ListConversationMembers(ctx context.Context, conv
 }
 
 // ListUserConversations 列某个用户参与的所有会话 id（服务间内部接口）。
-// 一次最多列 maxUserConversations 个会话。
+// 一次最多列 maxUserConversations 个会话。userID 是用户 uid。
 func (uc *ConversationUsecase) ListUserConversations(ctx context.Context, userID string) ([]uint64, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
@@ -729,6 +765,7 @@ func (uc *ConversationUsecase) ListUserConversations(ctx context.Context, userID
 }
 
 // fillProfiles 批量拉成员资料填进 conv，整批 err 降级，单条缺省静默。
+// convs 是待补全资料的会话列表。
 func (uc *ConversationUsecase) fillProfiles(ctx context.Context, convs []*Conversation) {
 	if uc.profiles == nil || len(convs) == 0 {
 		return
@@ -789,6 +826,7 @@ func (uc *ConversationUsecase) fillProfiles(ctx context.Context, convs []*Conver
 }
 
 // fillEmptyProfiles 把每个会话的昵称/头像数组填成与 MemberIDs 等长的空串。
+// convs 是待处理的会话列表。
 func fillEmptyProfiles(convs []*Conversation) {
 	for _, c := range convs {
 		if c == nil || len(c.MemberIDs) == 0 {
@@ -800,6 +838,7 @@ func fillEmptyProfiles(convs []*Conversation) {
 }
 
 // normalizeMembers 把调用方并入成员列表，去重并升序。
+// callerID 是调用方 uid，memberIDs 是请求里的成员 uid 列表。
 func normalizeMembers(callerID string, memberIDs []string) ([]string, error) {
 	seen := make(map[string]struct{}, len(memberIDs)+1)
 	out := make([]string, 0, len(memberIDs)+1)

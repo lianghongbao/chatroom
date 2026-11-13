@@ -9,19 +9,19 @@ import (
 )
 
 // MessageService message.proto 的 transport adapter。
-// 只做请求校验 + 取 caller uid + DO→DTO 转换。
+// 只做请求校验 + 从 ctx 取调用者身份 + DO→DTO 转换。
 type MessageService struct {
 	pb.UnimplementedMessageServer
 
 	uc *biz.MessageUsecase
 }
 
-// NewMessageService new a message service.
+// NewMessageService 构造 MessageService。uc 是消息用例。
 func NewMessageService(uc *biz.MessageUsecase) *MessageService {
 	return &MessageService{uc: uc}
 }
 
-// SendMessage 发消息；caller uid 由 ctx 派生。
+// SendMessage 发消息。req 是发消息请求。
 func (s *MessageService) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.SendMessageReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrMessageInvalidArgument
@@ -42,7 +42,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req *pb.SendMessageReq
 	return &pb.SendMessageReply{Message: convertMessageInfo(msg)}, nil
 }
 
-// ListMessages 拉历史消息，按 id 倒序（新的在前）。
+// ListMessages 拉历史消息，按 id 倒序（新的在前）。req 是历史消息请求。
 func (s *MessageService) ListMessages(ctx context.Context, req *pb.ListMessagesRequest) (*pb.ListMessagesReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrMessageInvalidArgument
@@ -62,7 +62,7 @@ func (s *MessageService) ListMessages(ctx context.Context, req *pb.ListMessagesR
 	return out, nil
 }
 
-// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。
+// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序（旧的在前）。req 是补消息请求。
 func (s *MessageService) ListMessagesSince(ctx context.Context, req *pb.ListMessagesSinceRequest) (*pb.ListMessagesSinceReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrMessageInvalidArgument
@@ -86,7 +86,7 @@ func (s *MessageService) ListMessagesSince(ctx context.Context, req *pb.ListMess
 	return out, nil
 }
 
-// MarkRead 清零调用方自己的会话未读数。
+// MarkRead 清零调用方自己的会话未读数。req 是清未读请求。
 func (s *MessageService) MarkRead(ctx context.Context, req *pb.MarkReadRequest) (*pb.MarkReadReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrMessageInvalidArgument
@@ -102,7 +102,7 @@ func (s *MessageService) MarkRead(ctx context.Context, req *pb.MarkReadRequest) 
 	return &pb.MarkReadReply{UnreadCount: n}, nil
 }
 
-// GetUnreadCount 查未读数。不传 conversation_id 时返回所有会话的未读总数。
+// GetUnreadCount 查未读数。不传 conversation_id 时返回所有会话的未读总数。req 是查未读请求。
 func (s *MessageService) GetUnreadCount(ctx context.Context, req *pb.GetUnreadCountRequest) (*pb.GetUnreadCountReply, error) {
 	if req == nil {
 		return nil, biz.ErrMessageInvalidArgument
@@ -123,7 +123,8 @@ func (s *MessageService) GetUnreadCount(ctx context.Context, req *pb.GetUnreadCo
 	return out, nil
 }
 
-// messageTypeFromDTO proto MessageType → biz.MessageType。未知值返 ErrMessageInvalidArgument。
+// messageTypeFromDTO proto MessageType → biz.MessageType。t 是 proto 里的消息类型枚举，
+// 未知值返 ErrMessageInvalidArgument。
 func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
 	switch t {
 	case pb.MessageType_MESSAGE_TYPE_UNSPECIFIED:
@@ -138,7 +139,7 @@ func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
 	}
 }
 
-// convertMessageInfo biz.Message → proto.MessageInfo。m == nil 时返 nil。
+// convertMessageInfo biz.Message → proto.MessageInfo。m 是领域对象，m == nil 时返 nil。
 func convertMessageInfo(m *biz.Message) *pb.MessageInfo {
 	if m == nil {
 		return nil
@@ -153,7 +154,8 @@ func convertMessageInfo(m *biz.Message) *pb.MessageInfo {
 	}
 }
 
-// messageTypeToDTO biz.MessageType (1/2) → proto MessageType (1/2)。未知值返 UNSPECIFIED。
+// messageTypeToDTO biz.MessageType (1/2) → proto MessageType (1/2)。t 是领域里的消息类型，
+// 未知值返 UNSPECIFIED。
 func messageTypeToDTO(t biz.MessageType) pb.MessageType {
 	switch t {
 	case biz.MessageTypeText:
@@ -165,7 +167,7 @@ func messageTypeToDTO(t biz.MessageType) pb.MessageType {
 	}
 }
 
-// clampPageSize 限制 page_size 在合法区间（1..200），其它回退默认 50。
+// clampPageSize 限制 page_size 在合法区间（1..200）。n 是请求里的分页大小，其它值回退默认 50。
 func clampPageSize(n int32) int {
 	if n <= 0 || n > 200 {
 		return 50

@@ -10,10 +10,9 @@ import (
 )
 
 // TestMessage_UnreadGRPCNotFoundKeepsOriginalError 跨进程的 404 不能被错判成 503。
-//
-// 下游 conversation 服务是 gRPC 调用，返回的是 *status.Error。
-// 它没有 Unwrap()，所以 errors.As(err, &*kratoserrors.Error) 永远匹配不上 ——
-// 旧实现用 errors.As，跨进程的 404 全被当成「下游不可达」返回 503。
+// 下游 conversation 服务是 gRPC 调用，返回的是 *status.Error，没有 Unwrap()，
+// 所以 errors.As(err, &*kratoserrors.Error) 永远匹配不上 —— 旧实现用 errors.As，
+// 跨进程的 404 全被当成「下游不可达」返回 503。
 func TestMessage_UnreadGRPCNotFoundKeepsOriginalError(t *testing.T) {
 	uc, _, membership, _, unread := newTestMessageUsecase()
 	membership.add(7, "uid-42")

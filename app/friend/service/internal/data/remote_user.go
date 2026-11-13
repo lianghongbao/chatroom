@@ -19,15 +19,16 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// RemoteUserClient 暴露 caller 实际用到的几个方法，保持窄接口便于注入 fake
+// RemoteUserClient 暴露 caller 实际用到的几个方法，保持窄接口便于注入 fake。
 type RemoteUserClient interface {
-	// GetUserByID 拉指定 uid 的公开资料。鉴权由 authForwarding 把当前 token 投到下游
+	// GetUserByID 拉指定 uid 的公开资料。callerID 是调用方，targetID 是目标 uid。
+	// 鉴权由 authForwarding 把当前 token 投到下游。
 	GetUserByID(ctx context.Context, callerID, targetID string) (*userv1.UserInfo, error)
-	// GetFriendProfiles 批量拉「好友可见」的公开资料，跳过陌生人可见性判定。
-	// 走服务间内部凭证（internalForwarding 注入 X-Internal-Token）
+	// GetFriendProfiles 批量拉「好友可见」的公开资料，ids 是目标 uid 列表，
+	// 跳过陌生人可见性判定。走服务间内部凭证（internalForwarding 注入 X-Internal-Token）。
 	GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error)
-	// GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料。
-	// 会话成员未必是好友，但同会话内互相可见昵称/头像
+	// GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，ids 是目标 uid 列表。
+	// 会话成员未必是好友，但同会话内互相可见昵称/头像。
 	GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error)
 }
 
@@ -36,8 +37,9 @@ type RemoteUserClient interface {
 // 拼出的服务名 "chatroom-user.grpc"。两处写错都会导致 "produced zero addresses"。
 const RemoteUserEndpoint = "discovery:///chatroom-user.grpc"
 
-// NewRemoteUserClient 构造 RemoteUserClient。discoverer == nil 时返 noop。
-// 超时 1.5s：ListFriends fan-out 调 N 个，单条拖太久会拖累整批。
+// NewRemoteUserClient 构造 RemoteUserClient。discoverer 是服务发现客户端，nil 时返 noop；
+// auth 提供内部凭证；obs 提供观测能力。
+// 超时 1.5s：好友列表 fan-out 调 N 个，单条拖太久会拖累整批。
 func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteUserClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteUserClient{}, func() {}, nil
@@ -72,15 +74,16 @@ func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *ob
 
 type remoteUserGRPCClient struct {
 	cli            userv1.UserClient
-	internalSecret string // 服务间内部凭证，空表示未配置，GetFriendProfiles 降级返空
+	internalSecret string // 服务间内部凭证，空表示未配置，资料类端点降级返空
 }
 
-// GetUserByID 把 targetID 折成 GetUserByIDRequest；识别 caller 靠下游解析 token
+// GetUserByID 把 targetID 折成 GetUserByIDRequest；识别 caller 靠下游解析 token。
 func (c *remoteUserGRPCClient) GetUserByID(ctx context.Context, _, targetID string) (*userv1.UserInfo, error) {
 	return c.cli.GetUserByID(ctx, &userv1.GetUserByIDRequest{Id: targetID})
 }
 
-// GetFriendProfiles 调 user 的好友资料端点，走内部凭证，跳过陌生人可见性。
+// GetFriendProfiles 调 user 的好友资料端点，ids 是目标 uid 列表，
+// 走内部凭证，跳过陌生人可见性。
 // 未配置 internalSecret 时降级返空——好友列表仍能返回，只是昵称/头像为空。
 func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
@@ -93,7 +96,8 @@ func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []stri
 	return reply.GetUsers(), nil
 }
 
-// GetConversationMemberProfiles 调 user 的会话成员资料端点，走内部凭证。
+// GetConversationMemberProfiles 调 user 的会话成员资料端点，ids 是目标 uid 列表，
+// 走内部凭证。
 // 未配置 internalSecret 时降级返空——会话列表仍能返回，只是昵称/头像为空。
 func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
@@ -107,7 +111,7 @@ func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context
 }
 
 // authForwarding 把入站 Authorization 投到下游，user service 据此识别 caller。
-// ctx 没带 token 时透传 nothing，下游返 401。
+// ctx 没带 token 时透传空值，下游返 401。
 func authForwarding() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -117,7 +121,7 @@ func authForwarding() middleware.Middleware {
 	}
 }
 
-// forwardAuth 从入站请求头取 Authorization 写入出站 metadata
+// forwardAuth 从入站请求头取 Authorization 写入出站 metadata。
 func forwardAuth(ctx context.Context) context.Context {
 	tr, ok := transport.FromServerContext(ctx)
 	if !ok {
@@ -133,7 +137,7 @@ func forwardAuth(ctx context.Context) context.Context {
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
-// noopRemoteUserClient 未配 discovery 时的兜底，所有调用返 nil
+// noopRemoteUserClient 未配 discovery 时的兜底，所有调用返 nil。
 type noopRemoteUserClient struct{}
 
 func (noopRemoteUserClient) GetUserByID(_ context.Context, _, _ string) (*userv1.UserInfo, error) {
@@ -149,7 +153,7 @@ func (noopRemoteUserClient) GetConversationMemberProfiles(_ context.Context, _ [
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 为空时不注入任何 header——下游的内部凭证校验会 fail closed 返 403，
+// secret 是内部凭证，为空时不注入任何 header——下游的内部凭证校验会 fail closed 返 403，
 // 调用方（biz）走降级，不影响好友列表主路径。
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {

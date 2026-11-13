@@ -18,7 +18,7 @@ if [ ! -f "${SERVICE_DIR}/internal/conf/conf.proto" ]; then
 	exit 1
 fi
 
-# 插件版本钉死 —— 与 api/gen.sh 和 go.mod 里的 protobuf 版本对齐。
+# 插件版本钉死，与 api/gen.sh 和 go.mod 里的 protobuf 版本对齐。
 PLUGIN_PKG="google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12"
 
 PLUGIN_DIR="${ROOT}/.cache/protoc-plugins"
@@ -45,10 +45,8 @@ fi
 
 # protoc 从仓库根跑，--proto_path=app —— 注册进 protobuf 全局注册表的
 # 路径是 <服务>/service/internal/conf/conf.proto。
-#
-# 路径必须**全局唯一**：整个仓库是单个 Go module，五个服务的 conf 包
-# 可能被链进同一个二进制。protobuf 的注册表按「相对 proto_path 根的
-# 路径」做 key，五份都叫 internal/conf/conf.proto 会在 init 期 panic。
+# 路径必须全局唯一：整仓是单个 Go module，多个服务的 conf 包会被链进同一
+# 个二进制，注册表按「相对 proto_path 根的路径」做 key，同名会在 init 期 panic。
 # 加上服务名这一层前缀就天然避开了。
 cd "${ROOT}"
 protoc \

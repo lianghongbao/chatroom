@@ -20,7 +20,8 @@ type MemberInvalidationPublisher struct {
 	rdb redis.Cmdable
 }
 
-// NewMemberInvalidationPublisher 构造 publisher。Redis 不可用时返 nil（不发通知）。
+// NewMemberInvalidationPublisher 构造 publisher。d 是 data 客户端。
+// Redis 不可用时返 nil（不发通知）。
 func NewMemberInvalidationPublisher(d *Data) *MemberInvalidationPublisher {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -28,7 +29,7 @@ func NewMemberInvalidationPublisher(d *Data) *MemberInvalidationPublisher {
 	return &MemberInvalidationPublisher{rdb: d.Redis()}
 }
 
-// Publish 通知「会话 X 的成员变了」。
+// Publish 通知「会话 X 的成员变了」。conversationID 是会话 ID。
 func (p *MemberInvalidationPublisher) Publish(ctx context.Context, conversationID uint64) error {
 	if p == nil || p.rdb == nil {
 		return nil

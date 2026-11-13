@@ -26,18 +26,22 @@ const (
 
 // TokenVerifier 校验握手 token 返用户 uid。
 type TokenVerifier interface {
+	// Verify 校验 raw 是原始 token，返回用户 ID。
 	Verify(raw string) (string, error)
 }
 
 // MessageSender 发消息到 message 服务（网关不落库，只转发）。
 type MessageSender interface {
-	// token 是发起方的 JWT，message 服务靠它识别发消息的人
+	// Send 转发一条消息。token 是发起方的 JWT，message 服务靠它识别发消息的人；
+	// senderID 是发送者 uid；msgType 是消息类型；content 是消息内容。
+	// 返回落库后的消息 id 与创建时间。
 	Send(ctx context.Context, token string, senderID string, conversationID uint64, msgType uint8, content string) (messageID uint64, createdAt int64, err error)
 }
 
 // MessageLister 从 message 服务拉消息（断线重连补消息用）。
 type MessageLister interface {
-	// 拉 id 严格大于 sinceID 的消息，按 id 正序。sinceID = 0 表示从头拉
+	// ListSince 拉 id 严格大于 sinceID 的消息，按 id 正序；sinceID = 0 表示从头拉。
+	// token 是发起方的 JWT。返回消息列表、最后一条消息 id、是否还有更多。
 	ListSince(ctx context.Context, token string, conversationID, sinceID uint64, limit int32) (msgs []MessageInfo, lastID uint64, hasMore bool, err error)
 }
 
@@ -83,7 +87,9 @@ type Server struct {
 	wg sync.WaitGroup
 }
 
-// NewServer 构造网关。members / online 为 nil 时分别不广播、不上报在线状态。
+// NewServer 构造网关。pool 是连接池，sender 是消息转发器，verify 是握手鉴权器，
+// members 是会话成员缓存（算广播目标用），online 是在线状态上报器。
+// members / online 为 nil 时分别不广播、不上报在线状态。
 func NewServer(cfg Config, pool *Pool, sender MessageSender, verify TokenVerifier, members *MemberCache, online *OnlineReporter, logger *slog.Logger) *Server {
 	if logger == nil {
 		logger = slog.Default()
@@ -196,9 +202,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		s.wg.Done()
 		// Remove 会触发 pool 的 onClose 回调 —— 那里已经判断了
 		// 「还有别的连接就不算离线」，在线状态由它统一管。
-		//
-		// 这里不要再来一次 MarkOffline：无条件删会把多端登录用户的
-		// 在线状态错删 —— 关掉手机端，网页端还连着，别人却查到他离线。
+		// 这里不要再来一次 MarkOffline：无条件删会把多端登录用户的在线状态错删 ——
+		// 关掉手机端，网页端还连着，别人却查到他离线。
 		s.pool.Remove(conn)
 		// 还有别的连接就不算离线
 		nowOffline := s.pool.Count(uid) == 0
@@ -224,9 +229,7 @@ func (s *Server) readPump(conn *Connection) {
 	_ = conn.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
 	// 收到 pong 就续期读超时 + 更新活跃时间
 	conn.conn.SetPongHandler(func(string) error {
-		// 记录最近活跃时间
 		conn.Touch()
-		// 续期
 		return conn.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
 	})
 
@@ -248,7 +251,7 @@ func (s *Server) readPump(conn *Connection) {
 	}
 }
 
-// handleFrame 处理一帧客户端上行消息。
+// handleFrame 处理一帧客户端上行消息，payload 是帧原文。
 func (s *Server) handleFrame(conn *Connection, payload []byte) {
 	frame, err := DecodeClientFrame(payload)
 	if err != nil {
@@ -275,12 +278,9 @@ func (s *Server) handleFrame(conn *Connection, payload []byte) {
 	}
 }
 
-// dispatchAsync 把要访问下游的帧处理丢到协程里跑。
-//
-// 只对「会阻塞」的帧类型用 —— 这些处理都要问下游（message / conversation 服务），
-// 同步做会把读协程卡住。ping / pong 不走这里：它必须同步回，
-// 否则客户端的心跳会堆积。
-//
+// dispatchAsync 把要访问下游的帧处理丢到协程里跑，fn 是处理函数。
+// 只对「会阻塞」的帧类型用 —— 同步做会把读协程卡住。ping / pong 不走这里：
+// 它必须同步回，否则客户端的心跳会堆积。
 // 写连接是安全的 —— Connection 是单写者模型，协程里只调 conn.Send 往队列塞，
 // 真正写 socket 的还是 writePump。
 func (s *Server) dispatchAsync(conn *Connection, fn func()) {
@@ -322,6 +322,7 @@ func (s *Server) handleStatus(conn *Connection, frame *ClientFrame) {
 
 // handleResume 处理断线重连后的补消息：客户端报「我最后看到的是 id=X」，
 // 网关问 message 服务「X 之后有什么」，按顺序推给客户端，再回结果帧。
+// frame 的 conversation_id 是会话 id，last_message_id 是基准消息 id。
 func (s *Server) handleResume(conn *Connection, frame *ClientFrame) {
 	if frame.ConversationID == 0 {
 		conn.Send(EncodeErrorFrame("conversation_id is required", "INVALID_ARGUMENT"))
@@ -369,6 +370,7 @@ func (s *Server) handleResume(conn *Connection, frame *ClientFrame) {
 const resumePageSize = 50
 
 // handleChat 处理客户端发来的聊天帧 —— 转发到 message 服务落库。
+// frame 的 conversation_id 是会话 id，msg_type 是消息类型，content 是消息内容。
 func (s *Server) handleChat(conn *Connection, frame *ClientFrame) {
 	if frame.ConversationID == 0 {
 		conn.Send(EncodeErrorFrame("conversation_id is required", "INVALID_ARGUMENT"))
@@ -404,6 +406,8 @@ func (s *Server) handleChat(conn *Connection, frame *ClientFrame) {
 
 // writePump 写协程：唯一的写者。gorilla/websocket 不允许并发写，
 // 其它地方都通过 Send 往队列塞。
+// gorilla/websocket 的读超时不可恢复 —— 一旦触发连接就永久废了，
+// 所以这里只写不设读超时，等新帧要靠后台读协程。
 func (s *Server) writePump(conn *Connection) {
 	ticker := time.NewTicker(s.cfg.PingInterval)
 	defer func() {
@@ -436,6 +440,7 @@ func (s *Server) writePump(conn *Connection) {
 const maxMessageSize = 64 * 1024
 
 // HandleBroadcast 处理一条从 Redis Pub/Sub 收到的消息，推给本实例上的目标连接。
+// payload 是广播体原文。广播目标靠内部端点列成员 —— 查不到成员就丢弃。
 func (s *Server) HandleBroadcast(payload []byte) {
 	msg, err := DecodePublishPayload(payload)
 	if err != nil {
@@ -459,7 +464,8 @@ func (s *Server) HandleBroadcast(payload []byte) {
 }
 
 // BroadcastToMembers 把消息推给会话的所有成员（除发送方）。
-// memberIDs 由调用方从 conversation 服务取。
+// memberIDs 是会话成员列表，由调用方从 conversation 服务取；
+// senderID 是发送方；payload 是广播体原文。
 func (s *Server) BroadcastToMembers(memberIDs []string, senderID string, payload []byte) {
 	msg, err := DecodePublishPayload(payload)
 	if err != nil {
@@ -486,7 +492,7 @@ func (s *Server) BroadcastToMembers(memberIDs []string, senderID string, payload
 	}
 }
 
-// StartBackground 启动空闲连接清理任务。返回一个停止函数。
+// StartBackground 启动空闲连接清理任务，ctx 结束时任务退出。返回一个停止函数。
 func (s *Server) StartBackground(ctx context.Context) func() {
 	if s.cfg.IdleTimeout <= 0 {
 		return func() {}
@@ -519,6 +525,8 @@ func (s *Server) Shutdown() {
 
 // clientFacingSendError 把下游错误翻成给客户端看的话。
 // 跨进程后拿到的是 gRPC status 错误，不是 kratos 的 *errors.Error，所以按 gRPC 码判。
+// 映射：PermissionDenied → 不是会话成员，InvalidArgument → 消息非法，
+// NotFound → 会话不存在，Unavailable → message 服务不可用，其余一律 send failed。
 func clientFacingSendError(err error) string {
 	if err == nil {
 		return "send failed"
@@ -555,7 +563,7 @@ func (s *Server) ConnectionCount() int {
 	return s.pool.Total()
 }
 
-// formatInt64 便于日志输出的 int64 字符串。
+// formatInt64 便于日志输出的 int64 字符串，v 是要格式化的值。
 func formatInt64(v int64) string {
 	return strconv.FormatInt(v, 10)
 }

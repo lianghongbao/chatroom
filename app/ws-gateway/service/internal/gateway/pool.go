@@ -14,7 +14,7 @@ type Pool struct {
 	onClose func(userID string, c *Connection)
 }
 
-// NewPool 构造连接池。onClose 用于清理 Redis 里的在线状态。
+// NewPool 构造连接池。onClose 用于清理 Redis 里的在线状态，可为 nil。
 func NewPool(onClose func(userID string, c *Connection)) *Pool {
 	return &Pool{conns: make(map[string][]*Connection), onClose: onClose}
 }
@@ -29,7 +29,7 @@ func (p *Pool) Add(c *Connection) {
 	p.conns[c.UserID] = append(p.conns[c.UserID], c)
 }
 
-// Remove 移除一条连接。按指针匹配，只删这一条。
+// Remove 移除一条连接。按指针匹配，只删这一条；确实是池子里的连接时才触发 onClose。
 func (p *Pool) Remove(c *Connection) {
 	if c == nil {
 		return
@@ -58,7 +58,7 @@ func (p *Pool) Remove(c *Connection) {
 	}
 }
 
-// Get 取某用户的全部连接副本。返回副本避免调用方遍历时被并发写影响。
+// Get 取某用户的全部连接副本，userID 是用户 ID。返回副本避免调用方遍历时被并发写影响。
 func (p *Pool) Get(userID string) []*Connection {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -71,6 +71,7 @@ func (p *Pool) Get(userID string) []*Connection {
 
 // Users 当前有连接的用户 id 列表。
 func (p *Pool) Users() []string {
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	out := make([]string, 0, len(p.conns))
@@ -80,7 +81,7 @@ func (p *Pool) Users() []string {
 	return out
 }
 
-// Count 某用户的连接数。
+// Count 某用户的连接数，userID 是用户 ID。
 func (p *Pool) Count(userID string) int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -107,6 +108,7 @@ func (p *Pool) OnlineCount() int {
 
 // All 全部连接。
 func (p *Pool) All() []*Connection {
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	out := make([]*Connection, 0, p.Total())
@@ -124,7 +126,7 @@ func (p *Pool) CloseAll() {
 	}
 }
 
-// EvictIdle 踢掉空闲超时的连接，返回踢掉的连接数。idleTimeout <= 0 时不踢。
+// EvictIdle 踢掉空闲超时的连接，idleTimeout 是空闲阈值（<= 0 时不踢），返回踢掉的连接数。
 func (p *Pool) EvictIdle(idleTimeout time.Duration) int {
 	if idleTimeout <= 0 {
 		return 0

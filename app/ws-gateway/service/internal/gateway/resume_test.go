@@ -45,6 +45,7 @@ func (f *fakeMessageLister) ListSince(_ context.Context, token string, conversat
 }
 
 // newTestServer 起一个挂网关 handler 的 HTTP 测试服务器，返回 WS URL。
+// handler 是 WS 升级 handler，t 是测试用例。
 func newTestServer(t *testing.T, s *Server) string {
 	t.Helper()
 	ts := httptest.NewServer(s.Handler())
@@ -52,7 +53,7 @@ func newTestServer(t *testing.T, s *Server) string {
 	return "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
 }
 
-// newResumeGateway 构造一个带消息查询能力的网关。
+// newResumeGateway 构造一个带消息查询能力的网关。lister 是消息查询替身。
 func newResumeGateway(t *testing.T, lister *fakeMessageLister) (*Server, string) {
 	t.Helper()
 	pool := NewPool(nil)

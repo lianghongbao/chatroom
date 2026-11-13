@@ -3,13 +3,12 @@
 #
 # 本地 config.yaml 和 nacos 上的 chatroom-{svc}.yaml 是同一份配置的两份拷贝，
 # 靠人肉记得改就会漂移（改了本地没推 → 服务读的还是 nacos 上的旧值）。
-# 这个脚本让两份拷贝由同一次生成产生。
 #
 # 分层约定：
 #   configs/bootstrap.yaml   引导配置：连哪个 nacos、哪条 dataId。只在本地，
 #                            永远不进 nacos —— 「连哪个 nacos」不能由 nacos
 #                            自己决定，否则会形成循环依赖。
-#   configs/config.yaml      业务配置：**这份原样进 nacos**。
+#   configs/config.yaml      业务配置：这份原样进 nacos。
 #
 # 用法（从服务目录跑）：
 #   tools/nacos-config.sh diff    # 对比本地和 nacos，不改任何东西
@@ -25,8 +24,7 @@ SERVICE_DIR="${SERVICE_DIR:?需要指定服务目录: SERVICE_DIR=../user-servic
 ROOT="$(cd "$SERVICE_DIR" && pwd)"
 DEV_ENV="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-env.mk"
 
-# 服务标识与中文名，决定 nacos 上的 dataId 和 desc。
-# 由服务目录下的 tools/nacos-config.sh 传入。
+# 服务标识，决定 nacos 上的 dataId；由服务目录下的 tools/nacos-config.sh 传入。
 SERVICE="${SERVICE:?需要指定服务标识: SERVICE=user ...}"
 
 # 从 tools/dev-env.mk 取默认值（Make 语法 `KEY ?= value`）。
@@ -53,10 +51,8 @@ access_token() {
 		python3 -c 'import sys,json; print(json.load(sys.stdin)["accessToken"])'
 }
 
-# 从 configs/bootstrap.yaml 读 dataId。
-#
-# dataId 写在 bootstrap.yaml 里，服务启动时读的也是同一份，所以这里必须从
-# 同一个源取。留空时回退到 <service_name>.yaml，跟服务端的回退规则一致
+# 从 configs/bootstrap.yaml 读 dataId。服务启动时读的是同一份，所以必须
+# 同源。留空时回退到 <service_name>.yaml，跟服务端的回退规则一致
 # （chatroom/pkg/nacos.Options.DataIDOrDefault）。
 data_id_of() {
 	python3 - "$ROOT/configs/bootstrap.yaml" <<'PYEOF'
@@ -76,9 +72,7 @@ PYEOF
 }
 
 # 把本地 config.yaml 转成 nacos 上要放的内容。
-#
-# config.yaml 原样进 nacos —— registry 段在 bootstrap.yaml 里。
-# 这里做一次断言：万一有人又把 registry 写回 config.yaml，推上去就会形成
+# 断言 config.yaml 里没有 registry 段 —— 万一有人写回去，推上去就会形成
 # 「nacos 决定连哪个 nacos」的循环依赖。宁可推失败也不要静默推坏。
 build_content() {
 	python3 - "$1" <<'PYEOF'

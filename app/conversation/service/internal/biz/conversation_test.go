@@ -15,7 +15,7 @@ import (
 type fakeConvRepo struct {
 	byID   map[uint64]*Conversation
 	nextID uint64
-	// saveCalls 记录 Save 被调用的次数，用来断言"复用单聊不写库"。
+	// saveCalls 记录 Save 被调用的次数，用来断言「复用单聊不写库」。
 	saveCalls int
 	// unread 存每个 (conversationID, userID) 的未读数。
 	unread map[string]uint32
@@ -25,7 +25,7 @@ func newFakeConvRepo() *fakeConvRepo {
 	return &fakeConvRepo{byID: make(map[uint64]*Conversation), nextID: 1, unread: make(map[string]uint32)}
 }
 
-// copyConv 复制一份，避免测试里的修改污染 repo 内部状态。
+// copyConv 复制一份，避免测试里的修改污染 repo 内部状态。c 是源会话。
 func copyConv(c *Conversation) *Conversation {
 	if c == nil {
 		return nil
@@ -238,7 +238,7 @@ func (r *fakeConvRepo) TouchConversation(_ context.Context, id uint64) error {
 	return nil
 }
 
-// unread 存每个 (conversationID, userID) 的未读数。
+// UpdateUnread 增减某成员的未读数，返回更新后的值。
 func (r *fakeConvRepo) UpdateUnread(_ context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if _, ok := r.byID[conversationID]; !ok {
 		return 0, ErrConversationNotFound
@@ -302,12 +302,12 @@ func (r *fakeConvRepo) ListUnread(_ context.Context, userID string) (map[uint64]
 	return out, nil
 }
 
-// unreadKey 未读数的 map key。
+// unreadKey 未读数的 map key。conversationID 是会话 ID，userID 是成员 uid。
 func unreadKey(conversationID uint64, userID string) string {
 	return fmt.Sprintf("%d:%s", conversationID, userID)
 }
 
-// splitUnreadKey 解析 unreadKey。
+// splitUnreadKey 解析 unreadKey，返回会话 ID 与成员 uid。
 func splitUnreadKey(key string) (uint64, string) {
 	var cid uint64
 	var uid string
@@ -338,7 +338,7 @@ func (f *fakeConvFetcher) FetchProfiles(_ context.Context, ids []string) ([]*Use
 
 // fakeExistenceChecker 是 biz.UserExistenceChecker 的内存替身。
 //
-//	existing 存在的 uid 集合；为空时视为"全部存在"（跳过校验）。
+//	existing 存在的 uid 集合；为空时视为「全部存在」（跳过校验）。
 //	err 非 nil 时模拟 user 服务不可达 —— biz 应该放行而不是拦下。
 type fakeExistenceChecker struct {
 	existing map[string]struct{}
@@ -496,7 +496,7 @@ func TestConversation_GetConversationHidesFromNonMember(t *testing.T) {
 	if _, err := uc.GetConversation(context.Background(), "uid-2", c.ID); err != nil {
 		t.Fatalf("成员应能看到会话: %v", err)
 	}
-	// 非成员 3 看不到 —— 折叠成 NOT_FOUND，不泄露"会话存在"。
+	// 非成员 3 看不到 —— 折叠成 NOT_FOUND，不泄露「会话存在」。
 	_, err = uc.GetConversation(context.Background(), "uid-3", c.ID)
 	if !errors.Is(err, ErrConversationNotFound) {
 		t.Fatalf("非成员应得到 NOT_FOUND，实际 %v", err)
@@ -720,7 +720,7 @@ func TestConversation_ListPaginatesWithCursor(t *testing.T) {
 }
 
 // TestConversation_ListExactPageSizeHasNoNextCursor 正好取完所有会话时，
-// 末页不该再带 next_cursor —— 客户端据此判断"到底了"。
+// 末页不该再带 next_cursor —— 客户端据此判断「到底了」。
 func TestConversation_ListExactPageSizeHasNoNextCursor(t *testing.T) {
 	uc, repo := newTestConvUsecase()
 
@@ -873,8 +873,8 @@ func TestConversation_CreateRejectsTooManyMembers(t *testing.T) {
 	}
 }
 
-// TestConversation_LeaveSingleChatRejected 单聊不支持退群。单聊固定两人，一方退群会留下只有 1 个成员的"单聊" —— 对方列表里的会话
-// 缺一个 peer，而且违反"单聊固定 2 人"的不变量。
+// TestConversation_LeaveSingleChatRejected 单聊不支持退群。单聊固定两人，一方退群会留下只有 1 个成员的「单聊」 —— 对方列表里的会话
+// 缺一个 peer，而且违反「单聊固定 2 人」的不变量。
 func TestConversation_LeaveSingleChatRejected(t *testing.T) {
 	uc, repo := newTestConvUsecase()
 
@@ -963,7 +963,7 @@ func TestConversation_TransferOwnerToSelfRejected(t *testing.T) {
 
 // TestConversation_TransferOwnerUnlocksLeaving 转让后原群主才能退群。
 //
-// 这是"群主被困死"的回归测试 —— 转让是唯一逃生口。
+// 这是「群主被困死」的回归测试 —— 转让是唯一逃生口。
 func TestConversation_TransferOwnerUnlocksLeaving(t *testing.T) {
 	uc, _ := newTestConvUsecase()
 

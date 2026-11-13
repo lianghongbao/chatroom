@@ -68,7 +68,7 @@ func (f *fakeMessageSender) Send(_ context.Context, token string, senderID strin
 	return f.msgID, f.createdAt, nil
 }
 
-// newTestGateway 构造一个网关 + 一个真实的 WS 测试服务器。
+// newTestGateway 构造一个网关 + 一个真实的 WS 测试服务器。t 是测试用例。
 //
 // 返回：网关、连接池、发消息替身、token 校验替身、服务器 URL。
 func newTestGateway(t *testing.T) (*Server, *Pool, *fakeMessageSender, *fakeTokenVerifier, string) {

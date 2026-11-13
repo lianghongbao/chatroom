@@ -32,7 +32,9 @@ type RemoteMessageClient interface {
 // 必须带 "discovery:///" 前缀和 ".grpc" 后缀，否则 gRPC 报 "produced zero addresses"。
 const RemoteMessageEndpoint = "discovery:///chatroom-message.grpc"
 
-// NewRemoteMessageClient 构造 RemoteMessageClient。discoverer == nil 时返 noop。
+// NewRemoteMessageClient 构造 RemoteMessageClient。
+// discoverer 是服务发现器，obs 是观测能力。
+// discoverer 为 nil 时返 noop。
 // 超时 2s：网关转发是同步链路，下游慢会拖住 WS 读协程。
 func NewRemoteMessageClient(discoverer registry.Discovery, obs *observability.Provider) (RemoteMessageClient, func(), error) {
 	if discoverer == nil {
@@ -102,7 +104,7 @@ func (c *remoteMessageGRPCClient) ListMessagesSince(ctx context.Context, token s
 	return reply.GetMessages(), reply.GetLastMessageId(), reply.GetHasMore(), nil
 }
 
-// messageTypeFromUint8 uint8 → proto 枚举。
+// messageTypeFromUint8 把 uint8 消息类型转成 proto 枚举。
 func messageTypeFromUint8(t uint8) messagev1.MessageType {
 	switch t {
 	case 2:
@@ -112,7 +114,7 @@ func messageTypeFromUint8(t uint8) messagev1.MessageType {
 	}
 }
 
-// withToken 把 token 放进出站 metadata 的 Authorization 头。
+// withToken 把 token 放进出站 metadata 的 Authorization 头。token 是用户 JWT。
 // 网关是替用户转发请求，token 得原样带过去 —— message 服务靠它识别发消息的人。
 func withToken(ctx context.Context, token string) context.Context {
 	if token == "" {

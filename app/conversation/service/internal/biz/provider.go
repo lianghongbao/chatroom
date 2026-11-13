@@ -2,5 +2,5 @@ package biz
 
 import "github.com/google/wire"
 
-// ProviderSet 是 conversation 服务的 biz providers。
+// ProviderSet conversation 服务的 biz 层 providers。
 var ProviderSet = wire.NewSet(NewConversationUsecase)

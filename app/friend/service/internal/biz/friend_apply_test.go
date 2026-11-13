@@ -15,7 +15,7 @@ func TestApply_TruncatesMessageByRunes(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 300 个中文字符 = 900 字节
+	// 300 个中文字符 = 900 字节。
 	msg := strings.Repeat("好", 300)
 
 	res, err := uc.Apply(context.Background(), "uid-1", "uid-2", msg)
@@ -76,18 +76,17 @@ func TestApply_ExactlyMaxLength(t *testing.T) {
 
 // TestApply_ReversePendingAutoAccept 反向 PENDING 自动收尾成好友。
 //
-// 覆盖「对方先申请了我，我又申请对方」—— 应该成为好友，
-// 而不是报错。
+// 覆盖「对方先申请了我，我又申请对方」—— 应该成为好友，而不是报错。
 func TestApply_ReversePendingAutoAccept(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 	ctx := context.Background()
 
-	// uid-2 先申请 uid-1
+	// uid-2 先申请 uid-1。
 	if _, err := uc.Apply(ctx, "uid-2", "uid-1", "hi"); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	// uid-1 反过来申请 uid-2 —— 应该自动成好友
+	// uid-1 反过来申请 uid-2 —— 应该自动成好友。
 	res, err := uc.Apply(ctx, "uid-1", "uid-2", "hi back")
 	if err != nil {
 		t.Fatalf("反向申请失败: %v", err)

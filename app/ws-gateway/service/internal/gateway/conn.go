@@ -23,7 +23,8 @@ type Connection struct {
 	lastActive atomic.Int64
 }
 
-// NewConnection 构造 Connection，sendQueueSize 是写队列长度。
+// NewConnection 构造连接，ws 是底层连接，userID 是所属用户，
+// token 是握手带来的 JWT，sendQueueSize 是写队列长度。
 func NewConnection(ws *websocket.Conn, userID string, token string, sendQueueSize int) *Connection {
 	if sendQueueSize <= 0 {
 		sendQueueSize = defaultSendQueueSize
@@ -39,8 +40,8 @@ func NewConnection(ws *websocket.Conn, userID string, token string, sendQueueSiz
 	return c
 }
 
-// Send 往写队列里塞一条消息。队列满时丢弃最老的一条再塞新的。
-// 返回 false 表示连接已关闭。
+// Send 往写队列里塞一条消息，payload 是待下发的帧内容。
+// 队列满时丢弃最老的一条再塞新的；返回 false 表示连接已关闭。
 func (c *Connection) Send(payload []byte) bool {
 	select {
 	case <-c.closed:
@@ -65,7 +66,7 @@ func (c *Connection) Send(payload []byte) bool {
 	}
 }
 
-// Close 关闭连接。幂等。
+// Close 关闭连接。幂等，读协程和写协程都会调。
 func (c *Connection) Close() {
 	c.closeOnce.Do(func() {
 		close(c.closed)
@@ -86,17 +87,17 @@ func (c *Connection) IsClosed() bool {
 	}
 }
 
-// Touch 记录最近活跃时间（心跳续期）。
+// Touch 刷新最近活跃时间（心跳续期）。
 func (c *Connection) Touch() {
 	c.lastActive.Store(time.Now().UnixNano())
 }
 
-// LastActive 最近活跃时间。
+// LastActive 最近一次活跃的时刻。
 func (c *Connection) LastActive() time.Time {
 	return time.Unix(0, c.lastActive.Load())
 }
 
-// IdleFor 空闲了多久。
+// IdleFor 距离最近一次活跃过了多久。
 func (c *Connection) IdleFor() time.Duration {
 	return time.Since(c.LastActive())
 }

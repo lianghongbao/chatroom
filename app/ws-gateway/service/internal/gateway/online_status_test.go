@@ -15,7 +15,6 @@ import (
 
 // TestOnlineStatusSurvivesOneOfTwoConnectionsClosed 端到端验证：
 // 同一个用户开两条 WS 连接，关掉其中一条，在线状态必须保留。
-//
 // 这条测试走的是真实的 handleWS 路径 —— 覆盖 defer 里那次 MarkOffline。
 func TestOnlineStatusSurvivesOneOfTwoConnectionsClosed(t *testing.T) {
 	f := newFakeOnlineRedis()

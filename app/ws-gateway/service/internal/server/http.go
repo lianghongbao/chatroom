@@ -12,7 +12,8 @@ import (
 	khttp "github.com/go-kratos/kratos/v3/transport/http"
 )
 
-// NewHTTPServer 构造 HTTP server。
+// NewHTTPServer 构造 HTTP server。c 是服务配置，obs 是观测能力，
+// handler 是 WS 升级 handler。
 func NewHTTPServer(c *conf.Server, obs *observability.Provider, gw *gateway.Server) *khttp.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),

@@ -181,7 +181,8 @@ func (f *fakeConvRepo) ListUnread(_ context.Context, userID string) (map[uint64]
 	return f.listUnread, nil
 }
 
-// fakeConvProfiles 是 biz.ConversationProfileFetcher 的替身。拉不到资料时 biz 会把昵称/头像填成等长的空串占位 —— 所以要验证昵称
+// fakeConvProfiles 是 biz.ConversationProfileFetcher 的替身。
+// 拉不到资料时 biz 会把昵称 / 头像填成等长的空串占位 —— 所以要验证昵称
 // 真的透传到 DTO，替身必须返回资料。
 type fakeConvProfiles struct {
 	profiles map[string]*biz.UserProfile

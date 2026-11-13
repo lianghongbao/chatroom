@@ -175,7 +175,7 @@ func (fakeFriendProfiles) FetchProfiles(context.Context, string, []string) ([]*b
 	return nil, nil
 }
 
-// newService 用 fake repo 造一个真实 usecase + service。
+// newService 用 fake repo 造一个真实 usecase + service。repo 是仓储替身。
 func newService(repo *fakeFriendRepo) *FriendService {
 	uc := biz.NewFriendUsecase(repo, fakeFriendProfiles{}, fakeFriendLimiter{}, nil)
 	return NewFriendService(uc)
@@ -226,8 +226,7 @@ func TestServiceApply_PassesCallerAndTarget(t *testing.T) {
 }
 
 // TestServiceApply_MessageTruncatedByBiz 验证截断发生在 biz 层而不是
-// service 层 —— service 原样透传 message，biz 落库前裁到 200 字符
-// （见 biz/friend_test.go TestFriendUsecase_Apply_MessageOver200Truncated）。
+// service 层 —— service 原样透传 message，biz 落库前裁到 200 字符。
 func TestServiceApply_MessageTruncatedByBiz(t *testing.T) {
 	repo := &fakeFriendRepo{saveRet: 1}
 	s := newService(repo)
@@ -510,7 +509,7 @@ func TestServiceListPendingRequests_PassesArgs(t *testing.T) {
 func TestServiceListPendingRequests_DefaultPageSize(t *testing.T) {
 	repo := &fakeFriendRepo{}
 	s := newService(repo)
-	// pageSize 留空 (0) → service 层折叠到 50
+	// pageSize 留空（0）→ service 层折叠到 50。
 	if _, err := s.ListPendingRequests(friendAuthedCtx(t, "uid-1"), &pb.ListPendingRequestsRequest{}); err != nil {
 		t.Fatalf("ListPendingRequests: %v", err)
 	}
@@ -534,8 +533,8 @@ func TestServiceCountPending_PassesCallerID(t *testing.T) {
 	}
 }
 
-// friendAuthedCtx 用一次 auth.Server 中间件把 uid 注入 ctx，复用 user_test.go
-// 里的 jwtFor（同一 secret），便于跨测试共用 token 格式。
+// friendAuthedCtx 用一次 auth.Server 中间件把 uid 注入 ctx，uid 是要注入的用户 ID，
+// 复用 user_test.go 里的 jwtFor（同一 secret），便于跨测试共用 token 格式。
 func friendAuthedCtx(t *testing.T, uid string) context.Context {
 	t.Helper()
 	return testutil.AuthedCtxWithToken(t, testutil.JWTFor(t, "test-secret", uid), "test-secret")

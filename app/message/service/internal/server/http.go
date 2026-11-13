@@ -18,7 +18,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// NewHTTPServer 构造 HTTP server。
+// NewHTTPServer 构造 HTTP server。c 是 server 配置段，ac 是鉴权配置，
+// obs 是观测能力，store 是 access token 黑名单查询，svc 是本域的 HTTP 服务实现。
 func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.MessageService) *khttp.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),
@@ -55,7 +56,7 @@ func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, s
 	return srv
 }
 
-// httpHealthHandler 健康检查 handler。
+// httpHealthHandler 健康检查 handler。只报进程存活，不探测任何依赖。
 func httpHealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

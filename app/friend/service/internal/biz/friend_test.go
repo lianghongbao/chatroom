@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-// fakeFriendRepo 是 biz.FriendRepo 的内存替身。内部用 (userID, friendID) 二元组作唯一键，与 schema 的 uk_user_friend
-// 对齐。Save 命中重复键时返 ErrFriendAlreadyApplied（与 data 层将 ent
-// 唯一冲突折叠成的错误一致）。
+// fakeFriendRepo 是 biz.FriendRepo 的内存替身。内部用 (userID, friendID) 二元组作唯一键，
+// 与 schema 的 uk_user_friend 对齐。Save 命中重复键时返 ErrFriendAlreadyApplied
+// （与 data 层把 ent 唯一冲突折叠成的错误一致）。
 type fakeFriendRepo struct {
-	// key = encodePair(userID, friendID)
+	// byPair 的 key 是 encodePair(userID, friendID)。
 	byPair map[string]*Friend
 	byID   map[uint64]*Friend
 	nextID uint64
@@ -27,7 +27,7 @@ func newFakeFriendRepo() *fakeFriendRepo {
 }
 
 func encodePair(userID, friendID string) string {
-	// 用 "\x00" 分隔不会与合法 id 冲突 (id 不会包含空字节)
+	// 用 "\x00" 分隔不会与合法 id 冲突（id 不会包含空字节）。
 	return userID + "\x00" + friendID
 }
 
@@ -50,7 +50,7 @@ func (r *fakeFriendRepo) Save(_ context.Context, f *Friend) (uint64, error) {
 	if _, exists := r.byPair[key]; exists {
 		return 0, ErrFriendAlreadyApplied
 	}
-	// 取当前 max id + 1, 避免删除记录后 nextID 回退导致 id 复用
+	// 取当前 max id + 1，避免删除记录后 nextID 回退导致 id 复用。
 	maxID := r.nextID
 	for id := range r.byID {
 		if id >= maxID {
@@ -149,8 +149,8 @@ func (r *fakeFriendRepo) DeleteByPair(_ context.Context, userID, friendID string
 	return nil
 }
 
-// FindPendingByRecipientID 是 F4 ListPendingRequests 的内存替身。
-// 仅返回 friend_id == recipientID 且 status == PENDING 的记录, 按 id 升序。
+// FindPendingByRecipientID 是 ListPendingRequests 的内存替身。
+// 仅返回 friend_id == recipientID 且 status == PENDING 的记录，按 id 升序。
 // cursor 语义与 FindAcceptedByUserIDAndID 相同。
 func (r *fakeFriendRepo) FindPendingByRecipientID(_ context.Context, recipientID string, cursor uint64, limit int) ([]*Friend, error) {
 	var out []*Friend
@@ -166,7 +166,7 @@ func (r *fakeFriendRepo) FindPendingByRecipientID(_ context.Context, recipientID
 		}
 		out = append(out, f)
 	}
-	// 排序: id 升序
+	// 排序：id 升序。
 	for i := 0; i < len(out); i++ {
 		for j := i + 1; j < len(out); j++ {
 			if out[j].ID < out[i].ID {
@@ -180,7 +180,7 @@ func (r *fakeFriendRepo) FindPendingByRecipientID(_ context.Context, recipientID
 	return out, nil
 }
 
-// CountPendingByRecipientID 是 F4 CountPending 的内存替身。
+// CountPendingByRecipientID 是 CountPending 的内存替身。
 func (r *fakeFriendRepo) CountPendingByRecipientID(_ context.Context, recipientID string) (uint64, error) {
 	var n uint64
 	for _, f := range r.byID {
@@ -191,10 +191,10 @@ func (r *fakeFriendRepo) CountPendingByRecipientID(_ context.Context, recipientI
 	return n, nil
 }
 
-// DeleteByEitherPair F6: 内存替身, 模拟 data 层"双向探 + 删"的事务语义。
-// 单元测试不需要真事务: 单线程顺序执行即可。
+// DeleteByEitherPair 内存替身，模拟 data 层「双向探 + 删」的事务语义。
+// 单元测试不需要真事务：单线程顺序执行即可。
 func (r *fakeFriendRepo) DeleteByEitherPair(_ context.Context, callerID, otherID string) (bool, error) {
-	// 正向: callerID=user, otherID=friend
+	// 正向：callerID 是发起方，otherID 是接收方。
 	if f, ok := r.byPair[encodePair(callerID, otherID)]; ok {
 		if f.Status != FriendStatusAccepted {
 			return false, nil
@@ -203,7 +203,7 @@ func (r *fakeFriendRepo) DeleteByEitherPair(_ context.Context, callerID, otherID
 		delete(r.byID, f.ID)
 		return true, nil
 	}
-	// 反向
+	// 反向。
 	if f, ok := r.byPair[encodePair(otherID, callerID)]; ok {
 		if f.Status != FriendStatusAccepted {
 			return false, nil
@@ -215,10 +215,10 @@ func (r *fakeFriendRepo) DeleteByEitherPair(_ context.Context, callerID, otherID
 	return false, nil
 }
 
-// fakeFriendLimiter 是 biz.FriendLimiter 的内存替身, 可在测试里按需
+// fakeFriendLimiter 是 biz.FriendLimiter 的内存替身，可在测试里按需
 // 触发 ErrFriendRateLimited。
 //
-// 默认零值表现: 三条路径都返 nil (放行)。需要命中频控时设对应字段。
+// 默认零值表现：三条路径都返 nil（放行）。需要命中频控时设对应字段。
 type fakeFriendLimiter struct {
 	rejectApply        bool
 	rejectAcceptReject bool
@@ -246,7 +246,7 @@ func (l *fakeFriendLimiter) AllowRemove(_ context.Context, _ string) error {
 	return nil
 }
 
-// fakeFriendFetcher 是 biz.FriendProfileFetcher 的内存替身，按 id 生成固定 profile。
+// fakeFriendFetcher 是 biz.FriendProfileFetcher 的内存替身，按 id 生成固定资料。
 // 需要触发 user service 不可达时设 failFetch=true。
 type fakeFriendFetcher struct {
 	failFetch bool
@@ -368,11 +368,11 @@ func TestFriendUsecase_Apply_AlreadyAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Apply: %v", err)
 	}
-	// 2 接受
+	// 2 接受。
 	if _, err := uc.Accept(context.Background(), "uid-2", res.RequestID); err != nil {
 		t.Fatalf("Accept: %v", err)
 	}
-	// 1 再次 Apply → 已是好友
+	// 1 再次 Apply → 已是好友。
 	_, err = uc.Apply(context.Background(), "uid-1", "uid-2", "")
 	if !errors.Is(err, ErrFriendAlreadyFriends) {
 		t.Fatalf("expected ErrFriendAlreadyFriends, got %v", err)
@@ -396,12 +396,12 @@ func TestFriendUsecase_Apply_ReversePendingAutoAccept(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 2 -> 1 PENDING
+	// 2 -> 1 PENDING。
 	res1, err := uc.Apply(context.Background(), "uid-2", "uid-1", "")
 	if err != nil {
 		t.Fatalf("first Apply: %v", err)
 	}
-	// 1 -> 2: 反向 PENDING, 应自动 ACCEPTED
+	// 1 -> 2：反向 PENDING，应自动 ACCEPTED。
 	res2, err := uc.Apply(context.Background(), "uid-1", "uid-2", "")
 	if err != nil {
 		t.Fatalf("reverse Apply: %v", err)
@@ -409,7 +409,7 @@ func TestFriendUsecase_Apply_ReversePendingAutoAccept(t *testing.T) {
 	if res2.Status != FriendStatusAccepted {
 		t.Fatalf("expected ACCEPTED, got %v", res2.Status)
 	}
-	// 应该是同一条 record, id 一致
+	// 应该是同一条记录，id 一致。
 	if res1.RequestID != res2.RequestID {
 		t.Fatalf("expected same record id, got %d vs %d", res1.RequestID, res2.RequestID)
 	}
@@ -419,14 +419,14 @@ func TestFriendUsecase_Apply_AfterRejectRebuilds(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 1 -> 2 PENDING → 2 reject
+	// 1 -> 2 PENDING → 2 reject。
 	if _, err := uc.Apply(context.Background(), "uid-1", "uid-2", ""); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if err := uc.Reject(context.Background(), "uid-2", 1); err != nil {
 		t.Fatalf("Reject: %v", err)
 	}
-	// 1 再 Apply → 删除旧 REJECTED, 走新建
+	// 1 再 Apply → 删除旧 REJECTED，走新建。
 	res, err := uc.Apply(context.Background(), "uid-1", "uid-2", "")
 	if err != nil {
 		t.Fatalf("re-Apply: %v", err)
@@ -445,7 +445,7 @@ func TestFriendUsecase_Accept_NotRecipient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	// 3 不是 target, 不能 Accept
+	// 3 不是 target，不能 Accept。
 	_, err = uc.Accept(context.Background(), "uid-3", res.RequestID)
 	if !errors.Is(err, ErrFriendNotRecipient) {
 		t.Fatalf("expected ErrFriendNotRecipient, got %v", err)
@@ -463,7 +463,7 @@ func TestFriendUsecase_Accept_AlreadyAccepted(t *testing.T) {
 	if _, err := uc.Accept(context.Background(), "uid-2", res.RequestID); err != nil {
 		t.Fatalf("Accept 1: %v", err)
 	}
-	// 二次 Accept
+	// 二次 Accept。
 	_, err = uc.Accept(context.Background(), "uid-2", res.RequestID)
 	if !errors.Is(err, ErrFriendPendingNotFound) {
 		t.Fatalf("expected ErrFriendPendingNotFound, got %v", err)
@@ -481,7 +481,7 @@ func TestFriendUsecase_Reject_HappyPath(t *testing.T) {
 	if err := uc.Reject(context.Background(), "uid-2", res.RequestID); err != nil {
 		t.Fatalf("Reject: %v", err)
 	}
-	// 验证: 通过 list 查不到 ACCEPTED
+	// 验证：通过 list 查不到 ACCEPTED。
 	friends, _, err := uc.List(context.Background(), "uid-1", 0, 10)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -495,7 +495,7 @@ func TestFriendUsecase_Remove_BothDirections(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 1 -> 2 accepted
+	// 1 -> 2 accepted。
 	res, err := uc.Apply(context.Background(), "uid-1", "uid-2", "")
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -504,17 +504,17 @@ func TestFriendUsecase_Remove_BothDirections(t *testing.T) {
 		t.Fatalf("Accept: %v", err)
 	}
 
-	// 1 删 2 (正向)
+	// 1 删 2（正向）。
 	if err := uc.Remove(context.Background(), "uid-1", "uid-2"); err != nil {
 		t.Fatalf("Remove by initiator: %v", err)
 	}
-	// 记录已删
+	// 记录已删。
 	err = uc.Remove(context.Background(), "uid-1", "uid-2")
 	if !errors.Is(err, ErrFriendNotFound) {
 		t.Fatalf("expected ErrFriendNotFound, got %v", err)
 	}
 
-	// 重新建, 这次 2 删 1 (反向)
+	// 重新建，这次 2 删 1（反向）。
 	res, err = uc.Apply(context.Background(), "uid-1", "uid-2", "")
 	if err != nil {
 		t.Fatalf("re-Apply: %v", err)
@@ -531,7 +531,7 @@ func TestFriendUsecase_Remove_OnlyPending(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// PENDING 不允许 Remove
+	// PENDING 不允许 Remove。
 	if _, err := uc.Apply(context.Background(), "uid-1", "uid-2", ""); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -544,11 +544,11 @@ func TestFriendUsecase_List_OnlyAccepted(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 1->2 PENDING (不计入列表)
+	// 1->2 PENDING（不计入列表）。
 	if _, err := uc.Apply(context.Background(), "uid-1", "uid-2", ""); err != nil {
 		t.Fatalf("Apply 1->2: %v", err)
 	}
-	// 1->3 已 accepted
+	// 1->3 已 accepted。
 	res3, err := uc.Apply(context.Background(), "uid-1", "uid-3", "")
 	if err != nil {
 		t.Fatalf("Apply 1->3: %v", err)
@@ -556,7 +556,7 @@ func TestFriendUsecase_List_OnlyAccepted(t *testing.T) {
 	if _, err := uc.Accept(context.Background(), "uid-3", res3.RequestID); err != nil {
 		t.Fatalf("Accept: %v", err)
 	}
-	// 1->4 REJECTED
+	// 1->4 REJECTED。
 	res4, err := uc.Apply(context.Background(), "uid-1", "uid-4", "")
 	if err != nil {
 		t.Fatalf("Apply 1->4: %v", err)
@@ -581,7 +581,7 @@ func TestFriendUsecase_List_Pagination(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 建 5 个 accepted 关系
+	// 建 5 个 accepted 关系。
 	for i := 2; i <= 6; i++ {
 		uid := fmt.Sprintf("uid-%d", i)
 		res, err := uc.Apply(context.Background(), "uid-1", uid, "")
@@ -593,7 +593,7 @@ func TestFriendUsecase_List_Pagination(t *testing.T) {
 		}
 	}
 
-	// 拿第一页 (limit=2)
+	// 拿第一页（limit=2）。
 	page1, next1, err := uc.List(context.Background(), "uid-1", 0, 2)
 	if err != nil {
 		t.Fatalf("List 1: %v", err)
@@ -605,7 +605,7 @@ func TestFriendUsecase_List_Pagination(t *testing.T) {
 		t.Fatalf("expected non-zero next cursor")
 	}
 
-	// 拿第二页
+	// 拿第二页。
 	page2, next2, err := uc.List(context.Background(), "uid-1", next1, 2)
 	if err != nil {
 		t.Fatalf("List 2: %v", err)
@@ -614,7 +614,7 @@ func TestFriendUsecase_List_Pagination(t *testing.T) {
 		t.Fatalf("expected 2, got %d", len(page2))
 	}
 
-	// 第三页: next2 = 0 表示已到末页（page2 把 limit+1 条全拿了, 剩余 0 条）。
+	// 第三页：next2 = 0 表示已到末页（page2 把 limit+1 条全拿了，剩余 0 条）。
 	// next2 != 0 时 page3 还可能剩 1 条。两种情况分别验证。
 	if next2 != 0 {
 		_, next3, err := uc.List(context.Background(), "uid-1", next2, 2)
@@ -627,15 +627,15 @@ func TestFriendUsecase_List_Pagination(t *testing.T) {
 	}
 }
 
-// F1: cursor 必须基于未过滤序列, 否则掺杂 PENDING/REJECTED 的
-// 中间行被剔掉, 旧逻辑会让 next_cursor 跳过记录。建一条 PENDING
-// 夹在 4 个 ACCEPTED 中间, 验证第一页/第二页均不丢、不重。
+// cursor 必须基于未过滤序列，否则掺杂 PENDING/REJECTED 的
+// 中间行被剔掉，旧逻辑会让 next_cursor 跳过记录。建一条 PENDING
+// 夹在 4 个 ACCEPTED 中间，验证第一页/第二页均不丢、不重。
 func TestFriendUsecase_List_CursorSkipsFilteredRows(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 4 个 ACCEPTED + 1 个 PENDING 夹在中间: caller=1, targetID=2..6
-	// 全部提申请后, 仅接受 2 / 4 / 5 / 6, 让 target=3 保持 PENDING。
+	// 4 个 ACCEPTED + 1 个 PENDING 夹在中间：caller=1，targetID=2..6
+	// 全部提申请后，仅接受 2 / 4 / 5 / 6，让 target=3 保持 PENDING。
 	for i := 2; i <= 6; i++ {
 		uid := fmt.Sprintf("uid-%d", i)
 		res, err := uc.Apply(context.Background(), "uid-1", uid, "")
@@ -643,14 +643,14 @@ func TestFriendUsecase_List_CursorSkipsFilteredRows(t *testing.T) {
 			t.Fatalf("Apply(%d): %v", i, err)
 		}
 		if i == 3 {
-			continue // 让 target=3 维持 PENDING
+			continue // 让 target=3 维持 PENDING。
 		}
 		if _, err := uc.Accept(context.Background(), uid, res.RequestID); err != nil {
 			t.Fatalf("Accept(%d): %v", i, err)
 		}
 	}
 
-	// 第一页 limit=2: status=ACCEPTED 在 repo 层过滤, 应返回前两个 ACCEPTED (ID 2, 4), cursor=4。
+	// 第一页 limit=2：status=ACCEPTED 在 repo 层过滤，应返回前两个 ACCEPTED（ID 2、4），cursor=4。
 	page1, next1, err := uc.List(context.Background(), "uid-1", 0, 2)
 	if err != nil {
 		t.Fatalf("List page1: %v", err)
@@ -662,7 +662,7 @@ func TestFriendUsecase_List_CursorSkipsFilteredRows(t *testing.T) {
 		t.Fatalf("page1 next cursor should be non-zero (还有下一页)")
 	}
 
-	// 第二页: cursor=4 之后 ACCEPTED 的 5/6 进入第二页。PENDING 行(ID=3)被 repo 层过滤掉,不再影响 cursor。
+	// 第二页：cursor=4 之后 ACCEPTED 的 5/6 进入第二页。PENDING 行（ID=3）被 repo 层过滤掉，不再影响 cursor。
 	page2, _, err := uc.List(context.Background(), "uid-1", next1, 2)
 	if err != nil {
 		t.Fatalf("List page2: %v", err)
@@ -671,7 +671,7 @@ func TestFriendUsecase_List_CursorSkipsFilteredRows(t *testing.T) {
 		t.Fatalf("page2 len = %d, want 2", len(page2))
 	}
 
-	// 收集两页所有 friend_id, 不能重复也不能漏 ACCEPTED。
+	// 收集两页所有 friend_id，不能重复也不能漏 ACCEPTED。
 	seen := map[string]int{}
 	for _, f := range append(page1, page2...) {
 		seen[f.FriendID]++
@@ -687,7 +687,7 @@ func TestFriendUsecase_List_CursorSkipsFilteredRows(t *testing.T) {
 }
 
 // TestFriendUsecase_Apply_RateLimited 验证 Apply 命中频控时直接返
-// ErrFriendRateLimited, 不会去查 repo (rejection should short-circuit)。
+// ErrFriendRateLimited，不会去查 repo（频控拒绝要短路）。
 func TestFriendUsecase_Apply_RateLimited(t *testing.T) {
 	repo := newFakeFriendRepo()
 	lim := &fakeFriendLimiter{rejectApply: true}
@@ -735,11 +735,11 @@ func TestFriendUsecase_Remove_RateLimited(t *testing.T) {
 	}
 }
 
-// TestFriendUsecase_LimiterNilFallsBack 验证 limiter nil 时走 noop, 不报错。
+// TestFriendUsecase_LimiterNilFallsBack 验证 limiter nil 时走 noop，不报错。
 func TestFriendUsecase_LimiterNilFallsBack(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
-	// 连发 5 次 Apply 都应成功 (没有 limiter 阻拦)
+	// 连发 5 次 Apply 都应成功（没有 limiter 阻拦）。
 	for i := 2; i <= 6; i++ {
 		if _, err := uc.Apply(context.Background(), "uid-1", fmt.Sprintf("uid-%d", i), ""); err != nil {
 			t.Fatalf("Apply(%d) with nil limiter: %v", i, err)
@@ -747,9 +747,9 @@ func TestFriendUsecase_LimiterNilFallsBack(t *testing.T) {
 	}
 }
 
-// TestFriendUsecase_ListPendingRequests 验证:
-//   - 只返回 caller 作为目标方 (friend_id == callerID) 的 PENDING 行
-//   - 排除 caller 自己发出去的 PENDING (自己发的是 user_id == callerID)
+// TestFriendUsecase_ListPendingRequests 验证：
+//   - 只返回 caller 作为目标方（friend_id == callerID）的 PENDING 行
+//   - 排除 caller 自己发出去的 PENDING（自己发的是 user_id == callerID）
 //   - 排除 ACCEPTED / REJECTED
 //   - cursor 分页正确
 func TestFriendUsecase_ListPendingRequests(t *testing.T) {
@@ -764,15 +764,15 @@ func TestFriendUsecase_ListPendingRequests(t *testing.T) {
 		repo.byID[id] = f
 		return id
 	}
-	// caller=1 收到的 PENDING (应收件)
+	// caller=1 收到的 PENDING（应收件）。
 	insert("uid-2", "uid-1", FriendStatusPending)
 	insert("uid-3", "uid-1", FriendStatusPending)
-	// caller=1 收到的 ACCEPTED / REJECTED (不应收件)
+	// caller=1 收到的 ACCEPTED / REJECTED（不应收件）。
 	insert("uid-4", "uid-1", FriendStatusAccepted)
 	insert("uid-6", "uid-1", FriendStatusRejected)
-	// caller=1 自己发出去的 PENDING (不应收件)
+	// caller=1 自己发出去的 PENDING（不应收件）。
 	insert("uid-1", "uid-5", FriendStatusPending)
-	// 给 caller=2 的 PENDING (跟 caller=1 无关, 不应收件)
+	// 给 caller=2 的 PENDING（跟 caller=1 无关，不应收件）。
 	insert("uid-7", "uid-2", FriendStatusPending)
 
 	got, _, err := uc.ListPendingRequests(context.Background(), "uid-1", 0, 50)
@@ -782,7 +782,7 @@ func TestFriendUsecase_ListPendingRequests(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("got %d rows, want 2 (only PENDING from friends to caller)", len(got))
 	}
-	// friend_id 指向"申请发起方"（proto 注释: friend_id 字段在此指向申请发起方），
+	// friend_id 指向「申请发起方」（proto 注释：friend_id 字段在此指向申请发起方），
 	// 即 2 和 3，而不是 caller 自己。
 	wantSenders := map[string]bool{"uid-2": true, "uid-3": true}
 	for _, f := range got {
@@ -795,8 +795,8 @@ func TestFriendUsecase_ListPendingRequests(t *testing.T) {
 	}
 }
 
-// TestFriendUsecase_CountPending 验证 CountPending 只数 PENDING, 不数
-// ACCEPTED / REJECTED; 只数 caller 作为目标方的。
+// TestFriendUsecase_CountPending 验证 CountPending 只数 PENDING，不数
+// ACCEPTED / REJECTED；只数 caller 作为目标方的。
 func TestFriendUsecase_CountPending(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
@@ -809,14 +809,14 @@ func TestFriendUsecase_CountPending(t *testing.T) {
 		repo.byID[id] = f
 		return id
 	}
-	// 混入多条: caller=1 收到 2 PENDING, 1 ACCEPTED, 1 REJECTED;
-	// caller=1 自己发出去的不算; 给 caller=2 的不算。
+	// 混入多条：caller=1 收到 2 PENDING、1 ACCEPTED、1 REJECTED；
+	// caller=1 自己发出去的不算；给 caller=2 的不算。
 	insert("uid-2", "uid-1", FriendStatusPending)
 	insert("uid-3", "uid-1", FriendStatusPending)
 	insert("uid-4", "uid-1", FriendStatusAccepted)
 	insert("uid-5", "uid-1", FriendStatusRejected)
-	insert("uid-1", "uid-6", FriendStatusPending) // self-sent, 不算
-	insert("uid-7", "uid-2", FriendStatusPending) // 给 2 的, 不算
+	insert("uid-1", "uid-6", FriendStatusPending) // 自己发出去的，不算
+	insert("uid-7", "uid-2", FriendStatusPending) // 给 uid-2 的，不算
 
 	got, err := uc.CountPending(context.Background(), "uid-1")
 	if err != nil {
@@ -827,12 +827,12 @@ func TestFriendUsecase_CountPending(t *testing.T) {
 	}
 }
 
-// Accept 返回的 Friend.FriendID 必须是"对方"（发起方），不是 caller 自己。
+// Accept 返回的 Friend.FriendID 必须是「对方」（发起方），不是 caller 自己。
 func TestFriendUsecase_Accept_ReturnsPeerNotCaller(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 1 发起，2 接受
+	// 1 发起，2 接受。
 	res, err := uc.Apply(context.Background(), "uid-1", "uid-2", "")
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -847,22 +847,22 @@ func TestFriendUsecase_Accept_ReturnsPeerNotCaller(t *testing.T) {
 }
 
 // 对方主动加我、我通过：接受方（caller）的好友列表必须能看到对方。
-// 关系只存单条 record (对方, 我)，caller 落在 friend_id 列上。
+// 关系只存单条记录（对方，我），caller 落在 friend_id 列上。
 func TestFriendUsecase_List_ShowsAcceptedIncomingRequest(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 2 主动加 1
+	// 2 主动加 1。
 	res, err := uc.Apply(context.Background(), "uid-2", "uid-1", "")
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	// 1 通过
+	// 1 通过。
 	if _, err := uc.Accept(context.Background(), "uid-1", res.RequestID); err != nil {
 		t.Fatalf("Accept: %v", err)
 	}
 
-	// 1 的好友列表应该有 2
+	// 1 的好友列表应该有 2。
 	friends, _, err := uc.List(context.Background(), "uid-1", 0, 10)
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -875,7 +875,7 @@ func TestFriendUsecase_List_ShowsAcceptedIncomingRequest(t *testing.T) {
 	}
 }
 
-// 双向对称：发起方和接受方的列表里都有对方，且 friend_id 都是"对方"。
+// 双向对称：发起方和接受方的列表里都有对方，且 friend_id 都是「对方」。
 func TestFriendUsecase_List_BothSidesSeeEachOther(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
@@ -910,7 +910,7 @@ func TestFriendUsecase_List_ExcludesPendingBothDirections(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 2 向 1 发起，保持 PENDING
+	// 2 向 1 发起，保持 PENDING。
 	if _, err := uc.Apply(context.Background(), "uid-2", "uid-1", ""); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -931,7 +931,7 @@ func TestFriendUsecase_List_BidirectionalPagination(t *testing.T) {
 	repo := newFakeFriendRepo()
 	uc := NewFriendUsecase(repo, &fakeFriendFetcher{}, &fakeFriendLimiter{}, nil)
 
-	// 交替方向建立 4 条关系: 1->2, 3->1, 1->4, 5->1
+	// 交替方向建立 4 条关系：1->2、3->1、1->4、5->1。
 	for _, tc := range []struct{ from, to string }{
 		{"uid-1", "uid-2"}, {"uid-3", "uid-1"}, {"uid-1", "uid-4"}, {"uid-5", "uid-1"},
 	} {
@@ -944,7 +944,7 @@ func TestFriendUsecase_List_BidirectionalPagination(t *testing.T) {
 		}
 	}
 
-	// 1 应该看到 2, 3, 4, 5 四个好友
+	// 1 应该看到 2、3、4、5 四个好友。
 	seen := make(map[string]int)
 	var cursor uint64
 	for i := 0; i < 10; i++ {

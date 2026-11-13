@@ -14,13 +14,13 @@ import (
 )
 
 // InternalOps 是 message 域「仅供服务间调用」的端点，列的是 proto operation 名。
-//
 // 走内部凭证（X-Internal-Token），不走用户 JWT。
 func InternalOps() []string {
 	return []string{}
 }
 
 // authMiddlewares 返回鉴权相关的两个中间件：用户 JWT 与内部凭证。
+// ac 是鉴权配置，store 是 access token 黑名单查询。
 //
 // 白名单（免 JWT）由官方 selector 的 Match 圈定 —— selector 的语义是
 // 「匹配上才执行中间件」，所以这里取反：不在白名单里的 operation 走 JWT。

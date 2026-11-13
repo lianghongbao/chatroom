@@ -10,10 +10,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// newTestConvCache 构造接真实 Redis 的 ConversationCache。
-//
+// newTestConvCache 构造接真实 Redis 的 ConversationCache。t 是测试用例。
 // 用 DB 15 —— 测试专用，跟应用的 DB 0 隔开。Redis 不可达时 skip。
-//
 // 返回 cache 和一个清理函数（删掉本次用到的 key）。
 func newTestConvCache(t *testing.T) (*ConversationCache, redis.Cmdable) {
 	t.Helper()
@@ -114,7 +112,6 @@ func TestConversationCache_InvalidateMembers(t *testing.T) {
 }
 
 // TestConversationCache_SetMembersSetsTTL 回填的 key 有 TTL。
-//
 // 短 TTL 是漏删时的兜底 —— 成员变动时主动删，但万一漏了，TTL 到期自然清掉。
 func TestConversationCache_SetMembersSetsTTL(t *testing.T) {
 	c, rdb := newTestConvCache(t)

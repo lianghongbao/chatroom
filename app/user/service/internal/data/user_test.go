@@ -12,7 +12,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 )
 
-// newTestUserRepo 建一个接真实 MySQL 的 userRepo。
+// newTestUserRepo 建一个接真实 MySQL 的 userRepo。t 是测试用例。
 func newTestUserRepo(t *testing.T) biz.UserRepo {
 	t.Helper()
 
@@ -34,9 +34,8 @@ func newTestUserRepo(t *testing.T) biz.UserRepo {
 }
 
 // TestUserRepo_FindByIDWithHash_KeepsHash FindByIDWithHash 必须带回密码哈希。
-//
 // FindByID 会把哈希清掉（对外展示不需要）。改密要拿哈希跟旧密码比对，
-// 如果它拿的是 FindByID 的结果，比对必然失败 —— 表现为「旧密码永远不对」，
+// 拿的是 FindByID 的结果就必然失败 —— 表现为「旧密码永远不对」，
 // 而密码本身没问题。这条测试钉住两个方法的差别。
 func TestUserRepo_FindByIDWithHash_KeepsHash(t *testing.T) {
 	repo := newTestUserRepo(t)

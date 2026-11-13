@@ -279,9 +279,9 @@ done
 > （报 `Code: 401, Message: User not found!` —— 这条是 nacos 登录失败，不是业务用户不存在）。
 > `make run` 已经带好了；手工起就照抄 `pkg/tools/dev-env.mk` 里的 `COMMON_ENV`。
 >
-> 注意**别用 `set -a; . pkg/tools/dev-env.mk` 导环境变量** —— 那个文件是 Make 语法，
-> `NACOS_SERVERS ?= ...` 的 `?=` 不是合法 shell，source 会静默失败，结果
-> `NACOS_USERNAME`/`NACOS_PASSWORD` 是空的 → 401 panic。要手工导就逐个 `export`。
+> 注意**别用 `set -a; . pkg/tools/dev-env.mk` 导环境变量** —— 那是 Make 语法，
+> `?=` 不是合法 shell，source 会静默失败，`NACOS_USERNAME`/`NACOS_PASSWORD` 是空的
+> → 401 panic。要手工导就逐个 `export`。
 
 ### 环境变量
 
@@ -398,10 +398,10 @@ make -C app/<服务>/service test -count=1
 
 跨服务调用拿不到结果时，**必须返 error，不能返空列表 / 空切片**。
 
-原因：有一批接口用「请求了但没回来」判定「用户不存在」
-（conversation 的 `CheckUsersExist` 就是这样）。如果下游不可用时返空，
-上层会把**降级**误判成**用户不存在** —— 建群聊 / 加成员直接返 404，
-而且症状是「用户不存在」这种误导性的错误。
+原因：有一批接口用「请求了但没回来」判定「用户不存在」（conversation 的
+`CheckUsersExist` 就是这样）。下游不可用时返空，上层会把**降级**误判成
+**用户不存在** —— 建群聊 / 加成员直接返 404，症状还是「用户不存在」
+这种误导性的错误。
 
 具体约定：
 
@@ -413,18 +413,15 @@ make -C app/<服务>/service test -count=1
 
 批量接口还有一条：**user 服务的批量端点单次最多收 200 个 id，超出部分静默截断**。
 调用方必须自己分片（`app/conversation/service/internal/data/remote_user.go` 的
-`batchProfiles`），否则被截断的那部分 id 会被当成「不存在」——
-200 人以上的群就建不出来了。
+`batchProfiles`），否则被截断的那部分 id 会被当成「不存在」，200 人以上的群就建不出来。
 
 ### 熔断：下游不健康时快速失败
 
-跨服务调用只有超时是不够的。下游宕机或变慢时，调用方每次调用都要等满
-超时（1.5s）才失败，而上游的请求还在源源不断进来 —— goroutine、连接、
-内存都在堆积，而下游已经不可能处理这些请求了。这叫**故障放大**：
-下游的问题被上游的并发量放大好几倍。
+下游宕机或变慢时，调用方每次调用都要等满超时（1.5s）才失败，而上游请求
+源源不断进来 —— goroutine、连接、内存都在堆积，这叫**故障放大**。熔断器在
+下游明显不健康时直接拒掉，请求快速失败，上游的降级逻辑立刻生效。
 
-熔断器的作用是**下游明显不健康时直接拒掉**，不再浪费资源去等。实现全在
-**`chatroom/pkg/breaker`**，接在 5 个跨服务 gRPC 客户端的中间件链**最内层**：
+实现全在 **`chatroom/pkg/breaker`**，接在 5 个跨服务 gRPC 客户端的中间件链**最内层**：
 
 ```go
 grpc.WithMiddleware(
@@ -435,9 +432,8 @@ grpc.WithMiddleware(
 )
 ```
 
-放最内层是有意的：被熔断拒绝的请求仍然进得了 tracing 中间件，
-trace 里能看到这次拒绝 —— 放外面的话就是「上游突然大面积报错，
-但一条 trace 都查不到」。
+放最内层是有意的：被熔断拒绝的请求仍然进得了 tracing 中间件，trace 里能看到
+这次拒绝 —— 放外面的话就是「上游突然大面积报错，但一条 trace 都查不到」。
 
 默认参数：
 
@@ -449,9 +445,9 @@ trace 里能看到这次拒绝 —— 放外面的话就是「上游突然大面
 | `openDuration` | 30s | 熔断打开后多久进半开状态试探 |
 | `halfOpenMax` | 3 | 半开状态下最多放几个试探请求 |
 
-**为什么不用 Kratos 内置的 SRE 熔断器**：内置的窗口只有 3s，且要求窗口内
-至少 20 个请求才评估失败率。窗口内请求数 = QPS × 3 —— 一个 5 QPS 的服务
-窗口内才 15 个请求，**永远达不到 20**，熔断器等于没有。这里把窗口放宽到 10s。
+**为什么不用 Kratos 内置的 SRE 熔断器**：内置的窗口只有 3s，且要求窗口内至少
+20 个请求才评估失败率。窗口内请求数 = QPS × 3 —— 5 QPS 的服务窗口内才 15 个请求，
+永远达不到 20，熔断器等于没有。这里把窗口放宽到 10s。
 
 只有 5xx（500 / 503 / 504）算失败：下游返 404「用户不存在」是业务结果，
 不是下游不健康，不该计入熔断统计。
@@ -509,7 +505,7 @@ token 放在 query 里而不是 header —— 浏览器的 WebSocket API 不能�
 - **`resume` 断线重连补消息**。客户端记住自己最后看到的那条消息 id，重连后带上
   `last_message_id`，网关调 message 服务的 `ListMessagesSince` 把 id 更大的消息
   按**正序**补回来（跟正常推送走同一个 `message` 帧，客户端只需要一套处理逻辑），
-  最后回一个 `resume_result` 帧。一次最多补 50 条 —— 写队列默认 64，補太多会挤掉消息。
+  最后回一个 `resume_result` 帧。一次最多补 50 条 —— 写队列默认 64，补太多会挤掉消息。
 - **`online` 帧既是响应也是通知**。别人上下线时，会话里的同伴也会收到 `online` 帧。
 
 ### 消息流转
@@ -543,9 +539,9 @@ GATEWAY_HTTP_ADDR=0.0.0.0:8005 GATEWAY_INSTANCE_ID=gw-2 chatroom-ws-gateway \
 ```
 
 每个实例都订阅 `chatroom:msg:*`，都会收到**所有**会话的消息，包括自己没人的会话 ——
-再按会话成员列表过滤出「连在本实例上的那些连接」推出去。
-一期就这么做（实例数 × 消息 QPS，量级不大）；真要省，可以改成按需 SUBSCRIBE，
-但那要处理订阅/退订的并发和漏订。
+再按会话成员列表过滤出「连在本实例上的那些连接」推出去。一期就这么做
+（实例数 × 消息 QPS，量级不大）；真要省可以改成按需 SUBSCRIBE，但那样要处理
+订阅 / 退订的并发和漏订。
 
 > K8s 里上面那两件事不用手工做：`GATEWAY_INSTANCE_ID` 直接取 pod 名
 > （`fieldRef: metadata.name`），天然错开；副本数交给 HPA —— 见
@@ -738,23 +734,21 @@ cd ../../app/user/service
 ../../gen-conf.sh user                      # conf proto
 ```
 
-契约用 **protoc** 而不是 buf —— 因为契约 proto 要 import 仓库根的
+契约用 **protoc** 而不是 buf —— 契约 proto 要 import 仓库根的
 `third_party/google/api/annotations.proto`，而 buf v2 的 module 根是单一目录，
 跨目录引用会被拒（`is outside the context directory`），`deps:` 又只接受 registry 名。
-protoc 原生支持多个 `--proto_path`，这正是官方 `go-kratos/beer-shop` 的做法
-（它用 `--proto_path=../../../third_party`）。
+protoc 原生支持多个 `--proto_path`，这正是官方 `go-kratos/beer-shop` 的做法。
 
-conf proto 也用 protoc（不用 buf），因为整仓是一个 module —— 五个服务的
-conf 包可能被链进同一个二进制，而 protobuf 的注册表按「相对 proto_path 根的
-路径」做 key。脚本从**仓库根**跑，`--proto_path=app`，注册路径就成了
-`<服务>/service/internal/conf/conf.proto`，带服务名这一层前缀天然避开撞车。
-契约那边同理：`--proto_path=api` → `<域>/service/v1/<文件>.proto`。
+conf proto 也用 protoc：整仓是一个 module，多个服务的 conf 包可能被链进同一个
+二进制，而 protobuf 的注册表按「相对 proto_path 根的路径」做 key。脚本从**仓库根**
+跑，`--proto_path=app`，注册路径就成了 `<服务>/service/internal/conf/conf.proto`，
+带服务名这一层前缀天然避开撞车。契约那边同理：`--proto_path=api` →
+`<域>/service/v1/<文件>.proto`。
 
-插件版本在 `api/gen.sh` / `app/gen-conf.sh` 里用 `@version` 钉死，编译产物
-缓存在 `.cache/protoc-plugins/`（按版本组合命名），并发跑不会互相踩。
+插件版本在 `api/gen.sh` / `app/gen-conf.sh` 里用 `@version` 钉死，编译产物缓存在
+`.cache/protoc-plugins/`（按版本组合命名），并发跑不会互相踩。
 
-`paths=source_relative` 让 `v1/xxx.proto` 生成到 `v1/xxx.pb.go` —— pb 代码跟
-proto 待在一起。
+`paths=source_relative` 让 `v1/xxx.proto` 生成到 `v1/xxx.pb.go` —— pb 代码跟 proto 待在一起。
 
 全部一次跑完（仓库根）：
 
@@ -829,15 +823,14 @@ c.Add("redis", false, d.PingRedis)  // 软依赖
 - `failed` —— 硬依赖挂了，readiness 返 **503**。
 - `degraded` —— 只有软依赖挂了，readiness 仍返 **200**，服务继续接流量。
 
-**别把 Redis 标成硬依赖**：Redis 一抖，四个服务的 pod 会被全摘光，
-故障面比降级大得多。也别把 MySQL 标成软依赖：那会让流量继续打进一个
-连不上库的 pod。这两条判定都有测试守着
-（`app/<服务>/service/internal/data/health_test.go`）。
+**别把 Redis 标成硬依赖**：Redis 一抖，四个服务的 pod 会被全摘光，故障面比
+降级大得多。也别把 MySQL 标成软依赖：那会让流量继续打进一个连不上库的 pod。
+这两条判定都有测试守着（`app/<服务>/service/internal/data/health_test.go`）。
 
-> 为什么 ws-gateway 的 Redis 反过来是硬依赖：那边 Redis Pub/Sub 是消息
-> 投递到 WS 客户端的**唯一**通道，断了就真的什么都推不出去。带着一个
-> 断掉的订阅继续接新连接，只会让客户端连上来却永远收不到消息 ——
-> 那才是最难排查的故障。快速失败更好。
+> 为什么 ws-gateway 的 Redis 反过来是硬依赖：那边 Redis Pub/Sub 是消息投递到
+> WS 客户端的**唯一**通道，断了就真的什么都推不出去。带着一个断掉的订阅继续
+> 接新连接，只会让客户端连上来却永远收不到消息 —— 那才是最难排查的故障。
+> 快速失败更好。
 
 探测本身走**原生连接池**（`*sql.DB.PingContext` / `redis.Ping`）：ent 生成的
 client 没有 Ping 方法，所以 `data` 层自己开一条 `*sql.DB` 交给 ent

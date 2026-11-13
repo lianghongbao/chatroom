@@ -8,7 +8,7 @@ import (
 
 // fakeUserRepo 是 UserRepo 的内存替身。uid 由计数器分配，形如 "uid-1"。
 type fakeUserRepo struct {
-	// users uid → 用户记录。
+	// users 是 uid → 用户记录。
 	users map[string]*User
 	// seq 是 uid 计数器。
 	seq int
@@ -18,7 +18,7 @@ func newFakeUserRepo() *fakeUserRepo {
 	return &fakeUserRepo{users: map[string]*User{}}
 }
 
-// nextUID 分配下一个 uid。
+// nextUID 分配下一个 uid，返回形如 "uid-2" 的字符串。
 func (r *fakeUserRepo) nextUID() string {
 	r.seq++
 	return "uid-" + itoa(r.seq)
@@ -120,7 +120,8 @@ func (r *fakeUserRepo) UpdateStatus(ctx context.Context, id string, status UserS
 	return nil
 }
 
-// seedUser 造一个已知用户：uid 固定为 "uid-1"，密码按 bcrypt 存。
+// seedUser 造一个已知用户。username 是用户名，password 是明文密码；
+// 密码按 bcrypt 存，昵称与用户名相同。
 func seedUser(t *testing.T, repo *fakeUserRepo, username, password string) *User {
 	t.Helper()
 	hash, err := hashPassword(password)

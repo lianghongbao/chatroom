@@ -18,7 +18,7 @@ import (
 	fieldmaskpb "google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
-// bcryptHash 生成明文口令的 bcrypt 哈希，供 fake repo 造用户用。
+// bcryptHash 生成明文口令的 bcrypt 哈希，供 fake repo 造用户用。plain 是明文口令。
 func bcryptHash(t *testing.T, plain string) string {
 	t.Helper()
 	h, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
@@ -266,7 +266,7 @@ func (f *fakeLocker) Acquire(_ context.Context, key string, ttl time.Duration) (
 	return func() {}, nil
 }
 
-// fakeHeader 是 transport.Header 的最小实现, 仅 Get 被 auth 中间件使用。
+// fakeHeader 是 transport.Header 的最小实现，仅 Get 被 auth 中间件使用。
 type fakeHeader struct{ values map[string]string }
 
 func (h *fakeHeader) Get(key string) string    { return h.values[key] }
@@ -287,7 +287,8 @@ func (f *fakeTransporter) Operation() string               { return "/api.user.v
 func (f *fakeTransporter) RequestHeader() transport.Header { return f.header }
 func (f *fakeTransporter) ReplyHeader() transport.Header   { return &fakeHeader{} }
 
-// jwtFor 用一个固定密钥给 uid 签 HS256 token, 仅用于测试构造请求 ctx。
+// jwtFor 用 secret 给 uid 签 HS256 token，仅用于测试构造请求 ctx。
+// secret 是签名密钥，uid 是用户 ID。
 func jwtFor(t *testing.T, secret string, uid string) string {
 	t.Helper()
 	tok := jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, jwtv5.MapClaims{
@@ -305,8 +306,9 @@ func jwtFor(t *testing.T, secret string, uid string) string {
 	return s
 }
 
-// authedCtxWithToken 走一次 auth.Server 中间件, 让它把 uid 写到 ctx。
-// 中间件依赖 transport.FromServerContext, 因此先用 fakeTransporter 包一层。
+// authedCtxWithToken 走一次 auth.Server 中间件，让它把 uid 写到 ctx。
+// bearer 是待校验的 token 串，secret 是签名密钥。
+// 中间件依赖 transport.FromServerContext，因此先用 fakeTransporter 包一层。
 func authedCtxWithToken(t *testing.T, bearer, secret string) context.Context {
 	t.Helper()
 	hdr := &fakeHeader{values: map[string]string{"Authorization": "Bearer " + bearer}}
@@ -336,7 +338,8 @@ func authedCtxWithToken(t *testing.T, bearer, secret string) context.Context {
 
 const testSecret = "test-secret-32-bytes-long-xxxxxx"
 
-// newService 构造 service + 它下面的 fake 依赖。service 直持 *biz.UserUsecase，所以替身是 repo / tokenStore / limiter /
+// newService 构造 service + 它下面的 fake 依赖。
+// service 直持 *biz.UserUsecase，所以替身是 repo / tokenStore / limiter /
 // locker —— 全部是 biz 层声明的接口。
 func newService(repo *fakeRepo, store *fakeTokenStore, lim *fakeLimiter, lock *fakeLocker) *UserService {
 	auth := &conf.Auth{JwtSecret: testSecret, TokenIssuer: "chatroom"}
@@ -345,6 +348,7 @@ func newService(repo *fakeRepo, store *fakeTokenStore, lim *fakeLimiter, lock *f
 }
 
 // newServiceWithRepo 是最常用的组合：一个空 repo + 一个可断言的 fake repo。
+// repo 是 userRepo 替身。
 func newServiceWithRepo(repo *fakeRepo) *UserService {
 	return newService(repo, &fakeTokenStore{}, &fakeLimiter{}, &fakeLocker{})
 }

@@ -35,7 +35,7 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		nacos.NewNamingClient,
 		nacos.NewRegistrar,
 		nacos.NewDiscovery,
-		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options
+		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options。
 		conf.NacosOptions,
 		// 把 *conf.Bootstrap 的子字段暴露为独立 provider。
 		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability"),
