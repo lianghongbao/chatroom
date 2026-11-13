@@ -18,7 +18,7 @@ type User struct {
 	ent.Schema
 }
 
-// Annotations of the User.
+// User 的表注解。
 func (User) Annotations() []schema.Annotation {
 	// 把字段 Comment 同步写到 MySQL DDL 的列备注里, 便于运维在
 	// INFORMATION_SCHEMA.COLUMNS 里直接核对语义。
@@ -27,14 +27,14 @@ func (User) Annotations() []schema.Annotation {
 	}
 }
 
-// Mixin of the User.
+// User 混入的字段。
 func (User) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		UIDMixin{},
 	}
 }
 
-// Fields of the User.
+// User 的字段。
 func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("username").NotEmpty().Comment("登录用户名, 唯一"),
@@ -54,7 +54,7 @@ func (User) Fields() []ent.Field {
 	}
 }
 
-// Indexes of the User.
+// User 的索引。
 func (User) Indexes() []ent.Index {
 	return []ent.Index{
 		// username 唯一, 给 FindByUsername 用, 同时兜底 Register 并发竞态。

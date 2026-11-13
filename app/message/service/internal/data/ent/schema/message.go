@@ -17,7 +17,7 @@ type Message struct {
 	ent.Schema
 }
 
-// Annotations of the Message.
+// Message 的表注解。
 func (Message) Annotations() []schema.Annotation {
 	// 把字段 Comment 同步写到 MySQL DDL 的列备注里，便于运维核对语义。
 	return []schema.Annotation{
@@ -25,7 +25,7 @@ func (Message) Annotations() []schema.Annotation {
 	}
 }
 
-// Fields of the Message.
+// Message 的字段。
 func (Message) Fields() []ent.Field {
 	return []ent.Field{
 		field.Uint64("id").Comment("主键, 自增"),
@@ -41,7 +41,7 @@ func (Message) Fields() []ent.Field {
 	}
 }
 
-// Indexes of the Message.
+// Message 的索引。
 func (Message) Indexes() []ent.Index {
 	return []ent.Index{
 		// 历史消息的主查询路径：某个会话的消息，按 id 倒序。

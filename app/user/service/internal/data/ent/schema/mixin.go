@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// UIDMixin adds the standard application-generated UUIDv7 string primary key.
+// UIDMixin 给 schema 加上应用侧生成的 UUIDv7 字符串主键。
 //
 // 用 string 而不是 uuid.UUID：biz / proto 层按 string 传，避免每层边界
 // 做一次 uuid.UUID ↔ string 转换。DB 列是 CHAR(36)。
@@ -18,7 +18,7 @@ type UIDMixin struct {
 	mixin.Schema
 }
 
-// Fields of the UIDMixin.
+// UIDMixin 的字段。
 func (UIDMixin) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
@@ -29,17 +29,17 @@ func (UIDMixin) Fields() []ent.Field {
 	}
 }
 
-// newUIDString returns an application-generated UUIDv7 as a string.
+// newUIDString 生成应用侧 UUIDv7 字符串。
 func newUIDString() string {
 	return uuid.Must(uuid.NewV7()).String()
 }
 
-// TimeMixin adds standard audit timestamps to schemas.
+// TimeMixin 给 schema 加上审计时间戳。
 type TimeMixin struct {
 	mixin.Schema
 }
 
-// Fields of the TimeMixin.
+// TimeMixin 的字段。
 func (TimeMixin) Fields() []ent.Field {
 	return []ent.Field{
 		field.Time("created_at").Immutable().Default(time.Now),
@@ -47,7 +47,7 @@ func (TimeMixin) Fields() []ent.Field {
 	}
 }
 
-// Indexes of the TimeMixin.
+// TimeMixin 的索引。
 func (TimeMixin) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("updated_at"),

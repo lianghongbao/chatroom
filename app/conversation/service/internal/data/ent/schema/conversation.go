@@ -21,7 +21,7 @@ type Conversation struct {
 	ent.Schema
 }
 
-// Annotations of the Conversation.
+// Conversation 的表注解。
 func (Conversation) Annotations() []schema.Annotation {
 	// 把字段 Comment 同步写到 MySQL DDL 的列备注里，便于运维核对语义。
 	return []schema.Annotation{
@@ -29,7 +29,7 @@ func (Conversation) Annotations() []schema.Annotation {
 	}
 }
 
-// Fields of the Conversation.
+// Conversation 的字段。
 func (Conversation) Fields() []ent.Field {
 	return []ent.Field{
 		field.Uint64("id").Comment("主键, 自增"),
@@ -55,7 +55,7 @@ func (Conversation) Fields() []ent.Field {
 	}
 }
 
-// Indexes of the Conversation.
+// Conversation 的索引。
 func (Conversation) Indexes() []ent.Index {
 	return []ent.Index{
 		// 会话列表按最后活动时间倒序，updated_at 走索引。
@@ -70,7 +70,7 @@ func (Conversation) Indexes() []ent.Index {
 	}
 }
 
-// Edges of the Conversation.
+// Conversation 的关联边。
 func (Conversation) Edges() []ent.Edge {
 	return []ent.Edge{
 		// 到成员的边。会话列表要按"我参与的会话"过滤，靠这条边生成
