@@ -60,7 +60,7 @@ func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, s
 	return srv
 }
 
-// httpHealthHandler 健康检查 handler。
+// httpHealthHandler 返回健康检查 handler。
 func httpHealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

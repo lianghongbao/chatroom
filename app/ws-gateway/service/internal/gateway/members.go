@@ -20,8 +20,7 @@ func (f MemberFetcherFunc) ListConversationMembers(ctx context.Context, conversa
 	return f(ctx, conversationID)
 }
 
-// UserConversationLister 列某用户参与的所有会话 id。
-// 跟 MemberFetcher 反方向：这个问「这个人在哪些会话」。
+// UserConversationLister 列某用户参与的所有会话 id（问「这个人在哪些会话」）。
 type UserConversationLister interface {
 	// ListUserConversations 返回该用户参与的会话 id 列表，userID 是用户 ID。
 	ListUserConversations(ctx context.Context, userID string) ([]uint64, error)
@@ -35,8 +34,7 @@ func (f UserConversationListerFunc) ListUserConversations(ctx context.Context, u
 	return f(ctx, userID)
 }
 
-// MemberCache 会话成员缓存。广播时每条消息都去问 conversation 服务太贵，用 TTL 兜底缓存。
-// 群成员变动后缓存最坏会不准一个 TTL。
+// MemberCache 会话成员缓存，用 TTL 兜底缓存。
 type MemberCache struct {
 	fetcher MemberFetcher
 	ttl     time.Duration
@@ -68,7 +66,7 @@ func NewMemberCache(fetcher MemberFetcher, ttl time.Duration) *MemberCache {
 // defaultMemberCacheTTL 成员缓存有效期。
 const defaultMemberCacheTTL = time.Minute
 
-// Get 取会话成员，conversationID 是会话 ID。命中且未过期直接返回；否则回源并缓存。
+// Get 取会话成员，conversationID 是会话 ID；命中且未过期直接返回，否则回源并缓存。
 func (c *MemberCache) Get(ctx context.Context, conversationID uint64) ([]string, error) {
 	if c == nil || c.fetcher == nil {
 		return nil, nil

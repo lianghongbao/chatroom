@@ -29,8 +29,7 @@ func (p *Pool) Add(c *Connection) {
 	p.conns[c.UserID] = append(p.conns[c.UserID], c)
 }
 
-// Remove 移除一条连接。c 是要移除的连接。按指针匹配，只删这一条；
-// 确实是池子里的连接时才触发 onClose。
+// Remove 移除一条连接。c 是要移除的连接，按指针匹配只删这一条。
 func (p *Pool) Remove(c *Connection) {
 	if c == nil {
 		return
@@ -59,7 +58,7 @@ func (p *Pool) Remove(c *Connection) {
 	}
 }
 
-// Get 取某用户的全部连接副本，userID 是用户 ID。返回副本避免调用方遍历时被并发写影响。
+// Get 取某用户的全部连接副本，userID 是用户 ID。
 func (p *Pool) Get(userID string) []*Connection {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

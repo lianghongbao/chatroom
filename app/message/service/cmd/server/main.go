@@ -46,7 +46,7 @@ func init() {
 }
 
 // newApp 组装 kratos 应用。
-// logger 带 service.* 属性的最终 logger
+// logger 带服务属性的 logger
 // gs gRPC server
 // hs HTTP server
 // reg nacos 注册器

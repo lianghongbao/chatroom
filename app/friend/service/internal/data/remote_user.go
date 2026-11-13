@@ -33,15 +33,14 @@ type RemoteUserClient interface {
 }
 
 // RemoteUserEndpoint 是 user 服务在 nacos 里的服务名（discovery 查找用）。
-// "discovery:///" 前缀让 target 走服务发现，".grpc" 后缀匹配 nacos contrib 注册时
-// 拼出的服务名 "chatroom-user.grpc"。两处写错都会导致 "produced zero addresses"。
+// "discovery:///" 前缀让 target 走服务发现，".grpc" 后缀匹配 nacos 注册的服务名。
 const RemoteUserEndpoint = "discovery:///chatroom-user.grpc"
 
 // NewRemoteUserClient 构造 RemoteUserClient。
-// discoverer 服务发现客户端，为 nil 时返 noop
+// discoverer 服务发现器，为 nil 时返 noop
 // auth 鉴权配置，提供内部凭证
 // obs 观测能力
-// 超时 1.5s：好友列表 fan-out 调 N 个，单条拖太久会拖累整批。
+// 超时 1.5s。
 func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteUserClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteUserClient{}, func() {}, nil
@@ -84,9 +83,7 @@ func (c *remoteUserGRPCClient) GetUserByID(ctx context.Context, _, targetID stri
 	return c.cli.GetUserByID(ctx, &userv1.GetUserByIDRequest{Id: targetID})
 }
 
-// GetFriendProfiles 调 user 的好友资料端点，ids 是目标 uid 列表，
-// 走内部凭证，跳过陌生人可见性。
-// 未配置 internalSecret 时降级返空。
+// GetFriendProfiles 调 user 的好友资料端点，ids 是目标 uid 列表，走内部凭证。未配置 internalSecret 时降级返空。
 func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
 		return nil, nil
@@ -98,8 +95,7 @@ func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []stri
 	return reply.GetUsers(), nil
 }
 
-// GetConversationMemberProfiles 调 user 的会话成员资料端点，ids 是目标 uid 列表，
-// 走内部凭证。未配置 internalSecret 时降级返空。
+// GetConversationMemberProfiles 调 user 的会话成员资料端点，ids 是目标 uid 列表，走内部凭证。未配置 internalSecret 时降级返空。
 func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
 		return nil, nil
@@ -111,8 +107,7 @@ func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context
 	return reply.GetUsers(), nil
 }
 
-// authForwarding 把入站 Authorization 投到下游，user service 据此识别 caller。
-// ctx 没带 token 时透传空值，下游返 401。
+// authForwarding 把入站 Authorization 投到下游，user service 据此识别 caller。ctx 没带 token 时透传空值，下游返 401。
 func authForwarding() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -153,8 +148,7 @@ func (noopRemoteUserClient) GetConversationMemberProfiles(_ context.Context, _ [
 	return nil, nil
 }
 
-// internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 内部凭证
+// internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。secret 是内部凭证。
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

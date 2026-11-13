@@ -29,7 +29,7 @@ type conversationRepo struct {
 }
 
 // NewConversationRepo 构造 biz.ConversationRepo 的 ent 实现。
-// d data 客户端
+// d 是 data 客户端。
 func NewConversationRepo(d *Data) biz.ConversationRepo {
 	if d == nil {
 		return nil
@@ -37,10 +37,8 @@ func NewConversationRepo(d *Data) biz.ConversationRepo {
 	return &conversationRepo{data: d, cache: NewConversationCache(d)}
 }
 
-// Save 新建会话 + 成员。c 是待落库的会话。
-// 事务内完成，保证 uk_conv_user 不冲突。
-// 单聊复用：先在事务外查一次已有单聊，命中直接返回（reused=true）；
-// 并发时真正的仲裁在 pair_key 的唯一索引上。
+// Save 新建会话 + 成员。c 是待落库的会话。事务内完成，保证 uk_conv_user 不冲突。
+// 单聊复用：事务外先查一次已有单聊，命中直接返回（reused=true）；并发由 pair_key 唯一索引仲裁。
 func (r *conversationRepo) Save(ctx context.Context, c *biz.Conversation) (*biz.Conversation, bool, error) {
 	if c == nil {
 		return nil, false, biz.ErrConversationInvalidArgument
@@ -127,8 +125,7 @@ func (r *conversationRepo) Save(ctx context.Context, c *biz.Conversation) (*biz.
 	}, false, nil
 }
 
-// singlePairKey 单聊的成员对唯一键。两个 uid 升序拼成 "a,b"，
-// 保证 "a,b" 和 "b,a" 落到同一个键，唯一索引才挡得住反向并发。
+// singlePairKey 单聊的成员对唯一键。两个 uid 升序拼成 "a,b"，反向并发落到同一个键。
 // a 成员 uid
 // b 成员 uid
 func singlePairKey(a, b string) string {
@@ -138,9 +135,8 @@ func singlePairKey(a, b string) string {
 	return a + "," + b
 }
 
-// isUniqueConstraintErr 判断 err 是不是唯一约束冲突。
-// err 待判定的错误
-// MySQL 错误码 1062 (ER_DUP_ENTRY) / 1586 (ER_DUP_ENTRY_WITH_KEY_NAME)
+// isUniqueConstraintErr 判断 err 是不是唯一约束冲突。err 是待判定的错误；
+// MySQL 错误码 1062 (ER_DUP_ENTRY) / 1586 (ER_DUP_ENTRY_WITH_KEY_NAME)。
 func isUniqueConstraintErr(err error) bool {
 	if err == nil {
 		return false
@@ -169,7 +165,9 @@ func (r *conversationRepo) FindByID(ctx context.Context, id uint64) (*biz.Conver
 	return r.toBizWithMembers(ctx, po)
 }
 
-// FindSingleByMembers 查两个成员之间的单聊。a、b 是两个成员的 uid。
+// FindSingleByMembers 查两个成员之间的单聊。
+// a 成员 uid
+// b 成员 uid
 // 直接用 pair_key 查 —— 单条索引命中，不用 join conversation_members。
 func (r *conversationRepo) FindSingleByMembers(ctx context.Context, a, b string) (*biz.Conversation, error) {
 	po, err := r.data.db.Conversation.Query().
@@ -186,10 +184,9 @@ func (r *conversationRepo) FindSingleByMembers(ctx context.Context, a, b string)
 }
 
 // ListByUserID 列出该用户参与的会话，按 updated_at DESC, id DESC。
-// 排序键是 (updated_at, id) 复合键，下一页谓词为
-// (updated_at < c.updated_at) OR (updated_at = c.updated_at AND id < c.id)。
-// 游标只带 id，c.updated_at 由 repo 反查。
-// userID 是用户 uid，cursor 零值表示首页，limit 是单页条数。
+// userID 用户 uid
+// cursor 零值表示首页
+// limit 单页条数
 func (r *conversationRepo) ListByUserID(ctx context.Context, userID string, cursor biz.ConversationCursor, limit int) ([]*biz.Conversation, error) {
 	if limit <= 0 {
 		limit = defaultConvListLimit
@@ -237,7 +234,9 @@ func (r *conversationRepo) ListByUserID(ctx context.Context, userID string, curs
 	return out, nil
 }
 
-// IsMember 判断 user 是否是会话成员。conversationID 是会话 ID，userID 是用户 uid。
+// IsMember 判断 user 是否是会话成员。
+// conversationID 会话 ID
+// userID 用户 uid
 func (r *conversationRepo) IsMember(ctx context.Context, conversationID uint64, userID string) (bool, error) {
 	n, err := r.data.db.ConversationMember.Query().
 		Where(
@@ -251,10 +250,11 @@ func (r *conversationRepo) IsMember(ctx context.Context, conversationID uint64, 
 	return n > 0, nil
 }
 
-// UpdateUnread 增减某成员的会话级未读数，返回更新后的值。不会减到 0 以下。
-// conversationID 是会话 ID，userID 是成员 uid，delta 是增减量。
-// 走原生 SQL 的原子表达式 SET unread_count = GREATEST(unread_count + ?, 0)，
-// 避免读-改-写丢失更新。
+// UpdateUnread 增减某成员的会话级未读数，返回更新后的值，不会减到 0 以下。
+// conversationID 会话 ID
+// userID 成员 uid
+// delta 增减量
+// 走原生 SQL 的原子表达式 SET unread_count = GREATEST(unread_count + ?, 0)，避免读-改-写丢失更新。
 func (r *conversationRepo) UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if r.data.sqlDB == nil {
 		return 0, errors.New("data.sqlDB 未初始化")
@@ -291,9 +291,11 @@ func (r *conversationRepo) UpdateUnread(ctx context.Context, conversationID uint
 }
 
 // UpdateUnreadBatch 批量增减多个成员的未读数，返回成功更新的成员数。
-// conversationID 是会话 ID，userIDs 是成员 uid 列表，delta 是增减量。
-// 一条 UPDATE ... WHERE user_id IN (...) 搞定，语义跟 UpdateUnread 一致。
-// 不是成员的 uid 不算失败；准确计数单独查成员数，不用 RowsAffected 近似。
+// conversationID 会话 ID
+// userIDs 成员 uid 列表
+// delta 增减量
+// 不是成员的 uid 不算失败
+// 成员数单独查，不用 RowsAffected 近似 —— GREATEST 钳回 0 时 affected 会是 0。
 func (r *conversationRepo) UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if r.data.sqlDB == nil {
 		return 0, errors.New("data.sqlDB 未初始化")
@@ -350,7 +352,9 @@ func (r *conversationRepo) UpdateUnreadBatch(ctx context.Context, conversationID
 	return uint32(n), nil
 }
 
-// GetUnread 查某成员的会话级未读数。conversationID 是会话 ID，userID 是成员 uid。
+// GetUnread 查某成员的会话级未读数。
+// conversationID 会话 ID
+// userID 成员 uid
 func (r *conversationRepo) GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	po, err := r.data.db.ConversationMember.Query().
 		Where(
@@ -367,9 +371,9 @@ func (r *conversationRepo) GetUnread(ctx context.Context, conversationID uint64,
 	return uint32(po.UnreadCount), nil
 }
 
-// ClearUnread 把某成员的会话级未读数清零。一条 UPDATE 清零，不做「先读再减」。
-// 成员不存在返 ErrConversationNotFound。
-// conversationID 是会话 ID，userID 是成员 uid。
+// ClearUnread 把某成员的会话级未读数清零，返回清零后的值。成员不存在返 ErrConversationNotFound。
+// conversationID 会话 ID
+// userID 成员 uid
 func (r *conversationRepo) ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	// 先确认成员行存在。不能靠 UPDATE 的 affected 行数判断 ——
 	// ent 的 UPDATE 只统计「值真的变了」的行，未读数本来就是 0 时 affected 为 0。
@@ -416,9 +420,9 @@ func (r *conversationRepo) ListUnread(ctx context.Context, userID string) (map[u
 	return out, nil
 }
 
-// AddMembers 批量加成员。事务内完成。
-// 返回 (实际新增数, 加完后的成员总数)，成员数在事务内数出来。
-// conversationID 是会话 ID，userIDs 是要加的用户 uid。
+// AddMembers 批量加成员，返回 (实际新增数, 加完后的成员总数)，成员数在事务内数出来 —— 并发下这个数才是真值。
+// conversationID 会话 ID
+// userIDs 要加的用户 uid
 func (r *conversationRepo) AddMembers(ctx context.Context, conversationID uint64, userIDs []string) (int, int, error) {
 	// userIDs 为空不是错误 —— 调用方想拿一个准确的成员数。这种情况照样数一遍，
 	// 返回 (0, 当前总数)。
@@ -497,7 +501,8 @@ func (r *conversationRepo) AddMembers(ctx context.Context, conversationID uint64
 }
 
 // RemoveMember 踢人。找不到成员返 ErrConversationNotFound。返回踢完后的成员总数（事务内数出）。
-// conversationID 是会话 ID，userID 是被踢的用户 uid。
+// conversationID 会话 ID
+// userID 被踢的用户 uid
 func (r *conversationRepo) RemoveMember(ctx context.Context, conversationID uint64, userID string) (int, error) {
 	tx, err := r.data.db.Tx(ctx)
 	if err != nil {
@@ -545,7 +550,9 @@ func (r *conversationRepo) RemoveMember(ctx context.Context, conversationID uint
 	return total, nil
 }
 
-// UpdateName 改群名。id 是会话 ID，name 是新群名。
+// UpdateName 改群名。
+// id 会话 ID
+// name 新群名
 func (r *conversationRepo) UpdateName(ctx context.Context, id uint64, name string) (*biz.Conversation, error) {
 	po, err := r.data.db.Conversation.UpdateOneID(id).
 		SetName(name).
@@ -559,8 +566,9 @@ func (r *conversationRepo) UpdateName(ctx context.Context, id uint64, name strin
 	return r.toBizWithMembers(ctx, po)
 }
 
-// TransferOwner 转让群主。事务内完成：新群主必须在会里，否则返 ErrConversationNotFound。
-// conversationID 是会话 ID，newOwnerID 是新群主的 uid。
+// TransferOwner 转让群主，事务内完成。新群主必须在会里，否则返 ErrConversationNotFound。
+// conversationID 会话 ID
+// newOwnerID 新群主的 uid
 func (r *conversationRepo) TransferOwner(ctx context.Context, conversationID uint64, newOwnerID string) (*biz.Conversation, error) {
 	tx, err := r.data.db.Tx(ctx)
 	if err != nil {
@@ -604,9 +612,8 @@ func (r *conversationRepo) TransferOwner(ctx context.Context, conversationID uin
 	return r.toBizWithMembers(ctx, po)
 }
 
-// Dissolve 解散会话：连同全部成员记录一起删掉。事务内完成。
-// 成员记录有指向 conversations 的外键，所以得先删成员再删会话。
-// conversationID 是会话 ID。
+// Dissolve 解散会话，连同全部成员记录一起删掉。conversationID 是会话 ID。
+// 事务内完成；成员记录有指向 conversations 的外键，所以先删成员再删会话。
 func (r *conversationRepo) Dissolve(ctx context.Context, conversationID uint64) error {
 	tx, err := r.data.db.Tx(ctx)
 	if err != nil {
@@ -702,8 +709,7 @@ func (r *conversationRepo) membersFromDB(ctx context.Context, conversationID uin
 	return out, nil
 }
 
-// ConversationCache 会话相关 Redis 缓存。
-// key 是 chatroom:conv:{id}:members（Set，会话成员 uid）。
+// ConversationCache 会话相关 Redis 缓存。key 是 chatroom:conv:{id}:members（Set，会话成员 uid）。
 // 缓存是派生数据，MySQL 是权威源：写路径「先写库，再删缓存」，读路径未命中回源。
 type ConversationCache struct {
 	rdb        redis.Cmdable
@@ -711,8 +717,8 @@ type ConversationCache struct {
 }
 
 // NewConversationCache 构造 ConversationCache。
-// d data 客户端
-// Redis 不可用时返 nil（降级为每次查库）。
+// d 是 data 客户端
+// Redis 不可用时返 nil。
 func NewConversationCache(d *Data) *ConversationCache {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -720,27 +726,23 @@ func NewConversationCache(d *Data) *ConversationCache {
 	return &ConversationCache{rdb: d.Redis(), membersTTL: 5 * time.Minute}
 }
 
-// convMembersKey 会话成员集合 key。
-// conversationID 会话 ID
+// convMembersKey 会话成员集合 key。conversationID 是会话 ID。
 func convMembersKey(conversationID uint64) string {
 	return "chatroom:conv:" + formatUint(conversationID) + ":members"
 }
 
-// convMembersVerKey 会话成员集合的版本号 key。
-// conversationID 会话 ID
+// convMembersVerKey 会话成员集合的版本号 key。conversationID 是会话 ID；
 // 回填时用 Lua 比对版本，版本变了就放弃回填。
 func convMembersVerKey(conversationID uint64) string {
 	return "chatroom:conv:" + formatUint(conversationID) + ":members:ver"
 }
 
-// formatUint 把 uint64 转成十进制字符串。
-// v 待转换的值
+// formatUint 把 uint64 转成十进制字符串。v 是待转换的值。
 func formatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }
 
-// Members 读会话成员 uid 列表（升序）。conversationID 是会话 ID。
-// 未命中返 (nil, nil)，调用方回源查库。
+// Members 读会话成员 uid 列表（升序）。conversationID 是会话 ID，未命中返 (nil, nil)；
 // 第二个返回值是回填时该带的版本号（读成员列表之前取）。
 func (c *ConversationCache) Members(ctx context.Context, conversationID uint64) ([]string, int64, error) {
 	if c == nil || c.rdb == nil {
@@ -775,7 +777,9 @@ func (c *ConversationCache) MembersVersion(ctx context.Context, conversationID u
 	return n
 }
 
-// SetMembers 回填会话成员集合。conversationID 是会话 ID，members 是成员 uid 列表，
+// SetMembers 回填会话成员集合。
+// conversationID 会话 ID
+// members 成员 uid 列表
 // ver 是回源之前取到的版本号；版本变了就放弃回填。
 func (c *ConversationCache) SetMembers(ctx context.Context, conversationID uint64, members []string, ver int64) {
 	if c == nil || c.rdb == nil || len(members) == 0 {
@@ -812,8 +816,7 @@ return 1
 	}
 }
 
-// InvalidateMembers 删掉会话成员集合缓存并把版本号 +1。
-// 成员变动时调用。conversationID 是会话 ID。
+// InvalidateMembers 删掉会话成员集合缓存并把版本号 +1。conversationID 是会话 ID。
 func (c *ConversationCache) InvalidateMembers(ctx context.Context, conversationID uint64) {
 	if c == nil || c.rdb == nil {
 		return

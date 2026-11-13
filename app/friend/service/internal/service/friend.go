@@ -16,13 +16,14 @@ type FriendService struct {
 	uc *biz.FriendUsecase
 }
 
-// NewFriendService 构造 FriendService。
-// uc 好友用例
+// NewFriendService 构造 FriendService。uc 是好友用例。
 func NewFriendService(uc *biz.FriendUsecase) *FriendService {
 	return &FriendService{uc: uc}
 }
 
-// ApplyFriend 发起好友申请。req 是请求，caller uid 由 ctx 派生。
+// ApplyFriend 发起好友申请。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) ApplyFriend(ctx context.Context, req *pb.ApplyFriendRequest) (*pb.ApplyFriendReply, error) {
 	if req == nil || req.GetTargetId() == "" {
 		return nil, biz.ErrFriendInvalidArgument
@@ -40,7 +41,9 @@ func (s *FriendService) ApplyFriend(ctx context.Context, req *pb.ApplyFriendRequ
 	return convertApplyReply(res), nil
 }
 
-// AcceptFriend 同意好友申请。req 是请求，caller uid 由 ctx 派生。
+// AcceptFriend 同意好友申请。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) AcceptFriend(ctx context.Context, req *pb.AcceptFriendRequest) (*pb.AcceptFriendReply, error) {
 	if req == nil || req.GetRequestId() == 0 {
 		return nil, biz.ErrFriendInvalidArgument
@@ -56,7 +59,9 @@ func (s *FriendService) AcceptFriend(ctx context.Context, req *pb.AcceptFriendRe
 	return &pb.AcceptFriendReply{Friend: convertFriendInfo(f)}, nil
 }
 
-// RejectFriend 拒绝好友申请。req 是请求，caller uid 由 ctx 派生。
+// RejectFriend 拒绝好友申请。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) RejectFriend(ctx context.Context, req *pb.RejectFriendRequest) (*pb.RejectFriendReply, error) {
 	if req == nil || req.GetRequestId() == 0 {
 		return nil, biz.ErrFriendInvalidArgument
@@ -71,7 +76,9 @@ func (s *FriendService) RejectFriend(ctx context.Context, req *pb.RejectFriendRe
 	return &pb.RejectFriendReply{}, nil
 }
 
-// RemoveFriend 删除好友。req 是请求，caller uid 由 ctx 派生。
+// RemoveFriend 删除好友。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) RemoveFriend(ctx context.Context, req *pb.RemoveFriendRequest) (*pb.RemoveFriendReply, error) {
 	if req == nil || req.GetFriendId() == "" {
 		return nil, biz.ErrFriendInvalidArgument
@@ -86,7 +93,9 @@ func (s *FriendService) RemoveFriend(ctx context.Context, req *pb.RemoveFriendRe
 	return &pb.RemoveFriendReply{}, nil
 }
 
-// ListFriends 列好友。req 是请求，caller uid 由 ctx 派生。
+// ListFriends 列好友。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) ListFriends(ctx context.Context, req *pb.ListFriendsRequest) (*pb.ListFriendsReply, error) {
 	if req == nil {
 		return nil, biz.ErrFriendInvalidArgument
@@ -106,7 +115,9 @@ func (s *FriendService) ListFriends(ctx context.Context, req *pb.ListFriendsRequ
 	return out, nil
 }
 
-// ListPendingRequests 列好友申请收件箱。req 是请求，caller uid 由 ctx 派生。
+// ListPendingRequests 列好友申请收件箱。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) ListPendingRequests(ctx context.Context, req *pb.ListPendingRequestsRequest) (*pb.ListPendingRequestsReply, error) {
 	if req == nil {
 		return nil, biz.ErrFriendInvalidArgument
@@ -126,7 +137,9 @@ func (s *FriendService) ListPendingRequests(ctx context.Context, req *pb.ListPen
 	return out, nil
 }
 
-// CountPending 查待处理申请数。req 是请求，caller uid 由 ctx 派生。
+// CountPending 查待处理申请数。
+// req 请求
+// caller uid 由 ctx 派生。
 func (s *FriendService) CountPending(ctx context.Context, req *pb.CountPendingRequest) (*pb.CountPendingReply, error) {
 	if req == nil {
 		return nil, biz.ErrFriendInvalidArgument
@@ -167,8 +180,7 @@ func convertFriendInfo(f *biz.Friend) *pb.FriendInfo {
 	return info
 }
 
-// convertApplyReply 把 biz.FriendApplyResult 折成 proto.ApplyFriendReply。
-// r == nil 时返一个空 reply（不是 nil）—— 调用方已经过了参数校验。
+// convertApplyReply 把 biz.FriendApplyResult 折成 proto.ApplyFriendReply。r == nil 时返一个空 reply。
 func convertApplyReply(r *biz.FriendApplyResult) *pb.ApplyFriendReply {
 	if r == nil {
 		return &pb.ApplyFriendReply{}
@@ -194,8 +206,7 @@ func friendStatusToDTO(s biz.FriendStatus) pb.FriendStatus {
 	}
 }
 
-// clampPageSize 限制 page_size 在合法区间（1..200），其它回退默认 50。
-// n 请求里的 page_size
+// clampPageSize 限制 page_size 在合法区间（1..200），其它回退默认 50。n 是请求里的 page_size。
 func clampPageSize(n int32) int {
 	if n <= 0 || n > 200 {
 		return 50

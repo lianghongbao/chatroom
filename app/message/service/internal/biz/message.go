@@ -45,22 +45,26 @@ var (
 
 // MessageRepo 消息仓储接口。
 type MessageRepo interface {
-	// Create 落库一条消息。m 是待存的领域对象，返回带 id 与 created_at 的消息。
+	// Create 落库一条消息，返回带 id 与 created_at 的消息。
+	// m 待存的领域对象
 	Create(ctx context.Context, m *Message) (*Message, error)
-	// ListByConversation 拉历史消息，按 id 倒序（新的在前）。conversationID 是会话 ID，
-	// cursor 的语义是「比这个 id 更旧的」，cursor 为 0 从最新一条开始，limit 是单页条数。
-	// 返回 (消息列表, 下一页游标)，没有更多时游标为 0。
+	// ListByConversation 拉历史消息，按 id 倒序（新的在前）。返回 (消息列表, 下一页游标)，没有更多时游标为 0。
+	// conversationID 会话 ID
+	// cursor 上一页最后一条消息的 id，0 表示从最新一条开始
+	// limit 单页条数
 	ListByConversation(ctx context.Context, conversationID uint64, cursor uint64, limit int) ([]*Message, uint64, error)
-	// ListSince 拉「id 严格大于 sinceID」的消息，按 id 正序（旧的在前）。conversationID 是会话 ID，
-	// sinceID 为 0 表示从头拉，limit 是单页条数。
-	// 返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
+	// ListSince 拉「id 严格大于 sinceID」的消息，按 id 正序（旧的在前）。返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
+	// conversationID 会话 ID
+	// sinceID 0 表示从头拉
+	// limit 单页条数
 	ListSince(ctx context.Context, conversationID, sinceID uint64, limit int) ([]*Message, uint64, bool, error)
 }
 
 // ConversationMembershipChecker 校验调用方是不是会话成员（跨服务 conversation 服务）。
 type ConversationMembershipChecker interface {
-	// IsMember 返回调用方是不是该会话的成员。conversationID 是会话 ID，userID 是用户 ID。
-	// 会话不存在时也返 false。
+	// IsMember 返回调用方是不是该会话的成员，会话不存在时也返 false。
+	// conversationID 会话 ID
+	// userID 用户 ID
 	IsMember(ctx context.Context, conversationID uint64, userID string) (bool, error)
 }
 
@@ -102,9 +106,12 @@ func NewMessageUsecase(repo MessageRepo, membership ConversationMembershipChecke
 	}
 }
 
-// SendMessage 发消息。callerID 是发送者 ID，conversationID 是会话 ID，typ 是消息类型，content 是正文。
-// 顺序：校验成员身份 → 落库 → 广播。
-// 广播在落库之后，避免客户端收到查不到的消息。
+// SendMessage 发消息。
+// callerID 发送者 ID
+// conversationID 会话 ID
+// typ 消息类型
+// content 消息正文
+// 顺序：校验成员身份 → 落库 → 广播。广播失败不影响落库结果。
 func (uc *MessageUsecase) SendMessage(ctx context.Context, callerID string, conversationID uint64, typ MessageType, content string) (*Message, error) {
 	if uc.repo == nil {
 		return nil, ErrMessageInvalidArgument
@@ -152,8 +159,9 @@ func (uc *MessageUsecase) SendMessage(ctx context.Context, callerID string, conv
 	return saved, nil
 }
 
-// incUnreadForMembers 给会话里除发送方以外的所有成员加一条未读。
-// conversationID 是会话 ID，senderID 是发送者 ID（自己不给自己加）。失败只记日志不往上抛。
+// incUnreadForMembers 给会话里除发送方以外的所有成员加一条未读。失败只记日志不往上抛。
+// conversationID 会话 ID
+// senderID 发送者 ID（自己不给自己加）
 func (uc *MessageUsecase) incUnreadForMembers(ctx context.Context, conversationID uint64, senderID string) {
 	if uc.unread == nil || uc.lister == nil {
 		return
@@ -190,9 +198,11 @@ func (uc *MessageUsecase) incUnreadForMembers(ctx context.Context, conversationI
 	}
 }
 
-// ListMessages 拉历史消息。callerID 是调用者 ID，conversationID 是会话 ID，
-// cursor 是上一页最后一条消息的 id（0 表示从最新开始），limit 是单页条数。
-// 返回 (消息列表, 下一页游标)。
+// ListMessages 拉历史消息。返回 (消息列表, 下一页游标)。
+// callerID 调用者 ID
+// conversationID 会话 ID
+// cursor 上一页最后一条消息的 id，0 表示从最新开始
+// limit 单页条数
 func (uc *MessageUsecase) ListMessages(ctx context.Context, callerID string, conversationID uint64, cursor uint64, limit int) ([]*Message, uint64, error) {
 	if uc.repo == nil {
 		return nil, 0, ErrMessageInvalidArgument
@@ -214,9 +224,11 @@ func (uc *MessageUsecase) ListMessages(ctx context.Context, callerID string, con
 	return uc.repo.ListByConversation(ctx, conversationID, cursor, limit)
 }
 
-// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序。callerID 是调用者 ID，
-// conversationID 是会话 ID，sinceID 是断线前看到的最后一条消息 id，limit 是单页条数。
-// 断线重连补消息用，与 ListMessages 方向相反。
+// ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序。
+// callerID 调用者 ID
+// conversationID 会话 ID
+// sinceID 断线前看到的最后一条消息 id
+// limit 单页条数
 // 返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
 func (uc *MessageUsecase) ListMessagesSince(ctx context.Context, callerID string, conversationID, sinceID uint64, limit int) ([]*Message, uint64, bool, error) {
 	if uc.repo == nil {
@@ -239,8 +251,9 @@ func (uc *MessageUsecase) ListMessagesSince(ctx context.Context, callerID string
 	return uc.repo.ListSince(ctx, conversationID, sinceID, limit)
 }
 
-// checkMembership 校验调用方是会话成员。callerID 是调用者 ID，conversationID 是会话 ID。
-// conversation 服务不可达或 membership == nil 时一律拒绝，不放行。
+// checkMembership 校验调用方是会话成员。conversation 服务不可达或 membership == nil 时一律拒绝，不放行。
+// callerID 调用者 ID
+// conversationID 会话 ID
 func (uc *MessageUsecase) checkMembership(ctx context.Context, callerID string, conversationID uint64) error {
 	if uc.membership == nil {
 		uc.logger.ErrorContext(ctx, "成员校验能力缺失，拒绝请求", "conversation_id", conversationID)
@@ -259,26 +272,39 @@ func (uc *MessageUsecase) checkMembership(ctx context.Context, callerID string, 
 
 // UnreadCounter 未读数读写（跨服务 conversation 服务）。
 type UnreadCounter interface {
-	// GetUnread 返回调用方在该会话的未读数。conversationID 是会话 ID，userID 是用户 ID。
+	// GetUnread 返回调用方在该会话的未读数。
+	// conversationID 会话 ID
+	// userID 用户 ID
 	GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
-	// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。delta 是增量。
+	// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。
+	// conversationID 会话 ID
+	// userID 成员 uid
+	// delta 增量
 	IncUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error)
-	// IncUnreadBatch 给一批成员的会话级未读数加 delta。conversationID 是会话 ID，
-	// userIDs 是成员 ID 列表，delta 是增量。整个 fan-out 压成一次调用。
+	// IncUnreadBatch 给一批成员的会话级未读数加 delta，整个 fan-out 压成一次调用。
+	// conversationID 会话 ID
+	// userIDs 成员 uid 列表
+	// delta 增量
 	IncUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error)
 	// ClearUnread 把调用方在该会话的未读数清零，返回清零后的值。
+	// conversationID 会话 ID
+	// userID 用户 ID
 	ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
 	// ListUnread 返回调用方所有会话的未读数（key = conversation_id）。
+	// userID 用户 ID
 	ListUnread(ctx context.Context, userID string) (map[uint64]uint32, error)
 }
 
 // ConversationMemberLister 列出会话成员（跨服务 conversation 服务）。
 type ConversationMemberLister interface {
-	// ListConversationMembers 返回会话成员 uid 列表。conversationID 是会话 ID。
+	// ListConversationMembers 返回会话成员 uid 列表。
+	// conversationID 会话 ID
 	ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error)
 }
 
-// MarkRead 清零某个会话的未读数。callerID 是调用者 ID，conversationID 是会话 ID。
+// MarkRead 清零某个会话的未读数。
+// callerID 调用者 ID
+// conversationID 会话 ID
 func (uc *MessageUsecase) MarkRead(ctx context.Context, callerID string, conversationID uint64) (uint32, error) {
 	if uc.unread == nil {
 		return 0, ErrMessageInvalidArgument
@@ -296,9 +322,9 @@ func (uc *MessageUsecase) MarkRead(ctx context.Context, callerID string, convers
 	return n, nil
 }
 
-// unreadDownstreamError 把未读数下游的错误映射成 503。err 是下游返回的错误，
-// conversationID 是会话 ID（仅用于日志）。
-// 下游不可达时 503 才准确；「成员不存在」是调用方的错，保留原始 404。
+// unreadDownstreamError 把未读数下游的错误映射成 503。下游不可达时 503 才准确；「成员不存在」是调用方的错，保留原始 404。
+// err 下游返回的错误
+// conversationID 会话 ID（仅用于日志）
 func (uc *MessageUsecase) unreadDownstreamError(ctx context.Context, err error, conversationID uint64) error {
 	if err == nil {
 		return nil
@@ -313,8 +339,10 @@ func (uc *MessageUsecase) unreadDownstreamError(ctx context.Context, err error, 
 	return ErrMessageConversationUnavailable
 }
 
-// GetUnreadCount 查未读数。callerID 是调用者 ID，conversationID 为 0 时返回所有会话的未读总数（角标用）。
-// 返回 (未读数, 各会话未读数)。查单个会话时第二个返回值为 nil。
+// GetUnreadCount 查未读数。
+// conversationID 为 0 时返回所有会话的未读总数（角标用）。返回 (未读数, 各会话未读数)，查单个会话时第二个返回值为 nil。
+// callerID 调用者 ID
+// conversationID 会话 ID，0 表示查所有会话
 func (uc *MessageUsecase) GetUnreadCount(ctx context.Context, callerID string, conversationID uint64) (uint32, map[uint64]uint32, error) {
 	if uc.unread == nil {
 		return 0, nil, ErrMessageInvalidArgument

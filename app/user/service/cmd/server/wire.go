@@ -22,8 +22,7 @@ import (
 	"github.com/google/wire"
 )
 
-// wireApp 组装 kratos 应用。
-// 入参依次是引导配置、registry 配置段与 logger。
+// wireApp 组装 kratos 应用。入参依次是引导配置、registry 配置段与 logger。
 func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func(), error) {
 	panic(wire.Build(
 		// 本域的 server 层：构造 HTTP/gRPC server 并注册 user 域的路由

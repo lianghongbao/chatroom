@@ -100,9 +100,7 @@ func NewDependencies(rdb redis.Cmdable, members MemberFetcher, cfg GatewayConfig
 	}
 }
 
-// NewMemberCacheFromDependencies 暴露依赖包里的成员缓存。
-// deps 依赖包
-// 成员失效通知的处理要拿到同一个缓存实例 —— 否则失效的是另一个 map。
+// NewMemberCacheFromDependencies 暴露依赖包里的成员缓存。deps 是依赖包。
 func NewMemberCacheFromDependencies(deps *Dependencies) *MemberCache {
 	return deps.Members
 }

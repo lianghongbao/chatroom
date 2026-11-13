@@ -26,8 +26,7 @@ type RemoteConversationClient interface {
 	CheckMembership(ctx context.Context, conversationID uint64, userID string) (bool, error)
 	// UpdateUnread 增减某成员的会话级未读数，返回更新后的值。delta 是增量。
 	UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error)
-	// UpdateUnreadBatch 批量增减多个成员的会话级未读数。conversationID 是会话 ID，
-	// userIDs 是成员 ID 列表，delta 是增量。发消息后的未读 fan-out 用它。
+	// UpdateUnreadBatch 批量增减多个成员的会话级未读数。发消息后的未读 fan-out 用它。
 	UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error)
 	// GetUnread 查某成员的会话级未读数。conversationID 是会话 ID，userID 是用户 ID。
 	GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error)
@@ -42,7 +41,8 @@ type RemoteConversationClient interface {
 }
 
 // UpdateUnreadBatch 批量增减多个成员的会话级未读数。conversationID 是会话 ID，
-// userIDs 是成员 ID 列表，delta 是增量。一次调用搞定整个 fan-out。
+// userIDs 成员 ID 列表
+// delta 增量
 func (c *remoteConversationGRPCClient) UpdateUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if c.internalSecret == "" {
 		return 0, errNoRemoteSecret
@@ -59,14 +59,14 @@ func (c *remoteConversationGRPCClient) UpdateUnreadBatch(ctx context.Context, co
 }
 
 // RemoteConversationEndpoint 是 conversation 服务在 nacos 里的服务名（discovery 查找用）。
-// 必须带 "discovery:///" 前缀和 ".grpc" 后缀，否则 gRPC 报 "produced zero addresses"。
+// 必须带 "discovery:///" 前缀和 ".grpc" 后缀。
 const RemoteConversationEndpoint = "discovery:///chatroom-conversation.grpc"
 
 // NewRemoteConversationClient 构造 RemoteConversationClient。
 // discoverer 服务发现客户端，为 nil 时返 noop
-// auth 鉴权配置，取内部凭证
+// auth 取内部凭证
 // obs 观测能力
-// 超时 1.5s：发消息是同步链路，下游卡住会拖慢用户请求。
+// 超时 1.5s。
 func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteConversationClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteConversationClient{}, func() {}, nil
@@ -103,7 +103,9 @@ type remoteConversationGRPCClient struct {
 	internalSecret string // 服务间内部凭证。空表示未配置，调用降级返错误
 }
 
-// CheckMembership 查成员身份。conversationID 是会话 ID，userID 是用户 ID。
+// CheckMembership 查成员身份。
+// conversationID 会话 ID
+// userID 用户 ID
 func (c *remoteConversationGRPCClient) CheckMembership(ctx context.Context, conversationID uint64, userID string) (bool, error) {
 	if c.internalSecret == "" {
 		return false, errNoRemoteSecret
@@ -118,7 +120,10 @@ func (c *remoteConversationGRPCClient) CheckMembership(ctx context.Context, conv
 	return reply.GetIsMember(), nil
 }
 
-// UpdateUnread 增减未读数。conversationID 是会话 ID，userID 是用户 ID，delta 是增量。
+// UpdateUnread 增减未读数。
+// conversationID 会话 ID
+// userID 用户 ID
+// delta 增量
 func (c *remoteConversationGRPCClient) UpdateUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if c.internalSecret == "" {
 		return 0, errNoRemoteSecret
@@ -134,7 +139,9 @@ func (c *remoteConversationGRPCClient) UpdateUnread(ctx context.Context, convers
 	return reply.GetUnreadCount(), nil
 }
 
-// GetUnread 查未读数。conversationID 是会话 ID，userID 是用户 ID。
+// GetUnread 查未读数。
+// conversationID 会话 ID
+// userID 用户 ID
 func (c *remoteConversationGRPCClient) GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if c.internalSecret == "" {
 		return 0, errNoRemoteSecret
@@ -149,7 +156,9 @@ func (c *remoteConversationGRPCClient) GetUnread(ctx context.Context, conversati
 	return reply.GetUnreadCount(), nil
 }
 
-// ClearUnread 清零未读数。conversationID 是会话 ID，userID 是用户 ID。
+// ClearUnread 清零未读数。
+// conversationID 会话 ID
+// userID 用户 ID
 func (c *remoteConversationGRPCClient) ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if c.internalSecret == "" {
 		return 0, errNoRemoteSecret
@@ -180,8 +189,7 @@ func (c *remoteConversationGRPCClient) ListUnread(ctx context.Context, userID st
 	return per, nil
 }
 
-// ListConversationMembers 列出会话的全部成员。conversationID 是会话 ID。
-// 只对内部服务开放。
+// ListConversationMembers 列出会话的全部成员。conversationID 是会话 ID；只对内部服务开放。
 func (c *remoteConversationGRPCClient) ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error) {
 	if c.internalSecret == "" {
 		return nil, errNoRemoteSecret
@@ -195,8 +203,7 @@ func (c *remoteConversationGRPCClient) ListConversationMembers(ctx context.Conte
 	return reply.GetMemberIds(), nil
 }
 
-// ListUserConversations 列某用户参与的所有会话 id。userID 是用户 ID。
-// 只对内部服务开放。
+// ListUserConversations 列某用户参与的所有会话 id。userID 是用户 ID；只对内部服务开放。
 func (c *remoteConversationGRPCClient) ListUserConversations(ctx context.Context, userID string) ([]uint64, error) {
 	if c.internalSecret == "" {
 		return nil, errNoRemoteSecret
@@ -210,8 +217,7 @@ func (c *remoteConversationGRPCClient) ListUserConversations(ctx context.Context
 	return reply.GetConversationIds(), nil
 }
 
-// internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 内部凭证
+// internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。secret 是内部凭证。
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -227,7 +233,6 @@ func internalForwarding(secret string) middleware.Middleware {
 }
 
 // noopRemoteConversationClient 未配 discovery 时的兜底，所有调用返错误。
-// 返错误而不是「假成功」，让 biz 层能拒绝发消息。
 type noopRemoteConversationClient struct{}
 
 func (noopRemoteConversationClient) CheckMembership(context.Context, uint64, string) (bool, error) {

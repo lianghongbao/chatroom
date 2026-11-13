@@ -40,7 +40,6 @@ const MaxApplyMessageLen = 200
 // truncateRunes 按 rune 截断字符串。
 // s 待截断文本
 // max 保留的 rune 数上限
-// 不能用 s[:n] —— 那是按字节切的，会切出半个 UTF-8 字符。
 func truncateRunes(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -59,8 +58,7 @@ func truncateRunes(s string, max int) string {
 	return s
 }
 
-// FriendApplyResult Apply 的返回。重复申请或反向收尾时也带当前 status，
-// 让 caller 区分新建与已存在。
+// FriendApplyResult Apply 的返回。重复申请或反向收尾时也带当前 status。
 type FriendApplyResult struct {
 	RequestID uint64
 	Status    FriendStatus
@@ -74,8 +72,7 @@ type FriendProfile struct {
 	CreatedAt time.Time
 }
 
-// FriendProfileFetcher 批量拉好友资料。整批失败由 biz 走降级，
-// user service 不可达不能阻断主路径。
+// FriendProfileFetcher 批量拉好友资料。整批失败由 biz 走降级。
 type FriendProfileFetcher interface {
 	FetchProfiles(ctx context.Context, callerID string, ids []string) ([]*FriendProfile, error)
 }
@@ -145,10 +142,9 @@ type FriendUsecase struct {
 }
 
 // NewFriendUsecase 构造 FriendUsecase。
-// repo 好友仓储
-// profiles 拉资料的依赖，为 nil 时走降级
-// limiter 限频器，为 nil 时关闭限频
-// logger 日志器，为 nil 时用 slog.Default
+// profiles nil 时走降级
+// limiter nil 时关闭限频
+// logger nil 时用 slog.Default
 func NewFriendUsecase(repo FriendRepo, profiles FriendProfileFetcher, limiter FriendLimiter, logger *slog.Logger) *FriendUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -159,9 +155,14 @@ func NewFriendUsecase(repo FriendRepo, profiles FriendProfileFetcher, limiter Fr
 	return &FriendUsecase{repo: repo, profiles: profiles, limiter: limiter, logger: logger}
 }
 
-// Apply 发起好友申请。callerID 是申请人 ID，targetID 是被申请人 ID，message 是申请附言。
-// callerID == targetID 拒绝；已是好友或已 PENDING 折叠相应错误；
-// 反向 PENDING 自动收尾成 ACCEPTED。message 超过 200 字符截断并 trim 空格。
+// Apply 发起好友申请。
+// callerID 申请人 ID
+// targetID 被申请人 ID
+// message 申请附言
+// callerID 调用方 uid
+// targetID 目标 uid
+// message 申请附言，超过 200 字符截断并 trim 空格。
+// callerID == targetID 返 ErrFriendSelf；已是好友或已 PENDING 折叠相应错误；反向 PENDING 自动收尾成 ACCEPTED。
 func (uc *FriendUsecase) Apply(ctx context.Context, callerID, targetID string, message string) (*FriendApplyResult, error) {
 	if uc.repo == nil {
 		return nil, ErrFriendInvalidArgument
@@ -236,9 +237,10 @@ func (uc *FriendUsecase) Apply(ctx context.Context, callerID, targetID string, m
 	return &FriendApplyResult{RequestID: id, Status: FriendStatusPending}, nil
 }
 
-// resolveApplyConflict 处理 Save 撞唯一索引的情况。callerID 是申请人 ID，
-// targetID 是被申请人 ID，retries 是剩余重试次数。
-// retries 限制重试次数，避免并发下状态一直变导致活锁。
+// resolveApplyConflict 处理 Save 撞唯一索引的情况。
+// callerID 申请人 ID
+// targetID 被申请人 ID
+// retries 剩余重试次数
 func (uc *FriendUsecase) resolveApplyConflict(ctx context.Context, callerID, targetID string, retries int) (*FriendApplyResult, error) {
 	forward, reverse, err := uc.repo.FindBothDirections(ctx, callerID, targetID)
 	if err != nil {
@@ -274,7 +276,9 @@ func (uc *FriendUsecase) resolveApplyConflict(ctx context.Context, callerID, tar
 	return nil, ErrFriendAlreadyApplied
 }
 
-// Accept 接受申请。callerID 是操作者 ID，requestID 是申请记录的主键。
+// Accept 接受申请。
+// callerID 操作者 ID
+// requestID 申请记录的主键
 // callerID 必须是 PENDING 的目标方，否则折叠 PENDING_NOT_FOUND 或 NOT_RECIPIENT。
 func (uc *FriendUsecase) Accept(ctx context.Context, callerID string, requestID uint64) (*Friend, error) {
 	if uc.repo == nil {
@@ -313,7 +317,9 @@ func (uc *FriendUsecase) Accept(ctx context.Context, callerID string, requestID 
 	return nil, ErrFriendPendingNotFound
 }
 
-// Reject 拒绝申请。callerID 是操作者 ID，requestID 是申请记录的主键。鉴权同 Accept。
+// Reject 拒绝申请。
+// callerID 操作者 ID
+// requestID 申请记录的主键。鉴权同 Accept
 func (uc *FriendUsecase) Reject(ctx context.Context, callerID string, requestID uint64) error {
 	if uc.repo == nil {
 		return ErrFriendInternal
@@ -349,7 +355,9 @@ func (uc *FriendUsecase) Reject(ctx context.Context, callerID string, requestID 
 	return ErrFriendPendingNotFound
 }
 
-// Remove 删好友。callerID 是操作者 ID，friendID 是对方 ID，任意一方调用皆可。
+// Remove 删好友。
+// callerID 操作者 ID
+// friendID 对方 ID，任意一方调用皆可
 func (uc *FriendUsecase) Remove(ctx context.Context, callerID, friendID string) error {
 	if uc.repo == nil {
 		return ErrFriendInternal
@@ -374,9 +382,10 @@ func (uc *FriendUsecase) Remove(ctx context.Context, callerID, friendID string) 
 	return nil
 }
 
-// List 列出 caller 的所有 ACCEPTED 好友，cursor 分页。callerID 是操作者 ID，
-// cursor 是上一页末位 ID，limit 是每页条数。
-// 好友关系只存单条记录，每条记录的「对方」归一化到 FriendID。
+// List 列出 caller 的所有 ACCEPTED 好友。
+// callerID 操作者 ID
+// cursor 上一页末位 ID
+// limit 每页条数
 // limit <= 0 走默认 50，末位 ID 即 next_cursor。
 func (uc *FriendUsecase) List(ctx context.Context, callerID string, cursor uint64, limit int) ([]*Friend, uint64, error) {
 	if uc.repo == nil {
@@ -416,10 +425,9 @@ func (uc *FriendUsecase) List(ctx context.Context, callerID string, cursor uint6
 	return out, nextCursor, nil
 }
 
-// normalizePeer 把记录的「对方」归一化到 FriendID，返回副本（不改原对象）。
+// normalizePeer 把记录的「对方」归一化到 FriendID，返回副本。
 // f 原记录
 // callerID 操作者 ID
-// 好友关系只存单条记录，caller 落在哪一列取决于谁先发起。
 func normalizePeer(f *Friend, callerID string) *Friend {
 	if f == nil {
 		return nil
@@ -434,9 +442,10 @@ func normalizePeer(f *Friend, callerID string) *Friend {
 }
 
 // ListPendingRequests 收件箱列表——caller 作为目标方收到的 PENDING 申请。
-// callerID 是操作者 ID，cursor 是上一页末位 ID，limit 是每页条数。
-// 返回的 Friend.FriendID 这里指「申请发起方」，service 层照常填到 FriendInfo.friend_id。
-// limit <= 0 走默认 50。
+// callerID 操作者 ID
+// cursor 上一页末位 ID
+// limit 每页条数。limit <= 0 走默认 50
+// 返回的 Friend.FriendID 指「申请发起方」。
 func (uc *FriendUsecase) ListPendingRequests(ctx context.Context, callerID string, cursor uint64, limit int) ([]*Friend, uint64, error) {
 	if uc.repo == nil {
 		return nil, 0, ErrFriendInvalidArgument
@@ -483,11 +492,10 @@ func (uc *FriendUsecase) CountPending(ctx context.Context, callerID string) (uin
 	return uc.repo.CountPendingByRecipientID(ctx, callerID)
 }
 
-// fillProfiles 按 friend_id 把资料写回好友列表，原地写入 Profile 字段。
+// fillProfiles 按 friend_id 把资料原地写回好友列表的 Profile 字段。
 // fetcher 拉资料的依赖
 // callerID 操作者 ID
-// friends 待补全的记录
-// 整批 err 降级；单条缺省静默。
+// friends 待补全的记录。整批 err 降级
 func fillProfiles(ctx context.Context, fetcher FriendProfileFetcher, callerID string, friends []*Friend) error {
 	if fetcher == nil || len(friends) == 0 {
 		return nil

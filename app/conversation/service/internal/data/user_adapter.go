@@ -7,21 +7,18 @@ import (
 	"chatroom/app/conversation/service/internal/biz"
 )
 
-// ConversationAdapter 把 RemoteUserClient 适配成 biz.ConversationProfileFetcher。
-// 集中处理 proto ↔ DO 转换。cli 为 nil 时透传「无可用下游」。
+// ConversationAdapter 把 RemoteUserClient 适配成 biz.ConversationProfileFetcher，集中处理 proto ↔ DO 转换。
+// cli 为 nil 时透传「无可用下游」。
 type ConversationAdapter struct {
 	cli RemoteUserClient
 }
 
-// NewConversationAdapter wire 注入 RemoteUserClient。
-// cli 远程用户客户端
-// nil 时仍可用。
+// NewConversationAdapter wire 注入 RemoteUserClient。cli 是远程用户客户端，为 nil 时仍可用。
 func NewConversationAdapter(cli RemoteUserClient) *ConversationAdapter {
 	return &ConversationAdapter{cli: cli}
 }
 
-// FetchProfiles 把 GetConversationMemberProfiles 结果折成 []*biz.UserProfile。
-// ids 是要查的用户 ID 列表。整批 err 透传，由 biz 走降级。
+// FetchProfiles 把 GetConversationMemberProfiles 结果折成 []*biz.UserProfile。ids 是要查的用户 ID 列表，整批 err 透传给 biz。
 func (a *ConversationAdapter) FetchProfiles(ctx context.Context, ids []string) ([]*biz.UserProfile, error) {
 	if a == nil || a.cli == nil {
 		return nil, nil
@@ -44,8 +41,7 @@ func (a *ConversationAdapter) FetchProfiles(ctx context.Context, ids []string) (
 	return out, nil
 }
 
-// CheckUsersExist 返回 ids 里不存在的 uid 列表。
-// 复用 GetConversationMemberProfiles —— 请求了但没回来的就是不存在。err 透传给 biz，biz 那边放行。
+// CheckUsersExist 返回 ids 里不存在的 uid 列表。请求了但没回来的就是不存在；err 透传给 biz 放行。
 func (a *ConversationAdapter) CheckUsersExist(ctx context.Context, ids []string) ([]string, error) {
 	if a == nil || a.cli == nil {
 		// 没有下游可用 —— 返错误让 biz 放行，而不是谎报「全部存在」。

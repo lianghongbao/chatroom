@@ -16,13 +16,14 @@ type ConversationService struct {
 	uc *biz.ConversationUsecase
 }
 
-// NewConversationService 构造 ConversationService。
-// uc 会话用例
+// NewConversationService 构造 ConversationService。uc 是会话用例。
 func NewConversationService(uc *biz.ConversationUsecase) *ConversationService {
 	return &ConversationService{uc: uc}
 }
 
-// CreateConversation 创建会话。req 是创建请求，调用方 uid 从 ctx 取。
+// CreateConversation 创建会话。
+// req 创建请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) CreateConversation(ctx context.Context, req *pb.CreateConversationRequest) (*pb.CreateConversationReply, error) {
 	if req == nil {
 		return nil, biz.ErrConversationInvalidArgument
@@ -50,7 +51,7 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req *pb.Cr
 }
 
 // conversationTypeFromDTO 把 proto 会话类型转成 biz 类型。
-// t proto 枚举值
+// t 是 proto 枚举值。
 func conversationTypeFromDTO(t pb.ConversationType) (biz.ConversationType, error) {
 	switch t {
 	case pb.ConversationType_CONVERSATION_TYPE_UNSPECIFIED:
@@ -65,8 +66,7 @@ func conversationTypeFromDTO(t pb.ConversationType) (biz.ConversationType, error
 	}
 }
 
-// ListConversations 列出调用方的所有会话。req 是列表请求，
-// cursor 是上一页游标（首页传空），pageSize 是每页条数。
+// ListConversations 列出调用方的所有会话。req 是列表请求，cursor 是上一页游标（首页传空），pageSize 是每页条数。
 func (s *ConversationService) ListConversations(ctx context.Context, req *pb.ListConversationsRequest) (*pb.ListConversationsReply, error) {
 	if req == nil {
 		return nil, biz.ErrConversationInvalidArgument
@@ -87,7 +87,9 @@ func (s *ConversationService) ListConversations(ctx context.Context, req *pb.Lis
 	return out, nil
 }
 
-// GetConversation 查会话详情。req 是查询请求，调用方 uid 从 ctx 取。
+// GetConversation 查会话详情。
+// req 查询请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) GetConversation(ctx context.Context, req *pb.GetConversationRequest) (*pb.GetConversationReply, error) {
 	if req == nil || req.GetId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -103,7 +105,9 @@ func (s *ConversationService) GetConversation(ctx context.Context, req *pb.GetCo
 	return &pb.GetConversationReply{Conversation: convertConversation(conv)}, nil
 }
 
-// AddMembers 往会话加成员。req 是加成员请求，调用方 uid 从 ctx 取。
+// AddMembers 往会话加成员。
+// req 加成员请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) AddMembers(ctx context.Context, req *pb.AddMembersRequest) (*pb.AddMembersReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -122,7 +126,9 @@ func (s *ConversationService) AddMembers(ctx context.Context, req *pb.AddMembers
 	return &pb.AddMembersReply{MemberCount: count, AddedCount: added}, nil
 }
 
-// RemoveMember 踢人。req 是踢人请求，调用方 uid 从 ctx 取。
+// RemoveMember 踢人。
+// req 踢人请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.RemoveMemberReply, error) {
 	if req == nil || req.GetConversationId() == 0 || req.GetMemberId() == "" {
 		return nil, biz.ErrConversationInvalidArgument
@@ -138,7 +144,9 @@ func (s *ConversationService) RemoveMember(ctx context.Context, req *pb.RemoveMe
 	return &pb.RemoveMemberReply{MemberCount: count}, nil
 }
 
-// LeaveConversation 主动退群。req 是退群请求，调用方 uid 从 ctx 取。
+// LeaveConversation 主动退群。
+// req 退群请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) LeaveConversation(ctx context.Context, req *pb.LeaveConversationRequest) (*pb.LeaveConversationReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -153,7 +161,9 @@ func (s *ConversationService) LeaveConversation(ctx context.Context, req *pb.Lea
 	return &pb.LeaveConversationReply{}, nil
 }
 
-// UpdateConversation 改会话名。req 是改名请求，调用方 uid 从 ctx 取。
+// UpdateConversation 改会话名。
+// req 改名请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) UpdateConversation(ctx context.Context, req *pb.UpdateConversationRequest) (*pb.UpdateConversationReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -169,7 +179,9 @@ func (s *ConversationService) UpdateConversation(ctx context.Context, req *pb.Up
 	return &pb.UpdateConversationReply{Conversation: convertConversation(conv)}, nil
 }
 
-// TransferOwner 转让群主。req 是转让请求，调用方 uid 从 ctx 取。
+// TransferOwner 转让群主。
+// req 转让请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) TransferOwner(ctx context.Context, req *pb.TransferOwnerRequest) (*pb.TransferOwnerReply, error) {
 	if req == nil || req.GetConversationId() == 0 || req.GetNewOwnerId() == "" {
 		return nil, biz.ErrConversationInvalidArgument
@@ -185,7 +197,9 @@ func (s *ConversationService) TransferOwner(ctx context.Context, req *pb.Transfe
 	return &pb.TransferOwnerReply{Conversation: convertConversation(conv)}, nil
 }
 
-// DissolveConversation 解散会话。req 是解散请求，调用方 uid 从 ctx 取。
+// DissolveConversation 解散会话。
+// req 解散请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) DissolveConversation(ctx context.Context, req *pb.DissolveConversationRequest) (*pb.DissolveConversationReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -200,7 +214,9 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req *pb.
 	return &pb.DissolveConversationReply{}, nil
 }
 
-// ListMembers 列会话成员。req 是列表请求，调用方 uid 从 ctx 取。
+// ListMembers 列会话成员。
+// req 列表请求
+// 调用方 uid 从 ctx 取。
 func (s *ConversationService) ListMembers(ctx context.Context, req *pb.ListMembersRequest) (*pb.ListMembersReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -223,8 +239,7 @@ func (s *ConversationService) ListMembers(ctx context.Context, req *pb.ListMembe
 	return out, nil
 }
 
-// CheckMembership 查某用户是不是会话成员。req 是查询请求，
-// userId 是被查的用户 ID。
+// CheckMembership 查某用户是不是会话成员。req 是查询请求，userId 是被查的用户 ID。
 func (s *ConversationService) CheckMembership(ctx context.Context, req *pb.CheckMembershipRequest) (*pb.CheckMembershipReply, error) {
 	if req == nil || req.GetConversationId() == 0 || req.GetUserId() == "" {
 		return nil, biz.ErrConversationInvalidArgument
@@ -236,8 +251,7 @@ func (s *ConversationService) CheckMembership(ctx context.Context, req *pb.Check
 	return &pb.CheckMembershipReply{IsMember: isMember}, nil
 }
 
-// UpdateUnread 增减某成员的会话级未读数。req 是请求，
-// delta 是增减量（负数表示减少）。
+// UpdateUnread 增减某成员的会话级未读数。req 是请求，delta 是增减量（负数表示减少）。
 func (s *ConversationService) UpdateUnread(ctx context.Context, req *pb.UpdateUnreadRequest) (*pb.UpdateUnreadReply, error) {
 	if req == nil || req.GetConversationId() == 0 || req.GetUserId() == "" {
 		return nil, biz.ErrConversationInvalidArgument
@@ -250,7 +264,8 @@ func (s *ConversationService) UpdateUnread(ctx context.Context, req *pb.UpdateUn
 }
 
 // UpdateUnreadBatch 批量增减多个成员的会话级未读数，返回成功更新的成员数。
-// req 是请求，delta 是增减量。消息服务发消息后的 fan-out 用它。
+// req 请求
+// delta 增减量；消息服务发消息后的 fan-out 用它。
 func (s *ConversationService) UpdateUnreadBatch(ctx context.Context, req *pb.UpdateUnreadBatchRequest) (*pb.UpdateUnreadBatchReply, error) {
 	if req == nil || req.GetConversationId() == 0 || len(req.GetUserIds()) == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -301,8 +316,7 @@ func (s *ConversationService) ListUnread(ctx context.Context, req *pb.ListUnread
 	return &pb.ListUnreadReply{PerConversation: per}, nil
 }
 
-// ListConversationMembers 列出会话的全部成员（服务间内部接口）。
-// req 是查询请求。
+// ListConversationMembers 列出会话的全部成员（服务间内部接口）。req 是查询请求。
 func (s *ConversationService) ListConversationMembers(ctx context.Context, req *pb.ListConversationMembersRequest) (*pb.ListConversationMembersReply, error) {
 	if req == nil || req.GetConversationId() == 0 {
 		return nil, biz.ErrConversationInvalidArgument
@@ -333,8 +347,7 @@ func (s *ConversationService) ListUserConversations(ctx context.Context, req *pb
 	return &pb.ListUserConversationsReply{ConversationIds: ids}, nil
 }
 
-// convertConversation 把 biz 会话转成 proto 会话信息。
-// c 领域模型
+// convertConversation 把 biz 会话转成 proto 会话信息。c 是领域模型。
 func convertConversation(c *biz.Conversation) *pb.ConversationInfo {
 	if c == nil {
 		return nil
@@ -363,7 +376,7 @@ func convertConversation(c *biz.Conversation) *pb.ConversationInfo {
 }
 
 // conversationTypeToDTO 把 biz 会话类型转成 proto 枚举。
-// t biz 类型
+// t 是 biz 类型。
 func conversationTypeToDTO(t biz.ConversationType) pb.ConversationType {
 	switch t {
 	case biz.ConversationTypeSingle:

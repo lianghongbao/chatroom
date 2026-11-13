@@ -11,8 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// ProviderSet 是 ws-gateway 的 data providers。
-// 网关不落库 —— 所以这里只有 Redis 客户端，没有 ent client、没有 repo。
+// ProviderSet 是 ws-gateway 的 data providers。网关不落库，只有 Redis 客户端。
 var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewRedisClient, NewSender, NewLister, NewRemoteConversationClient, NewMembershipAdapter, NewUnreadAdapter, NewMembersAdapter, NewMemberListerAdapter, NewUserConversationListerAdapter, NewRemoteMessageClient)
 
 // Data 持有 redis 长连接客户端。
@@ -20,9 +19,8 @@ type Data struct {
 	rdb *redis.Client
 }
 
-// NewData 打开 redis 客户端。
-// c 配置段
-// 返回的清理函数负责关闭客户端。
+// NewData 打开 redis 客户端，返回客户端与清理函数。
+// c 是配置段。
 func NewData(c *conf.Data) (*Data, func(), error) {
 	var rdb *redis.Client
 	if rc := c.GetRedis(); rc != nil && rc.GetAddr() != "" {
@@ -52,8 +50,7 @@ func NewRedisCmdable(d *Data) redis.Cmdable {
 	return d.Redis()
 }
 
-// NewRedisClient 暴露共享的 *redis.Client。
-// 网关用它订阅 Redis Pub/Sub —— PSubscribe 只在具体类型上有，redis.Cmdable 接口不含订阅方法。
+// NewRedisClient 暴露共享的 *redis.Client（redis.Cmdable 接口不含订阅方法）。
 func NewRedisClient(d *Data) *redis.Client {
 	return d.RedisClient()
 }
@@ -67,7 +64,6 @@ func (d *Data) Redis() redis.Cmdable {
 }
 
 // RedisClient 返回具体的 *redis.Client；可能为 nil。
-// 跟 Redis() 的区别：PSubscribe 只在 *redis.Client 上有。
 func (d *Data) RedisClient() *redis.Client {
 	if d == nil {
 		return nil

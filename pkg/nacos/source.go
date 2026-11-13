@@ -24,8 +24,7 @@ func WithGroup(group string) Option {
 	return func(o *options) { o.group = group }
 }
 
-// WithDataID 设置 nacos dataId。
-// dataID 配置项的 dataId
+// WithDataID 设置 nacos dataId。dataID 是配置项的 dataId。
 func WithDataID(dataID string) Option {
 	return func(o *options) { o.dataID = dataID }
 }

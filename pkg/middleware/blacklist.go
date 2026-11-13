@@ -15,13 +15,13 @@ type BlacklistChecker struct {
 }
 
 // NewBlacklistChecker 构造黑名单查询器。
-// rdb 为 nil 时恒放行
+// rdb 为 nil 时恒放行。
 func NewBlacklistChecker(rdb redis.Cmdable) *BlacklistChecker {
 	return &BlacklistChecker{rdb: rdb}
 }
 
 // blacklistKey 黑名单 key，与写入方共用。
-// jti token 的唯一标识
+// jti 是 token 的唯一标识。
 func blacklistKey(jti string) string {
 	return keys.TokenBlacklistKey(jti)
 }

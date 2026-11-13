@@ -19,7 +19,7 @@ func (f TokenVerifierFunc) Verify(raw string) (string, error) {
 
 // NewJWTVerifier 构造基于 JWT 的 token 校验器。
 // secret 签名密钥
-// issuer 签发方，为空时用 middleware 包的默认值
+// issuer 签发方（为空时用 middleware 包的默认值）
 // blacklist 登出黑名单查询器，为 nil 时不查黑名单，降级放行
 func NewJWTVerifier(secret, issuer string, blacklist middleware.TokenChecker) TokenVerifier {
 	return TokenVerifierFunc(func(raw string) (string, error) {
@@ -58,7 +58,7 @@ type errTokenBlacklistedType struct{}
 func (errTokenBlacklistedType) Error() string { return "token has been revoked" }
 
 // NewBlacklistCheckerFromRedis 用 Redis 构造黑名单查询器。
-// rdb 为 nil 时返 nil（查不了黑名单，降级放行）
+// rdb 为 nil 时返 nil（降级放行）。
 func NewBlacklistCheckerFromRedis(rdb *redis.Client) middleware.TokenChecker {
 	if rdb == nil {
 		return nil

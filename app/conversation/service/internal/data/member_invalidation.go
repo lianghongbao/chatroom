@@ -10,15 +10,14 @@ import (
 )
 
 // MemberInvalidationPublisher biz.MemberInvalidationPublisher 的 Redis Pub/Sub 实现。
-// 成员变了就通知 ws-gateway 失效本地成员缓存。
-// Pub/Sub 不持久化，网关没订阅时通知会丢，不影响正确性只影响时效。
+// 成员变了就通知 ws-gateway 失效本地成员缓存；通知会丢，只影响时效。
 type MemberInvalidationPublisher struct {
 	rdb redis.Cmdable
 }
 
 // NewMemberInvalidationPublisher 构造 publisher。
-// d data 客户端
-// Redis 不可用时返 nil（不发通知）。
+// d 是 data 客户端
+// Redis 不可用时返 nil。
 func NewMemberInvalidationPublisher(d *Data) *MemberInvalidationPublisher {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -38,8 +37,7 @@ func (p *MemberInvalidationPublisher) Publish(ctx context.Context, conversationI
 	return p.rdb.Publish(ctx, keys.MemberInvalidatedChannel(), payload).Err()
 }
 
-// MemberInvalidationPayload 成员变更通知的载荷。
-// 网关按 JSON 字段名解析 —— 两边靠字段名对齐。
+// MemberInvalidationPayload 成员变更通知的载荷，网关按 JSON 字段名解析。
 type MemberInvalidationPayload struct {
 	ConversationID uint64 `json:"conversation_id"`
 }

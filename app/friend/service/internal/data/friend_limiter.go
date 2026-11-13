@@ -11,9 +11,8 @@ import (
 )
 
 // FriendLimiter 是 biz.FriendLimiter 的 Redis 实现。
-// 固定窗口计数：key = "chatroom:friend:<op>:<callerID>"，每次 INCR +1，
-// 首次返回 1 时设窗口 TTL。计数 > limit 时返 ErrFriendRateLimited。
-// 降级：Redis 不可达一律放行并打 warn 日志。
+// 固定窗口计数：key = "chatroom:friend:<op>:<callerID>"，计数 > limit 时返 ErrFriendRateLimited。
+// Redis 不可达一律放行并打 warn 日志。
 type FriendLimiter struct {
 	rdb redis.Cmdable
 	// 每个动作的 (windowTTL, limit)：
@@ -41,9 +40,7 @@ var defaultFriendLimiter = struct {
 	removeLimit:       30,
 }
 
-// NewFriendLimiter 构造好友域频控。
-// d 数据层实例
-// 由 biz 层走 noop。返回 biz.FriendLimiter 接口，wire 无需再 Bind。
+// NewFriendLimiter 构造好友域频控。d 是数据层实例；Redis 不可用时返回 nil，由 biz 层走 noop。
 func NewFriendLimiter(d *Data) biz.FriendLimiter {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -59,9 +56,11 @@ func NewFriendLimiter(d *Data) biz.FriendLimiter {
 	}
 }
 
-// allow 是通用 INCR+EXPIRE 计数路径。key 是计数 key，ttl 是窗口长度，
-// limit 是窗口内允许的最大次数。返回 true 表示放行。
-// TTL 只在 INCR 返回 1 时设置；Redis err 一律降级放行。
+// allow 是通用 INCR+EXPIRE 计数路径。
+// key 计数 key
+// ttl 窗口长度
+// limit 窗口内允许的最大次数，返回 true 表示放行
+// Redis err 一律降级放行。
 func (l *FriendLimiter) allow(ctx context.Context, key string, ttl time.Duration, limit int32) bool {
 	if l == nil || l.rdb == nil {
 		return true
@@ -104,8 +103,7 @@ func (l *FriendLimiter) AllowRemove(ctx context.Context, callerID string) error 
 	return nil
 }
 
-// applyKey 返回 chatroom:friend:apply:<callerID>。callerID 为空时用占位符，
-// 上游 biz 已校验过，这里再兜一次。
+// applyKey 返回 chatroom:friend:apply:<callerID>。callerID 为空时用占位符。
 func (l *FriendLimiter) applyKey(callerID string) string {
 	if callerID == "" {
 		return "chatroom:friend:apply:_zero_"

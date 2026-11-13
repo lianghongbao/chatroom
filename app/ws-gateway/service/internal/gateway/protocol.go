@@ -116,29 +116,25 @@ func EncodeOnlineFrame(userID string, online bool) []byte {
 	return b
 }
 
-// EncodeMessageFrame 编一个消息帧。
-// d 消息内容
+// EncodeMessageFrame 编一个消息帧。d 是消息内容。
 func EncodeMessageFrame(d *MessageData) []byte {
 	b, _ := EncodeServerFrame(FrameMessage, d)
 	return b
 }
 
-// EncodeAckFrame 编一个 ack 帧。
-// d 落库后的消息 id 与时间
+// EncodeAckFrame 编一个 ack 帧。d 是落库后的消息 id 与时间。
 func EncodeAckFrame(d *AckData) []byte {
 	b, _ := EncodeServerFrame(FrameAck, d)
 	return b
 }
 
-// EncodeResumeResultFrame 编一个断线重连结果帧。
-// d 补消息的结果
+// EncodeResumeResultFrame 编一个断线重连结果帧。d 是补消息的结果。
 func EncodeResumeResultFrame(d *ResumeData) []byte {
 	b, _ := EncodeServerFrame(FrameResumeResult, d)
 	return b
 }
 
-// DecodeClientFrame 解析客户端上行帧。
-// payload 原始帧内容
+// DecodeClientFrame 解析客户端上行帧。payload 是原始帧内容。
 func DecodeClientFrame(payload []byte) (*ClientFrame, error) {
 	var f ClientFrame
 	if err := json.Unmarshal(payload, &f); err != nil {
@@ -147,8 +143,7 @@ func DecodeClientFrame(payload []byte) (*ClientFrame, error) {
 	return &f, nil
 }
 
-// messageChannel 会话对应的 Pub/Sub 频道名。
-// conversationID 会话 ID
+// messageChannel 会话对应的 Pub/Sub 频道名。conversationID 是会话 ID。
 func messageChannel(conversationID uint64) string {
 	return keys.MessageChannel(conversationID)
 }

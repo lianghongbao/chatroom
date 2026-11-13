@@ -13,15 +13,14 @@ type userRepo struct {
 	data *Data
 }
 
-// NewUserRepo 构造 biz.UserRepo 的 ent 实现。
-// data 共享的存储客户端
+// NewUserRepo 构造 biz.UserRepo 的 ent 实现。data 是共享的存储客户端。
 func NewUserRepo(data *Data) biz.UserRepo {
 	return &userRepo{data: data}
 }
 
 // toBizUser ent.User PO → biz.User DO。
 // po ent 记录
-// clearHash 为 true 时清掉 PasswordHash
+// clearHash true 时清掉 PasswordHash
 func toBizUser(po *ent.User, clearHash bool) *biz.User {
 	if po == nil {
 		return nil
@@ -67,8 +66,7 @@ func (r *userRepo) Save(ctx context.Context, u *biz.User) (string, error) {
 	return po.ID, nil
 }
 
-// FindByID 按主键查用户。id 是用户 ID；找不到返 ErrUserNotFound；
-// 返回的 DO PasswordHash 已清空。
+// FindByID 按主键查用户。id 是用户 ID；找不到返 ErrUserNotFound；返回的 DO PasswordHash 已清空。
 func (r *userRepo) FindByID(ctx context.Context, id string) (*biz.User, error) {
 	po, err := r.data.db.User.Get(ctx, id)
 	if err != nil {
@@ -80,8 +78,7 @@ func (r *userRepo) FindByID(ctx context.Context, id string) (*biz.User, error) {
 	return toBizUser(po, true), nil
 }
 
-// FindByIDWithHash 按主键查用户，保留 PasswordHash。id 是用户 ID；
-// 找不到返 ErrUserNotFound。改密要拿哈希跟旧密码比对，所以这里不清哈希。
+// FindByIDWithHash 按主键查用户，保留 PasswordHash。id 是用户 ID；找不到返 ErrUserNotFound。
 func (r *userRepo) FindByIDWithHash(ctx context.Context, id string) (*biz.User, error) {
 	po, err := r.data.db.User.Get(ctx, id)
 	if err != nil {
@@ -94,7 +91,7 @@ func (r *userRepo) FindByIDWithHash(ctx context.Context, id string) (*biz.User, 
 }
 
 // FindByUsername 按用户名查用户。username 是用户名；找不到返 ErrUserNotFound；
-// 返回的 DO 保留 PasswordHash（供 Login 的 bcrypt 比对）。
+// 返回的 DO 保留 PasswordHash。
 func (r *userRepo) FindByUsername(ctx context.Context, username string) (*biz.User, error) {
 	po, err := r.data.db.User.Query().Where(user.UsernameEQ(username)).Only(ctx)
 	if err != nil {
@@ -124,14 +121,17 @@ func (r *userRepo) FindByIDs(ctx context.Context, ids []string) ([]*biz.User, er
 	return out, nil
 }
 
-// Update 全量更新资料，内部走 UpdateFields（兼容老调用方）。
-// id 是用户 ID，nickname 是昵称，avatar 是头像地址。
+// Update 全量更新资料，内部走 UpdateFields。
+// id 用户 ID
+// nickname 昵称
+// avatar 头像地址
 func (r *userRepo) Update(ctx context.Context, id string, nickname, avatar string) (*biz.User, error) {
 	return r.UpdateFields(ctx, id, biz.UserUpdateFields{Nickname: &nickname, Avatar: &avatar})
 }
 
-// UpdateFields 字段粒度更新。id 是用户 ID，fields 是待改字段集合；
-// 只 Set 指针非 nil 的字段，ent 的 SetXxx 未调用即不改该列。
+// UpdateFields 字段粒度更新。
+// id 用户 ID
+// fields 待改字段集合；只 Set 指针非 nil 的字段
 func (r *userRepo) UpdateFields(ctx context.Context, id string, fields biz.UserUpdateFields) (*biz.User, error) {
 	upd := r.data.db.User.UpdateOneID(id)
 	if fields.Nickname != nil {
@@ -150,8 +150,9 @@ func (r *userRepo) UpdateFields(ctx context.Context, id string, fields biz.UserU
 	return toBizUser(po, true), nil
 }
 
-// UpdatePassword 单独写 password_hash 列。id 是用户 ID，newHash 是新的 bcrypt 哈希；
-// 改密不与 UpdateFields 共路径，语义隔离。
+// UpdatePassword 单独写 password_hash 列。
+// id 用户 ID
+// newHash 新的 bcrypt 哈希
 func (r *userRepo) UpdatePassword(ctx context.Context, id string, newHash string) error {
 	_, err := r.data.db.User.UpdateOneID(id).SetPasswordHash(newHash).Save(ctx)
 	if err != nil {
@@ -163,7 +164,10 @@ func (r *userRepo) UpdatePassword(ctx context.Context, id string, newHash string
 	return nil
 }
 
-// UpdateStatus 改账号状态。id 是用户 ID，status 是目标状态；找不到返 ErrUserNotFound。
+// UpdateStatus 改账号状态。
+// id 用户 ID
+// status 目标状态
+// 找不到返 ErrUserNotFound
 func (r *userRepo) UpdateStatus(ctx context.Context, id string, status biz.UserStatus) error {
 	_, err := r.data.db.User.UpdateOneID(id).SetStatus(uint8(status)).Save(ctx)
 	if err != nil {

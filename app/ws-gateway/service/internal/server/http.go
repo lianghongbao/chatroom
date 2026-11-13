@@ -16,7 +16,6 @@ import (
 // c 服务配置
 // obs 观测能力
 // gw 网关
-// handler WS 升级 handler
 func NewHTTPServer(c *conf.Server, obs *observability.Provider, gw *gateway.Server) *khttp.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),

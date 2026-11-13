@@ -45,6 +45,13 @@ func init() {
 	flag.StringVar(&flagbootstrap, "bootstrap", "configs/bootstrap.yaml", "bootstrap config path, eg: -bootstrap bootstrap.yaml")
 }
 
+// newApp 组装 kratos 应用。
+// logger 带服务属性的 logger
+// hs HTTP server
+// lc 网关的后台任务（Redis 订阅 / 空闲连接清理）
+// reg nacos 注册器
+// regCfg registry 配置段，用于读 ServiceName
+// obs 观测能力，用于停机时关 exporter
 func newApp(
 	logger *slog.Logger,
 	hs *http.Server,

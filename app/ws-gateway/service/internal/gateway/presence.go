@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// Presence 在线状态查询。
-// 分两层：全局在线（Redis 的 online:{uid}，跨实例可见）和本实例在线（连接池里查得到）。
+// Presence 在线状态查询：全局在线（Redis 的 online:{uid}）与本实例在线（连接池）。
 type Presence struct {
 	// online 全局在线状态。
 	online *OnlineReporter
@@ -22,9 +21,9 @@ type Presence struct {
 const defaultPresenceTimeout = 500 * time.Millisecond
 
 // NewPresence 构造 Presence。
-// online 在线状态上报器，为 nil 时在线查询不可用
-// pool 连接池，为 nil 时连接查询不可用
-// members 成员缓存，为 nil 时成员查询不可用
+// online 在线状态上报器
+// pool 连接池
+// members 成员缓存，三者为 nil 时对应查询不可用
 func NewPresence(online *OnlineReporter, pool *Pool, members *MemberCache) *Presence {
 	return &Presence{
 		online:  online,
@@ -71,7 +70,7 @@ func (p *Presence) Status(ctx context.Context, userID string) UserStatus {
 }
 
 // ConversationStatus 查一个会话里各成员的在线状态，conversationID 是会话 ID。
-// 返 nil 表示查不了（成员列表拿不到）—— 跟「没人在线」要区分开。
+// 返 nil 表示查不了（成员列表拿不到），跟「没人在线」区分开。
 func (p *Presence) ConversationStatus(ctx context.Context, conversationID uint64) ([]UserStatus, error) {
 	if p == nil || p.members == nil {
 		return nil, nil
@@ -95,8 +94,7 @@ type PresenceData struct {
 	Members map[string]bool `json:"members"`
 }
 
-// EncodePresenceFrame 编一个会话级在线状态帧。
-// statuses 各成员的在线状态
+// EncodePresenceFrame 编一个会话级在线状态帧。statuses 是各成员的在线状态。
 func EncodePresenceFrame(statuses []UserStatus) []byte {
 	members := make(map[string]bool, len(statuses))
 	for _, s := range statuses {
@@ -111,9 +109,9 @@ func EncodePresenceFrame(statuses []UserStatus) []byte {
 }
 
 // NotifyOnlineStateChange 通知会话同伴「某人的在线状态变了」。
-// userID 是状态变化的用户，online 是变化后的状态。
-// 流程：查出这个人在哪些会话 → 每个会话取出其它成员 → 推 online 帧。
-// 返回推给了几个人。出错只记日志不返回错误。
+// userID 状态变化的用户
+// online 变化后的状态
+// 返回推给了几个人，出错只记日志
 func (s *Server) NotifyOnlineStateChange(userID string, online bool) int {
 	if s == nil || s.pool == nil || s.presence == nil {
 		return 0

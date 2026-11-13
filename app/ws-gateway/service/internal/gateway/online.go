@@ -7,8 +7,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// OnlineReporter 在线状态上报（Redis）。`online:{uid}` 的值 = 网关实例 ID，
-// TTL 随心跳续期。存 Redis 是为了多实例下也能看到全局在线状态。
+// OnlineReporter 在线状态上报（Redis）。`online:{uid}` 的值 = 网关实例 ID，TTL 随心跳续期。
 type OnlineReporter struct {
 	rdb        redis.Cmdable
 	instanceID string
@@ -39,7 +38,6 @@ func (r *OnlineReporter) MarkOnline(ctx context.Context, userID string) {
 }
 
 // MarkOffline 标记用户离线，userID 是用户 ID。
-// 只有当 Redis 里记的还是本实例时才删 —— 用户可能同时连着另一个实例。
 func (r *OnlineReporter) MarkOffline(ctx context.Context, userID string) {
 	if r == nil || r.rdb == nil {
 		return
@@ -70,8 +68,7 @@ func (r *OnlineReporter) IsOnline(ctx context.Context, userID string) bool {
 	return n > 0
 }
 
-// onlineKey 在线状态的 Redis key。
-// userID 用户 ID
+// onlineKey 在线状态的 Redis key。userID 是用户 ID。
 func onlineKey(userID string) string {
 	return "online:" + userID
 }

@@ -7,8 +7,7 @@ import (
 	"chatroom/pkg/observability"
 )
 
-// NewConfig 把 conf.Observability 翻译成 observability.Config。
-// o 观测配置段
+// NewConfig 把 conf.Observability 翻译成 observability.Config。o 是观测配置段。
 func NewConfig(o *conf.Observability) *observability.Config {
 	if o == nil {
 		return nil

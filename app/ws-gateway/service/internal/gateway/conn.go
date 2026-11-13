@@ -9,8 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Connection 一条 WebSocket 连接。
-// 并发模型：单写者 —— 只有写协程能调 WriteMessage，其它协程通过 Send 往队列塞。
+// Connection 一条 WebSocket 连接。单写者 —— 只有写协程能调 WriteMessage，其它协程通过 Send 往队列塞。
 type Connection struct {
 	UserID string
 	Token  string // 握手时带的 JWT，转发消息到 message 服务时要用
@@ -43,8 +42,7 @@ func NewConnection(ws *websocket.Conn, userID string, token string, sendQueueSiz
 	return c
 }
 
-// Send 往写队列里塞一条消息，payload 是待下发的帧内容。
-// 队列满时丢弃最老的一条再塞新的；返回 false 表示连接已关闭。
+// Send 往写队列里塞一条消息，payload 是待下发的帧内容；返回 false 表示连接已关闭。
 func (c *Connection) Send(payload []byte) bool {
 	select {
 	case <-c.closed:

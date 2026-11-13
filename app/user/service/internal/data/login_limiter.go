@@ -52,7 +52,8 @@ func NewLoginLimiter(d *Data, auth *conf.Auth) biz.LoginLimiter {
 }
 
 // Allow 检查 username 在这个 IP 上是否被锁定；命中返 ErrUserLoginLocked。
-// username 是用户名，clientIP 是调用方 IP。Redis 错降级放行。
+// username 用户名
+// clientIP 调用方 IP；Redis 错降级放行
 func (l *loginLimiter) Allow(ctx context.Context, username, clientIP string) error {
 	if l == nil || l.rdb == nil {
 		return nil
@@ -71,7 +72,9 @@ func (l *loginLimiter) Allow(ctx context.Context, username, clientIP string) err
 }
 
 // OnFailure 累加失败计数；首次失败设 TTL；达到阈值置锁定标记。
-// username 是用户名，clientIP 是调用方 IP。错误仅 warn，不阻断流程。
+// username 用户名
+// clientIP 调用方 IP
+// 错误仅 warn，不阻断流程
 func (l *loginLimiter) OnFailure(ctx context.Context, username, clientIP string) {
 	if l == nil || l.rdb == nil {
 		return
@@ -96,7 +99,9 @@ func (l *loginLimiter) OnFailure(ctx context.Context, username, clientIP string)
 }
 
 // OnSuccess 清掉失败计数与锁定标记；DEL 返 0 也算成功。
-// username 是用户名，clientIP 是调用方 IP。错误仅 warn，不阻断登录流程。
+// username 用户名
+// clientIP 调用方 IP
+// 错误仅 warn，不阻断登录流程
 func (l *loginLimiter) OnSuccess(ctx context.Context, username, clientIP string) {
 	if l == nil || l.rdb == nil {
 		return

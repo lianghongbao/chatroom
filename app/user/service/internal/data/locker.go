@@ -17,9 +17,7 @@ type Locker struct {
 	rdb redis.Cmdable
 }
 
-// NewLocker 构造 biz.Locker 的 Redis 实现。
-// d 存储客户端
-// Redis 不可用时返 nil（不加锁）。
+// NewLocker 构造 biz.Locker 的 Redis 实现。d 是存储客户端；Redis 不可用时返 nil（不加锁）。
 func NewLocker(d *Data) *Locker {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -27,8 +25,10 @@ func NewLocker(d *Data) *Locker {
 	return &Locker{rdb: d.Redis()}
 }
 
-// Acquire 取 key 的互斥锁。key 是业务侧的 key，ttl 是锁的存活时间；
-// 拿不到时返 (nil, errLockBusy)。TTL 必须覆盖临界区的最坏耗时。
+// Acquire 取 key 的互斥锁。
+// key 业务侧的 key
+// ttl 锁的存活时间（必须覆盖临界区最坏耗时）
+// 拿不到时返 (nil, errLockBusy)。
 func (l *Locker) Acquire(ctx context.Context, key string, ttl time.Duration) (biz.Release, error) {
 	if l == nil || l.rdb == nil {
 		return func() {}, nil
@@ -48,12 +48,10 @@ func (l *Locker) Acquire(ctx context.Context, key string, ttl time.Duration) (bi
 	}, nil
 }
 
-// errLockBusy 锁被他人持有。data 层不依赖 biz（biz 依赖 data），
-// 所以这里定义自己的错误，由 service / biz 层翻译成对外错误。
+// errLockBusy 锁被他人持有，由 service / biz 层翻译成对外错误。
 var errLockBusy = errors.New("lock is held by others")
 
-// lockKeyOf 锁的 redis key。
-// key 业务侧的 key
+// lockKeyOf 锁的 redis key。key 是业务侧的 key。
 func lockKeyOf(key string) string {
 	return keys.LockKey(key)
 }

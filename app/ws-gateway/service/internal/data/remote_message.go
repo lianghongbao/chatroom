@@ -32,10 +32,9 @@ type RemoteMessageClient interface {
 // 必须带 "discovery:///" 前缀和 ".grpc" 后缀，否则 gRPC 报 "produced zero addresses"。
 const RemoteMessageEndpoint = "discovery:///chatroom-message.grpc"
 
-// NewRemoteMessageClient 构造 RemoteMessageClient。
+// NewRemoteMessageClient 构造 RemoteMessageClient，超时 2s。
 // discoverer 服务发现器，为 nil 时返 noop
 // obs 观测能力
-// 超时 2s。
 func NewRemoteMessageClient(discoverer registry.Discovery, obs *observability.Provider) (RemoteMessageClient, func(), error) {
 	if discoverer == nil {
 		return &noopRemoteMessageClient{}, func() {}, nil
@@ -62,8 +61,11 @@ type remoteMessageGRPCClient struct {
 	cli messagev1.MessageClient
 }
 
-// SendMessage 发消息。token 是发起方的用户 JWT，conversationID 是会话 ID，
-// typ 是消息类型，content 是消息内容。
+// SendMessage 发消息。
+// token 发起方的用户 JWT
+// conversationID 会话 ID
+// typ 消息类型
+// content 消息内容
 func (c *remoteMessageGRPCClient) SendMessage(ctx context.Context, token string, conversationID uint64, typ uint8, content string) (*messagev1.MessageInfo, error) {
 	req := &messagev1.SendMessageRequest{
 		ConversationId: conversationID,
@@ -77,8 +79,11 @@ func (c *remoteMessageGRPCClient) SendMessage(ctx context.Context, token string,
 	return reply.GetMessage(), nil
 }
 
-// ListMessages 拉历史消息。token 是发起方的用户 JWT，conversationID 是会话 ID，
-// cursor 为 0 表示从最新开始，limit 是单页条数。
+// ListMessages 拉历史消息。
+// token 发起方的用户 JWT
+// conversationID 会话 ID
+// cursor 0 表示从最新开始
+// limit 单页条数
 func (c *remoteMessageGRPCClient) ListMessages(ctx context.Context, token string, conversationID uint64, cursor uint64, limit int32) ([]*messagev1.MessageInfo, uint64, error) {
 	req := &messagev1.ListMessagesRequest{
 		ConversationId: conversationID,
@@ -93,8 +98,10 @@ func (c *remoteMessageGRPCClient) ListMessages(ctx context.Context, token string
 }
 
 // ListMessagesSince 拉「比某个 id 更新的」消息，按 id 正序。
-// token 是发起方的用户 JWT，conversationID 是会话 ID，sinceID 为基准消息 id，
-// limit 是单页条数。
+// token 发起方的用户 JWT
+// conversationID 会话 ID
+// sinceID 基准消息 id
+// limit 单页条数
 func (c *remoteMessageGRPCClient) ListMessagesSince(ctx context.Context, token string, conversationID, sinceID uint64, limit int32) ([]*messagev1.MessageInfo, uint64, bool, error) {
 	req := &messagev1.ListMessagesSinceRequest{
 		ConversationId: conversationID,
@@ -119,7 +126,6 @@ func messageTypeFromUint8(t uint8) messagev1.MessageType {
 }
 
 // withToken 把 token 放进出站 metadata 的 Authorization 头。token 是用户 JWT。
-// 网关是替用户转发请求，token 得原样带过去 —— message 服务靠它识别发消息的人。
 func withToken(ctx context.Context, token string) context.Context {
 	if token == "" {
 		return ctx
