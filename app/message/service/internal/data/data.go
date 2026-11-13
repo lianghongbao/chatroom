@@ -25,7 +25,7 @@ var ProviderSet = wire.NewSet(
 	NewMembershipAdapter, NewUnreadAdapter, NewMemberListerAdapter,
 )
 
-// NewRedisCmdable 暴露共享的 redis.Cmdable。
+// NewRedisCmdable 暴露共享的 redis.Cmdable。d 是共享的数据客户端。
 func NewRedisCmdable(d *Data) redis.Cmdable {
 	return d.Redis()
 }
@@ -38,7 +38,9 @@ type Data struct {
 	rdb   *redis.Client
 }
 
-// NewData 打开 db / redis 客户端。Redis 缺配置时 rdb 为 nil，下游降级；启动期不 PING 避免阻塞上线。
+// NewData 打开 db / redis 客户端。c 是本服务的数据配置段。
+// Redis 缺配置时 rdb 为 nil，下游降级；启动期不 PING 避免阻塞上线。
+// 返回 (Data, 清理函数, 错误)。
 func NewData(c *conf.Data) (*Data, func(), error) {
 	dc := c.GetDatabase()
 	if dc == nil {
@@ -99,7 +101,8 @@ func (d *Data) Redis() redis.Cmdable {
 	return d.rdb
 }
 
-// durationOf 把 proto duration 转成 time.Duration。nil 返 0 —— 0 表示「不设超时」。
+// durationOf 把 proto duration 转成 time.Duration。d 是配置里的时长。
+// nil 返 0 —— 0 表示「不设超时」。
 func durationOf(d *durationpb.Duration) time.Duration {
 	if d == nil {
 		return 0

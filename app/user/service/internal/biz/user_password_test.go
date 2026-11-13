@@ -11,7 +11,6 @@ import (
 )
 
 // TestChangePassword_RevokesRefreshToken 改密必须把 refresh token 一起撤销。
-//
 // 只拉黑 access token 的话，refresh token 还在 —— 拿着它还能换出新
 // access token，改密等于没改。
 func TestChangePassword_RevokesRefreshToken(t *testing.T) {
@@ -47,7 +46,6 @@ func TestChangePassword_RevokesRefreshToken(t *testing.T) {
 }
 
 // TestChangePassword_KeepsPasswordWhitespace 密码里的空格原样保留。
-//
 // 注册时用 " pass "，改密时必须拿 " pass " 去比 —— 中间任何一次 trim
 // 都会让老用户再也改不了密码。
 func TestChangePassword_KeepsPasswordWhitespace(t *testing.T) {
@@ -83,7 +81,7 @@ func TestLogin_PasswordWhitespaceRoundTrip(t *testing.T) {
 }
 
 // TestRegister_RejectsOverlongInputs 超长输入要在 biz 层就挡掉，
-// 不能再写进库（或者变成 500）。
+// 不能写进库（或者变成 500）。
 func TestRegister_RejectsOverlongInputs(t *testing.T) {
 	cases := []struct {
 		name     string

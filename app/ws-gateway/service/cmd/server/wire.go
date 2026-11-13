@@ -29,19 +29,19 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		// 网关不需要业务用例层 —— 它只维护连接 + 转发。
 		gateway.ProviderSet,
 		// nacos：注册本实例 + 发现下游服务。
-		// 三个 provider 共用同一个 naming client（pkg/nacos.NewNamingClient 产出的
-		// 那一个）—— 注册和发现必须是同一个 client，否则两边状态会不一致。
+		// 三个 provider 共用同一个 naming client —— 注册和发现必须是同一个
+		// client，否则两边状态会不一致。
 		nacos.NewNamingClient,
 		nacos.NewRegistrar,
 		nacos.NewDiscovery,
-		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options
+		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options。
 		conf.NacosOptions,
 		// 把 *conf.Bootstrap 的子字段暴露为独立 provider，让各层的构造函数
 		// 能直接收到自己需要的 proto 段
 		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability"),
 		// 观测能力：conf.Observability → observability.Config → *observability.Provider。
-		// Provider 构造时即注册 otel 全局 provider，所以 wire 会在建 server 之前先建它 ——
-		// server 依赖 *Provider，依赖关系保证了顺序。
+		// Provider 构造时即注册 otel 全局 provider，server 依赖 *Provider，
+		// 依赖关系保证了它先于 server 建好。
 		obs.NewConfig,
 		pkgobs.NewPromRegistry,
 		pkgobs.New,

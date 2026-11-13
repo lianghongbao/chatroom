@@ -21,10 +21,8 @@ CONTRACTS := user friend conversation message
 
 .PHONY: api
 # 重新生成全部契约代码（grpc stub / http stub / openapi.yaml）
-#
-# 走 api/gen.sh —— 用 protoc 而不是 buf，因为契约 proto 要 import
-# 仓库根的 third_party/google/api/，而 buf v2 的 module 根是单一目录，
-# 跨目录引用不了。protoc 原生支持多个 --proto_path。
+# 走 api/gen.sh —— 用 protoc 而不是 buf，契约 proto 要 import 仓库根的
+# third_party/google/api/，而 buf v2 的 module 根是单一目录，跨目录引用不了。
 api:
 	@for d in $(CONTRACTS); do \
 		echo "=== api/$$d/service ==="; \

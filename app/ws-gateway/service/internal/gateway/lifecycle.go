@@ -18,31 +18,29 @@ type Lifecycle struct {
 	// subDone 通知订阅协程退出。
 	subDone chan struct{}
 	// subClose 保证 subDone 只被关一次。
-	//
-	// 协程的 defer 和 Stop() 都会关它 —— 两个地方都会执行到，
-	// 关两次同一个 channel 会 panic。
+	// 协程的 defer 和 Stop() 都会关它 —— 关两次同一个 channel 会 panic。
 	subClose sync.Once
 	// started 是否已 Start。防止重复 Start。
 	started bool
 }
 
-// NewLifecycle 构造 Lifecycle。subscriber 为 nil 时不订阅。
+// NewLifecycle 构造 Lifecycle，gw 是网关，subscriber 为 nil 时不订阅。
 func NewLifecycle(gw *Server, subscriber *Subscriber) *Lifecycle {
 	return &Lifecycle{gw: gw, subscriber: subscriber}
 }
 
-// NewLifecycleWithInvalidator 构造 Lifecycle，同时挂上成员失效通知的订阅器。
+// NewLifecycleWithInvalidator 构造 Lifecycle，invalidator 是成员失效通知的订阅器。
 func NewLifecycleWithInvalidator(gw *Server, subscriber *Subscriber, invalidator *InvalidatorSubscriber) *Lifecycle {
 	return &Lifecycle{gw: gw, subscriber: subscriber, invalidator: invalidator}
 }
 
-// WithInvalidator 挂上成员失效通知的订阅器。
+// WithInvalidator 挂上成员失效通知的订阅器，s 为 nil 时不订阅。
 func (l *Lifecycle) WithInvalidator(s *InvalidatorSubscriber) *Lifecycle {
 	l.invalidator = s
 	return l
 }
 
-// Start 启动后台任务。幂等 —— 重复调用只生效一次。
+// Start 启动后台任务，ctx 结束时应取消。幂等 —— 重复调用只生效一次。
 func (l *Lifecycle) Start(ctx context.Context) {
 	if l.started {
 		return
@@ -66,7 +64,7 @@ func (l *Lifecycle) Start(ctx context.Context) {
 	}
 }
 
-// runSubscriber 订阅直到 ctx 结束；订阅断了就退避后重连。
+// runSubscriber 订阅直到 ctx 结束；订阅断了就退避后重连。sub 为 nil 时直接返回。
 func (l *Lifecycle) runSubscriber(ctx context.Context, sub *Subscriber) {
 	if sub == nil {
 		return
@@ -86,10 +84,8 @@ func (l *Lifecycle) runSubscriber(ctx context.Context, sub *Subscriber) {
 		}
 
 		// 退避 —— 不管 Run 是正常返回还是报错，都要等一下再重连。
-		//
-		// 少了这一步就是热循环：订阅的 channel 干净关闭时 Run 返 nil
-		// （不是错误），循环立刻重来，每秒能空转几百万次，
-		// CPU 打满还疯狂打 Redis —— 恰好是 Redis 抖动时最需要它稳住的场景。
+		// 少了这一步就是热循环：订阅的 channel 干净关闭时 Run 返 nil（不是错误），
+		// 循环立刻重来，CPU 打满还疯狂打 Redis —— 恰好是 Redis 抖动时最需要它稳住的场景。
 		select {
 		case <-ctx.Done():
 			return
@@ -107,6 +103,7 @@ func (l *Lifecycle) runSubscriber(ctx context.Context, sub *Subscriber) {
 
 // closeSubDone 关闭 subDone，只关一次。
 func (l *Lifecycle) closeSubDone() {
+
 	l.subClose.Do(func() {
 		if l.subDone != nil {
 			close(l.subDone)
@@ -114,7 +111,7 @@ func (l *Lifecycle) closeSubDone() {
 	})
 }
 
-// Stop 关停：停止后台任务 + 关掉所有连接。
+// Stop 关停：停止后台任务并关掉所有连接。
 func (l *Lifecycle) Stop() {
 	if l.stopIdle != nil {
 		l.stopIdle()

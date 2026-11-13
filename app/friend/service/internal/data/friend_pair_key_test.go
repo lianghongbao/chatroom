@@ -30,7 +30,7 @@ func TestFriendRepo_ConcurrentOppositeApplyCreatesOneRow(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			<-start
-			// 一半正向一半反向
+			// 一半正向一半反向。
 			user, fr := "uid-1", "uid-2"
 			if idx%2 == 1 {
 				user, fr = "uid-2", "uid-1"

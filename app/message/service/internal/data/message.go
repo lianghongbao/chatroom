@@ -20,12 +20,12 @@ type messageRepo struct {
 	data *Data
 }
 
-// NewMessageRepo 构造 biz.MessageRepo 的 ent 实现。
+// NewMessageRepo 构造 biz.MessageRepo 的 ent 实现。data 是共享的数据客户端。
 func NewMessageRepo(data *Data) biz.MessageRepo {
 	return &messageRepo{data: data}
 }
 
-// toBizMessage ent.Message PO → biz.Message DO；po 为 nil 时返 nil
+// toBizMessage ent.Message PO → biz.Message DO。po 为 nil 时返 nil。
 func toBizMessage(po *ent.Message) *biz.Message {
 	if po == nil {
 		return nil
@@ -40,7 +40,7 @@ func toBizMessage(po *ent.Message) *biz.Message {
 	}
 }
 
-// Create 落库一条消息，返回带 id / created_at 的消息
+// Create 落库一条消息。m 是待存的领域对象，返回带 id 与 created_at 的消息。
 func (r *messageRepo) Create(ctx context.Context, m *biz.Message) (*biz.Message, error) {
 	po, err := r.data.db.Message.Create().
 		SetConversationID(m.ConversationID).
@@ -54,7 +54,9 @@ func (r *messageRepo) Create(ctx context.Context, m *biz.Message) (*biz.Message,
 	return toBizMessage(po), nil
 }
 
-// ListByConversation 拉历史消息，按 id 倒序（新的在前）。cursor 语义是「比这个 id 更旧的」。
+// ListByConversation 拉历史消息，按 id 倒序（新的在前）。conversationID 是会话 ID，
+// cursor 的语义是「比这个 id 更旧的」，limit 是单页条数。
+// 返回 (消息列表, 下一页游标)，没有更多时游标为 0。
 func (r *messageRepo) ListByConversation(ctx context.Context, conversationID uint64, cursor uint64, limit int) ([]*biz.Message, uint64, error) {
 	q := r.data.db.Message.Query().
 		Where(message.ConversationIDEQ(conversationID)).
@@ -81,6 +83,8 @@ func (r *messageRepo) ListByConversation(ctx context.Context, conversationID uin
 }
 
 // ListSince 拉「id 严格大于 sinceID」的消息，按 id 正序（旧的在前）。
+// conversationID 是会话 ID，sinceID 为 0 表示从头拉，limit 是单页条数。
+// 返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
 func (r *messageRepo) ListSince(ctx context.Context, conversationID, sinceID uint64, limit int) ([]*biz.Message, uint64, bool, error) {
 	q := r.data.db.Message.Query().
 		Where(message.ConversationIDEQ(conversationID)).
@@ -114,7 +118,8 @@ type MessagePublisher struct {
 	rdb redis.Cmdable
 }
 
-// NewMessagePublisher 构造 MessagePublisher。Redis 不可用时返 nil（不广播）。
+// NewMessagePublisher 构造 MessagePublisher。d 是共享的数据客户端，
+// Redis 不可用时返 nil（不广播）。
 func NewMessagePublisher(d *Data) *MessagePublisher {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -122,7 +127,7 @@ func NewMessagePublisher(d *Data) *MessagePublisher {
 	return &MessagePublisher{rdb: d.Redis()}
 }
 
-// Publish 把消息发到该会话的频道。
+// Publish 把消息发到该会话的频道。m 是要广播的消息。
 func (p *MessagePublisher) Publish(ctx context.Context, m *biz.Message) error {
 	if p == nil || p.rdb == nil {
 		return nil
@@ -138,6 +143,7 @@ func (p *MessagePublisher) Publish(ctx context.Context, m *biz.Message) error {
 }
 
 // messageChannel 会话对应的 Pub/Sub 频道名，与 ws-gateway 订阅的频道名一致。
+// conversationID 是会话 ID。
 func messageChannel(conversationID uint64) string {
 	return keys.MessageChannel(conversationID)
 }
@@ -152,7 +158,7 @@ type PublishPayload struct {
 	CreatedAt      int64  `json:"created_at"`
 }
 
-// marshalPublishPayload 把 biz.Message 折成广播体。
+// marshalPublishPayload 把 biz.Message 折成广播体。m 是要广播的消息。
 func marshalPublishPayload(m *biz.Message) ([]byte, error) {
 	return json.Marshal(&PublishPayload{
 		MessageID:      m.ID,
@@ -164,7 +170,8 @@ func marshalPublishPayload(m *biz.Message) ([]byte, error) {
 	})
 }
 
-// formatUint 把 uint64 转成十进制字符串。消息广播热路径上用 strconv 更快。
+// formatUint 把 uint64 转成十进制字符串。v 是待转换的值。
+// 消息广播热路径上用 strconv 更快。
 func formatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }

@@ -1,25 +1,16 @@
 // Package breaker 提供跨服务 gRPC 调用的熔断中间件。
 //
-// 为什么需要：跨服务调用只有超时是不够的。
+// 下游宕机或变慢时，调用方每次调用都要等满超时才失败，而上游请求
+// 源源不断进来 —— goroutine、连接、内存都在堆积，这叫「故障放大」。
+// 熔断器在下游明显不健康时直接拒掉，请求快速失败，上游的降级逻辑
+// 立刻生效。
 //
-// 下游宕机或变慢时，调用方每次调用都要等满超时（1.5s）才失败。
-// 上游的请求还在源源不断进来 —— goroutine、连接、内存都在堆积，
-// 而下游已经不可能处理这些请求了。这叫「故障放大」：
-// 下游的问题被上游的并发量放大好几倍。
-//
-// 熔断器的作用是**下游明显不健康时直接拒掉**，不再浪费资源去等：
-// 请求快速失败，上游的降级逻辑（拉不到就降级）立刻生效，
-// 上游自己保持健康，等下游恢复后自动放行。
-//
-// 熔断按 **operation 粒度**（Kratos 内部按 gRPC method 分组）——
+// 熔断按 operation 粒度（Kratos 内部按 gRPC method 分组）——
 // 下游某一个端点挂了，不该把同一个下游的其它端点一起拒掉。
 //
-// 为什么自己实现而不用 Kratos 内置的：
-//
-// Kratos 内置的 SRE 熔断器窗口只有 3s，且要求窗口内至少 20 个请求
-// 才评估失败率。窗口内的请求数 = QPS × 3 —— 一个 5 QPS 的服务
-// 窗口内才 15 个请求，**永远达不到 20**，熔断器等于没有。
-// 这里把窗口放宽到 10s，并让「最少请求数」可以按服务调。
+// 不用 Kratos 内置 SRE 熔断器的原因：它窗口只有 3s 且要求窗口内
+// 至少 20 个请求才评估，5 QPS 的服务永远达不到 20，等于没有熔断。
+// 这里窗口放宽到 10s，最少请求数也可按服务调。
 package breaker
 
 import (
@@ -39,14 +30,11 @@ const (
 	// DefaultFailureRatio 触发熔断的失败率阈值。
 	DefaultFailureRatio = 0.5
 	// DefaultRequest 窗口内至少要有多少请求才评估失败率。
-	//
-	// 流量低的时候不该因为三五次失败就熔断 —— 样本太少，统计没意义。
+	// 流量低时不该因三五次失败就熔断 —— 样本太少，统计没意义。
 	DefaultRequest = 20
-	// DefaultWindow 滚动统计窗口。
-	//
-	// 比 Kratos 内置的 3s 长：跨服务调用本来就慢（网络 + 下游处理），
-	// 下游正在发版时的短暂失败率会明显升高 —— 3s 窗口很容易误判成「挂了」。
-	// 窗口长一点，统计更稳，也顺带解决了低 QPS 下凑不满请求数的问题。
+	// DefaultWindow 滚动统计窗口。比 Kratos 内置的 3s 长：跨服务调用
+	// 本来就慢，下游发版时短暂失败率会明显升高，3s 窗口容易误判成
+	// 「挂了」。
 	DefaultWindow = 10 * time.Second
 	// DefaultBucket 窗口分桶数。桶越细，窗口边界越平滑。
 	DefaultBucket = 10
@@ -98,15 +86,13 @@ func WithHalfOpenMax(n int64) Option {
 	return func(o *options) { o.halfOpenMax = n }
 }
 
-// Client 返回 gRPC 客户端熔断中间件。
+// Client 返回 gRPC 客户端熔断中间件。opts 是熔断参数。
 //
-// 放进客户端中间件链的**最内层**（紧挨着真正的 RPC 调用）：
-// 放外面的话，被熔断拒绝的请求根本进不到 tracing 中间件，
-// trace 里看不到这次拒绝 —— 也就没法排查「为什么上游突然大面积报错」。
+// 放进客户端中间件链的最内层（紧挨着真正的 RPC 调用）：放外面的话
+// 被熔断拒绝的请求进不到 tracing 中间件，trace 里看不到这次拒绝。
 //
 // 只有 5xx 类错误算失败（Kratos 内部按 500/503/504 判定）：
-// 下游返 404「用户不存在」是业务结果，不是下游不健康，
-// 不该计入熔断统计。
+// 下游返 404「用户不存在」是业务结果，不该计入熔断统计。
 func Client(opts ...Option) middleware.Middleware {
 	o := &options{
 		failureRatio: DefaultFailureRatio,
@@ -153,9 +139,7 @@ const (
 )
 
 // breaker 三态熔断器：closed → open → halfOpen → closed。
-//
-// 实现 Kratos 的 circuitbreaker.CircuitBreaker 接口
-// （Allow / MarkSuccess / MarkFailed），这样能挂进
+// 实现 Kratos 的 circuitbreaker.CircuitBreaker 接口，挂进
 // circuitbreaker.Client 的分组机制里 —— 每个 operation 一个实例。
 type breaker struct {
 	mu sync.Mutex
@@ -187,7 +171,7 @@ func newBreaker(o *options) *breaker {
 	}
 }
 
-// Allow 报告请求能否通过。
+// Allow 报告请求能否通过。被熔断拒掉时返回 ErrNotAllowed。
 func (b *breaker) Allow() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()

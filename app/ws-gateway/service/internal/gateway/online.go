@@ -15,7 +15,8 @@ type OnlineReporter struct {
 	ttl        time.Duration
 }
 
-// NewOnlineReporter 构造 OnlineReporter。rdb 为 nil 时降级（不写在线状态）。
+// NewOnlineReporter 构造 OnlineReporter，instanceID 是本实例 ID，ttl 是在线状态
+// 有效期（<= 0 用默认值）。rdb 为 nil 时降级（不写在线状态）。
 func NewOnlineReporter(rdb redis.Cmdable, instanceID string, ttl time.Duration) *OnlineReporter {
 	if ttl <= 0 {
 		ttl = defaultOnlineTTL
@@ -23,7 +24,7 @@ func NewOnlineReporter(rdb redis.Cmdable, instanceID string, ttl time.Duration) 
 	return &OnlineReporter{rdb: rdb, instanceID: instanceID, ttl: ttl}
 }
 
-// MarkOnline 标记用户在线。
+// MarkOnline 标记用户在线，userID 是用户 ID。写失败只当没写上，不报错。
 func (r *OnlineReporter) MarkOnline(ctx context.Context, userID string) {
 	if r == nil || r.rdb == nil {
 		return
@@ -35,8 +36,8 @@ func (r *OnlineReporter) MarkOnline(ctx context.Context, userID string) {
 	}
 }
 
-// MarkOffline 标记用户离线。只有当 Redis 里记的还是本实例时才删 ——
-// 用户可能同时连着另一个实例。
+// MarkOffline 标记用户离线，userID 是用户 ID。
+// 只有当 Redis 里记的还是本实例时才删 —— 用户可能同时连着另一个实例。
 func (r *OnlineReporter) MarkOffline(ctx context.Context, userID string) {
 	if r == nil || r.rdb == nil {
 		return
@@ -55,7 +56,7 @@ return 0
 	}
 }
 
-// IsOnline 查用户是否在线。
+// IsOnline 查用户是否在线，userID 是用户 ID。查不到按离线算。
 func (r *OnlineReporter) IsOnline(ctx context.Context, userID string) bool {
 	if r == nil || r.rdb == nil {
 		return false
@@ -67,7 +68,7 @@ func (r *OnlineReporter) IsOnline(ctx context.Context, userID string) bool {
 	return n > 0
 }
 
-// onlineKey 在线状态的 Redis key。
+// onlineKey 在线状态的 Redis key，userID 是用户 ID。
 func onlineKey(userID string) string {
 	return "online:" + userID
 }

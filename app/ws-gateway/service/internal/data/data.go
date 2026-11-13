@@ -20,7 +20,8 @@ type Data struct {
 	rdb *redis.Client
 }
 
-// NewData 打开 redis 客户端。Redis 缺配置时 rdb 为 nil，下游降级。
+// NewData 打开 redis 客户端，c 是配置段。Redis 缺配置时 rdb 为 nil，下游降级。
+// 返回的清理函数负责关闭客户端。
 func NewData(c *conf.Data) (*Data, func(), error) {
 	var rdb *redis.Client
 	if rc := c.GetRedis(); rc != nil && rc.GetAddr() != "" {
@@ -65,8 +66,7 @@ func (d *Data) Redis() redis.Cmdable {
 }
 
 // RedisClient 返回具体的 *redis.Client；可能为 nil。
-//
-// 跟 Redis() 的区别：PSubscribe 只在 *redis.Client 上有
+// 跟 Redis() 的区别：PSubscribe 只在 *redis.Client 上有。
 func (d *Data) RedisClient() *redis.Client {
 	if d == nil {
 		return nil
@@ -76,6 +76,7 @@ func (d *Data) RedisClient() *redis.Client {
 
 // durationOf 把 proto duration 转成 time.Duration。nil（未设置）返 0 —— 0 表示不设超时。
 func durationOf(d *durationpb.Duration) time.Duration {
+
 	if d == nil {
 		return 0
 	}

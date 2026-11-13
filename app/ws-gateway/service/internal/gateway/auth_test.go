@@ -23,7 +23,7 @@ func (f *fakeBlacklist) IsBlacklisted(_ context.Context, jti string) (bool, erro
 	return f.blacklisted, f.err
 }
 
-// testJWT 造一个能通过校验的 access token。jti 可自定义 ——
+// testJWT 造一个能通过校验的 access token。uid 是用户 ID，jti 可自定义 ——
 // 黑名单是按 jti 查的。
 func testJWT(t *testing.T, secret, issuer, uid, jti string) string {
 	t.Helper()

@@ -19,15 +19,17 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// RemoteUserClient 暴露 caller 实际用到的方法，保持窄接口。
+// RemoteUserClient 暴露调用方实际用到的方法，保持窄接口。
 type RemoteUserClient interface {
-	// GetUserByID 拉指定 uid 的公开资料。鉴权由 authForwarding 把当前 token 投到下游。
+	// GetUserByID 拉指定用户的公开资料。
+	// callerID 是调用方 ID，targetID 是被查用户 ID。
+	// 鉴权由 authForwarding 把当前 token 投到下游。
 	GetUserByID(ctx context.Context, callerID, targetID string) (*userv1.UserInfo, error)
 	// GetFriendProfiles 批量拉「好友可见」的公开资料，跳过陌生人可见性判定。
-	// 走服务间内部凭证（internalForwarding 注入 X-Internal-Token）
+	// ids 是用户 ID 列表。走服务间内部凭证（internalForwarding 注入 X-Internal-Token）。
 	GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error)
 	// GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料。
-	// 走服务间内部凭证（internalForwarding 注入 X-Internal-Token）
+	// ids 是用户 ID 列表。走服务间内部凭证（internalForwarding 注入 X-Internal-Token）。
 	GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error)
 }
 
@@ -36,7 +38,9 @@ type RemoteUserClient interface {
 // 拼上的 endpoint scheme —— 少一个都会报 "produced zero addresses"。
 const RemoteUserEndpoint = "discovery:///chatroom-user.grpc"
 
-// NewRemoteUserClient 构造 RemoteUserClient。discoverer == nil 时返 noop，所有调用降级返 (nil/nil, nil)。
+// NewRemoteUserClient 构造 RemoteUserClient。
+// discoverer 是服务发现器，auth 是鉴权配置，obs 是观测能力。
+// discoverer 为 nil 时返 noop，所有调用降级返 (nil/nil, nil)。
 // 超时 1.5s：fan-out 调 N 个，单条拖太久会拖累整批。
 func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *observability.Provider) (RemoteUserClient, func(), error) {
 	if discoverer == nil {
@@ -75,14 +79,14 @@ type remoteUserGRPCClient struct {
 	internalSecret string // 服务间内部凭证。空表示未配置，GetFriendProfiles 降级返空
 }
 
-// GetUserByID 把 targetID 折成 GetUserByIDRequest；user service 按「看他人」路径处理。
-// callerID 不直接使用，识别靠下游解析 token。
+// GetUserByID 按目标用户查资料；user service 按「看他人」路径处理。
+// targetID 是被查用户 ID，callerID 不直接使用，识别靠下游解析 token。
 func (c *remoteUserGRPCClient) GetUserByID(ctx context.Context, _, targetID string) (*userv1.UserInfo, error) {
 	return c.cli.GetUserByID(ctx, &userv1.GetUserByIDRequest{Id: targetID})
 }
 
-// GetFriendProfiles 调 user 的好友资料端点。走内部凭证，跳过陌生人可见性。
-// 未配置 internalSecret 时降级返空。
+// GetFriendProfiles 调 user 的好友资料端点。ids 是用户 ID 列表。
+// 走内部凭证，跳过陌生人可见性。未配置 internalSecret 时降级返空。
 func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
 		return nil, nil
@@ -94,8 +98,8 @@ func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []stri
 	return reply.GetUsers(), nil
 }
 
-// GetConversationMemberProfiles 调 user 的会话成员资料端点。走内部凭证。
-// 未配置 internalSecret 时降级返空。
+// GetConversationMemberProfiles 调 user 的会话成员资料端点。ids 是用户 ID 列表。
+// 走内部凭证。未配置 internalSecret 时降级返空。
 func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
 		return nil, nil
@@ -107,8 +111,8 @@ func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context
 	return reply.GetUsers(), nil
 }
 
-// authForwarding 把入站 Authorization 投到下游，user service 据此识别 caller。
-// ctx 没带 token 时透传 nothing，下游返 401。
+// authForwarding 把入站 Authorization 投到下游，user service 据此识别调用方。
+// ctx 没带 token 时不投，下游返 401。
 func authForwarding() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -118,7 +122,7 @@ func authForwarding() middleware.Middleware {
 	}
 }
 
-// forwardAuth 从入站请求头取 Authorization 写入出站 metadata。
+// forwardAuth 从入站请求头取 Authorization 写入出站 metadata。ctx 是请求上下文。
 func forwardAuth(ctx context.Context) context.Context {
 	tr, ok := transport.FromServerContext(ctx)
 	if !ok {
@@ -150,7 +154,8 @@ func (noopRemoteUserClient) GetConversationMemberProfiles(_ context.Context, _ [
 }
 
 // internalForwarding 把服务间内部凭证注入出站 metadata 的 X-Internal-Token 头。
-// secret 为空时不注入任何 header——下游校验会 fail closed 返 403，调用方走降级。
+// secret 是内部凭证，为空时不注入任何 header —— 下游校验会 fail closed 返 403，
+// 调用方走降级。
 func internalForwarding(secret string) middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {

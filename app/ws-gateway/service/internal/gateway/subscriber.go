@@ -19,7 +19,8 @@ type Subscriber struct {
 	onMessage func(channel string, payload []byte)
 }
 
-// NewSubscriber 构造 Subscriber，订阅会话消息频道。rdb 为 nil 时返 nil（不订阅）。
+// NewSubscriber 构造 Subscriber，onMessage 是收到消息时的回调。
+// rdb 为 nil 时返 nil（不订阅）。
 func NewSubscriber(rdb *redis.Client, onMessage func(channel string, payload []byte)) *Subscriber {
 	if rdb == nil {
 		return nil
@@ -31,7 +32,7 @@ func NewSubscriber(rdb *redis.Client, onMessage func(channel string, payload []b
 	}
 }
 
-// NewChannelSubscriber 构造 Subscriber，订阅单个频道（不是模式）。
+// NewChannelSubscriber 构造 Subscriber，订阅单个频道（不是模式），channel 是频道名。
 // 成员失效通知用一个全局频道就够了 —— 变更不频繁，全局频道避免了
 // 「订阅/退订并发」和漏订的问题，跟消息广播用模式订阅是同一个理由。
 func NewChannelSubscriber(rdb *redis.Client, channel string, onMessage func(channel string, payload []byte)) *Subscriber {
@@ -46,10 +47,8 @@ func NewChannelSubscriber(rdb *redis.Client, channel string, onMessage func(chan
 }
 
 // Run 阻塞订阅，直到 ctx 结束。返回 ctx 的错误。
-//
-// 订阅 channel 关闭（Redis 重启 / 连接断开）时返回 errSubClosed ——
-// 不是 nil。调用方要靠这个区分「正常结束」和「订阅断了要重连」，
-// 两者都返 nil 会让重连循环变成热循环。
+// 订阅 channel 关闭（Redis 重启 / 连接断开）时返回 errSubClosed —— 不是 nil。
+// 调用方要靠这个区分「正常结束」和「订阅断了要重连」，两者都返 nil 会让重连循环变成热循环。
 func (s *Subscriber) Run(ctx context.Context) error {
 	if s == nil || s.rdb == nil {
 		return nil
@@ -93,7 +92,7 @@ type PublishPayload struct {
 	CreatedAt      int64  `json:"created_at"`
 }
 
-// ConversationIDFromChannel 从频道名解析会话 id。解析失败返 0。
+// ConversationIDFromChannel 从频道名解析会话 id，channel 是频道名。解析失败返 0。
 func ConversationIDFromChannel(channel string) uint64 {
 	idx := strings.LastIndex(channel, ":")
 	if idx < 0 || idx == len(channel)-1 {
@@ -109,7 +108,7 @@ func ConversationIDFromChannel(channel string) uint64 {
 	return id
 }
 
-// DecodePublishPayload 解析广播体。
+// DecodePublishPayload 解析广播体，payload 是广播体原文。
 func DecodePublishPayload(payload []byte) (*PublishPayload, error) {
 	var p PublishPayload
 	if err := json.Unmarshal(payload, &p); err != nil {

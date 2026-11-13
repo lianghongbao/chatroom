@@ -2,9 +2,8 @@
 # 生成某个域的契约代码（grpc stub / http stub / openapi.yaml）。
 #
 # 用 protoc 而不是 buf：契约 proto 要 import 仓库根的
-# third_party/google/api/annotations.proto，而 buf v2 的 module 根是
-# 单一目录 —— 跨目录引用要么报错，要么把整个项目降到 buf v1。
-# protoc 原生支持多个 --proto_path，这正是官方 beer-shop 的做法。
+# third_party/google/api/annotations.proto，而 buf v2 的 module 根是单一目录，
+# 跨目录引用会被拒。protoc 原生支持多个 --proto_path。
 #
 # 用法：gen.sh <域名>      例：gen.sh user
 # 必须在对应契约目录（api/<域>/service/）下执行。
@@ -24,12 +23,9 @@ if [ ! -d "${THIRD_PARTY}" ]; then
 	exit 1
 fi
 
-# 插件版本钉死 —— 不随 PATH 里的 protoc-gen-* 漂移。
-# 与 go.mod 里的 protobuf 版本对齐。
-#
-# protoc 的 --plugin 只认「一个可执行文件路径」，不能直接塞
-# `go run pkg@version`（带参数的命令）。所以先把这些版本编译成
-# 二进制，再把 --plugin 指向编译出来的二进制。
+# 插件版本钉死，不随 PATH 里的 protoc-gen-* 漂移。
+# protoc 的 --plugin 只认可执行文件路径，不能直接塞 `go run pkg@version`
+# （带参数的命令），所以先编译成二进制再指向它。
 PLUGIN_PKG="google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12"
 PLUGIN_GRPC="google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2"
 PLUGIN_HTTP="github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3@v3.0.0-20260526000039-30da04b769dc"
@@ -48,12 +44,10 @@ fi
 echo "生成契约代码（${DOMAIN}）：${PROTOS[*]}"
 
 # 把四个插件编译到缓存目录（版本由上面的 @version 钉死）。
-#
-# 用固定缓存目录而不是每次 mktemp：插件编译一次要几十秒，四个契约各编一遍
-# 太慢。缓存目录按插件版本组合命名 —— 版本变了自动重建。
-#
+# 缓存目录按插件版本组合命名 —— 版本变了自动重建。插件编译一次要几十秒，
+# 四个契约各编一遍太慢。
 # 并发跑（多个契约同时 make api）时 go install 会争 module cache 的锁，
-# 偶发失败。所以加锁 + 重试。
+# 所以加锁 + 重试。
 PLUGIN_DIR="${ROOT}/.cache/protoc-plugins"
 PLUGIN_KEY="$(printf '%s\n' "${PLUGIN_PKG}" "${PLUGIN_GRPC}" "${PLUGIN_HTTP}" "${PLUGIN_OPENAPI}" | md5sum | cut -d' ' -f1)"
 PLUGIN_DIR="${PLUGIN_DIR}/${PLUGIN_KEY}"
@@ -81,17 +75,12 @@ for pkg in "${PLUGIN_PKG}" "${PLUGIN_GRPC}" "${PLUGIN_HTTP}" "${PLUGIN_OPENAPI}"
 	done
 done
 
-# protoc 从仓库根跑，--proto_path 指向 api/ —— 这样注册进 protobuf 全局
-# 注册表的文件路径是 <域>/service/v1/<文件>.proto。
-#
-# 路径必须**全局唯一**：整个仓库是单个 Go module，四个域的契约会被链进
-# 同一个二进制。protobuf 的注册表按「相对 proto_path 根的路径」做 key，
-# 四份都叫 v1/error_reason.proto 会在 init 期 panic
-# （proto: file "v1/error_reason.proto" is already registered）。
+# protoc 从仓库根跑，--proto_path 指向 api/ —— 注册进 protobuf 全局注册表的
+# 路径是 <域>/service/v1/<文件>.proto。
+# 路径必须全局唯一：整仓是单个 Go module，多个域的契约会被链进同一个
+# 二进制，注册表按「相对 proto_path 根的路径」做 key，同名会在 init 期 panic。
 # 加上域名这一层前缀就天然避开了。
-#
-# paths=source_relative —— 生成的 .pb.go 跟 proto 待在一起
-# （api/<域>/service/v1/）。
+# paths=source_relative —— 生成的 .pb.go 跟 proto 待在一起。
 cd "${ROOT}"
 protoc \
 	--proto_path=api \

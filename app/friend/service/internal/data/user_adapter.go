@@ -13,12 +13,13 @@ type FriendAdapter struct {
 	cli RemoteUserClient
 }
 
-// NewFriendAdapter wire 注入 RemoteUserClient。nil 时仍可用。
+// NewFriendAdapter 构造 FriendAdapter。cli 是下游客户端，nil 时仍可用。
 func NewFriendAdapter(cli RemoteUserClient) *FriendAdapter {
 	return &FriendAdapter{cli: cli}
 }
 
 // FetchProfiles 把 GetFriendProfiles 结果折成 []*biz.FriendProfile。
+// callerID 是调用方，ids 是目标 uid 列表。
 // 整批 err 透传，由 biz 走降级（昵称/头像留空，不阻断好友列表）。
 func (a *FriendAdapter) FetchProfiles(ctx context.Context, callerID string, ids []string) ([]*biz.FriendProfile, error) {
 	if a == nil || a.cli == nil {

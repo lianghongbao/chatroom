@@ -17,15 +17,14 @@ type MemberInvalidationPayload struct {
 }
 
 // InvalidatorSubscriber 订阅成员失效通知的订阅器。
-//
 // 单独一个类型（而不是直接用 *Subscriber）—— wire 靠类型区分 provider，
 // 两个 *Subscriber provider 会撞车。
 type InvalidatorSubscriber struct {
 	*Subscriber
 }
 
-// NewMemberInvalidationSubscriber 构造订阅成员失效通知的订阅器。
-//
+// NewMemberInvalidationSubscriber 构造成员失效通知的订阅器，members 是要失效的
+// 成员缓存，logger 为 nil 时用默认 logger。
 // rdb 为 nil 时返 nil（不订阅）—— 缓存仍按 TTL 自然过期。
 func NewMemberInvalidationSubscriber(rdb *redis.Client, members *MemberCache, logger *slog.Logger) *InvalidatorSubscriber {
 	if rdb == nil {
@@ -39,8 +38,8 @@ func NewMemberInvalidationSubscriber(rdb *redis.Client, members *MemberCache, lo
 	})}
 }
 
-// HandleMemberInvalidation 处理一条成员变更通知：让对应会话的成员缓存失效。
-//
+// HandleMemberInvalidation 处理一条成员变更通知，让对应会话的成员缓存失效。
+// payload 是通知原文，logger 为 nil 时用默认 logger。
 // 解析失败只记日志 —— 一条坏消息不该把整个订阅搞死。
 func HandleMemberInvalidation(members *MemberCache, payload []byte, logger *slog.Logger) {
 	if logger == nil {

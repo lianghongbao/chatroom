@@ -23,6 +23,7 @@ import (
 )
 
 // wireApp 组装 kratos 应用。
+// 入参依次是引导配置、registry 配置段与 logger。
 func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func(), error) {
 	panic(wire.Build(
 		// 本域的 server 层：构造 HTTP/gRPC server 并注册 user 域的路由
@@ -31,17 +32,17 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		biz.ProviderSet,
 		service.ProviderSet,
 		// nacos：注册本实例 + 发现下游服务。
-		// 三个 provider 共用同一个 naming client（pkg/nacos.NewNamingClient 产出的
-		// 那一个）—— 注册和发现必须是同一个 client，否则两边状态会不一致。
+		// 三个 provider 共用同一个 naming client —— 注册和发现必须是同一个
+		// client，否则两边状态会不一致。
 		nacos.NewNamingClient,
 		nacos.NewRegistrar,
-		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options
+		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options。
 		conf.NacosOptions,
 		// 把 *conf.Bootstrap 的子字段暴露为独立 provider，各层直接吃 *conf.Xxx，不做二次翻译
 		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability"),
 		// 观测能力：conf.Observability → observability.Config → *observability.Provider。
-		// Provider 构造时即注册 otel 全局 provider，所以 wire 会在建 server 之前先建它 ——
-		// server 依赖 *Provider，依赖关系保证了顺序。
+		// Provider 构造时即注册 otel 全局 provider，server 依赖 *Provider，
+		// 依赖关系保证了它先于 server 建好。
 		observability.NewConfig,
 		pkgobs.NewPromRegistry,
 		pkgobs.New,

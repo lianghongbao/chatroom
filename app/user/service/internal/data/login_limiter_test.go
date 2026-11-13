@@ -12,7 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// newTestLoginLimiter 构造接真实 Redis 的登录限频器。
+// newTestLoginLimiter 构造接真实 Redis 的登录限频器，返回限频器与 redis 客户端。
 func newTestLoginLimiter(t *testing.T) (*loginLimiter, *redis.Client) {
 	t.Helper()
 	rdb := testutil.NewRedis(t)

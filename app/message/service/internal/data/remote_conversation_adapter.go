@@ -16,12 +16,13 @@ type MembershipAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewMembershipAdapter wire 注入 RemoteConversationClient。nil 时 IsMember 返错误。
+// NewMembershipAdapter 构造 MembershipAdapter。cli 是下游客户端，nil 时 IsMember 返错误。
 func NewMembershipAdapter(cli RemoteConversationClient) *MembershipAdapter {
 	return &MembershipAdapter{cli: cli}
 }
 
-// IsMember 查 userID 是不是 conversationID 的成员。err 透传给 biz，由 biz 决定拒绝。
+// IsMember 查 userID 是不是 conversationID 的成员。conversationID 是会话 ID，userID 是用户 ID。
+// err 透传给 biz，由 biz 决定拒绝。
 func (a *MembershipAdapter) IsMember(ctx context.Context, conversationID uint64, userID string) (bool, error) {
 	if a == nil || a.cli == nil {
 		return false, errNoRemoteConversation
@@ -34,12 +35,12 @@ type UnreadAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewUnreadAdapter wire 注入 RemoteConversationClient。nil 时所有方法返错误。
+// NewUnreadAdapter 构造 UnreadAdapter。cli 是下游客户端，nil 时所有方法返错误。
 func NewUnreadAdapter(cli RemoteConversationClient) *UnreadAdapter {
 	return &UnreadAdapter{cli: cli}
 }
 
-// GetUnread 查某成员的会话级未读数。
+// GetUnread 查某成员的会话级未读数。conversationID 是会话 ID，userID 是用户 ID。
 func (a *UnreadAdapter) GetUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if a == nil || a.cli == nil {
 		return 0, errNoRemoteConversation
@@ -47,7 +48,7 @@ func (a *UnreadAdapter) GetUnread(ctx context.Context, conversationID uint64, us
 	return a.cli.GetUnread(ctx, conversationID, userID)
 }
 
-// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。
+// IncUnread 给某成员的会话级未读数加 delta，返回更新后的值。delta 是增量。
 func (a *UnreadAdapter) IncUnread(ctx context.Context, conversationID uint64, userID string, delta int32) (uint32, error) {
 	if a == nil || a.cli == nil {
 		return 0, errNoRemoteConversation
@@ -55,7 +56,8 @@ func (a *UnreadAdapter) IncUnread(ctx context.Context, conversationID uint64, us
 	return a.cli.UpdateUnread(ctx, conversationID, userID, delta)
 }
 
-// IncUnreadBatch 给一批成员的会话级未读数加 delta。
+// IncUnreadBatch 给一批成员的会话级未读数加 delta。conversationID 是会话 ID，
+// userIDs 是成员 ID 列表，delta 是增量。
 // 走下游的批量端点，一次跨进程调用搞定整个 fan-out。
 func (a *UnreadAdapter) IncUnreadBatch(ctx context.Context, conversationID uint64, userIDs []string, delta int32) (uint32, error) {
 	if a == nil || a.cli == nil {
@@ -64,7 +66,7 @@ func (a *UnreadAdapter) IncUnreadBatch(ctx context.Context, conversationID uint6
 	return a.cli.UpdateUnreadBatch(ctx, conversationID, userIDs, delta)
 }
 
-// ClearUnread 把未读数清零，返回清零后的值。
+// ClearUnread 把未读数清零，返回清零后的值。conversationID 是会话 ID，userID 是用户 ID。
 // 走下游的 ClearUnread 端点，服务端一条 UPDATE 原子清零。
 func (a *UnreadAdapter) ClearUnread(ctx context.Context, conversationID uint64, userID string) (uint32, error) {
 	if a == nil || a.cli == nil {
@@ -73,7 +75,7 @@ func (a *UnreadAdapter) ClearUnread(ctx context.Context, conversationID uint64, 
 	return a.cli.ClearUnread(ctx, conversationID, userID)
 }
 
-// ListUnread 查某 uid 在所有会话的未读数。
+// ListUnread 查某 uid 在所有会话的未读数。userID 是用户 ID。
 func (a *UnreadAdapter) ListUnread(ctx context.Context, userID string) (map[uint64]uint32, error) {
 	if a == nil || a.cli == nil {
 		return nil, errNoRemoteConversation
@@ -86,12 +88,12 @@ type MembersAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewMembersAdapter wire 注入 RemoteConversationClient。nil 时 ListConversationMembers 返错误。
+// NewMembersAdapter 构造 MembersAdapter。cli 是下游客户端，nil 时 ListConversationMembers 返错误。
 func NewMembersAdapter(cli RemoteConversationClient) *MembersAdapter {
 	return &MembersAdapter{cli: cli}
 }
 
-// ListConversationMembers 列出会话的全部成员。
+// ListConversationMembers 列出会话的全部成员。conversationID 是会话 ID。
 func (a *MembersAdapter) ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error) {
 	if a == nil || a.cli == nil {
 		return nil, errNoRemoteConversation
@@ -104,12 +106,12 @@ type MemberListerAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewMemberListerAdapter wire 注入 RemoteConversationClient。nil 时 ListConversationMembers 返错误。
+// NewMemberListerAdapter 构造 MemberListerAdapter。cli 是下游客户端，nil 时 ListConversationMembers 返错误。
 func NewMemberListerAdapter(cli RemoteConversationClient) *MemberListerAdapter {
 	return &MemberListerAdapter{cli: cli}
 }
 
-// ListConversationMembers 列出会话的全部成员。
+// ListConversationMembers 列出会话的全部成员。conversationID 是会话 ID。
 func (a *MemberListerAdapter) ListConversationMembers(ctx context.Context, conversationID uint64) ([]string, error) {
 	if a == nil || a.cli == nil {
 		return nil, errNoRemoteConversation
@@ -122,12 +124,13 @@ type UserConversationListerAdapter struct {
 	cli RemoteConversationClient
 }
 
-// NewUserConversationListerAdapter wire 注入 RemoteConversationClient。nil 时 ListUserConversations 返错误。
+// NewUserConversationListerAdapter 构造 UserConversationListerAdapter。cli 是下游客户端，
+// nil 时 ListUserConversations 返错误。
 func NewUserConversationListerAdapter(cli RemoteConversationClient) *UserConversationListerAdapter {
 	return &UserConversationListerAdapter{cli: cli}
 }
 
-// ListUserConversations 列某用户参与的所有会话 id。
+// ListUserConversations 列某用户参与的所有会话 id。userID 是用户 ID。
 func (a *UserConversationListerAdapter) ListUserConversations(ctx context.Context, userID string) ([]uint64, error) {
 	if a == nil || a.cli == nil {
 		return nil, errNoRemoteConversation

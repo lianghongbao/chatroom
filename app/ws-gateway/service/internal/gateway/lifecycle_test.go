@@ -34,8 +34,7 @@ func TestLifecycle_StopTwiceDoesNotPanic(t *testing.T) {
 }
 
 // TestLifecycle_ReconnectBacksOff 订阅断开后重连要有退避 ——
-// 没有退避就是热循环：200ms ��能空转几百万次。
-//
+// 没有退避就是热循环：200ms 能空转几百万次。
 // 这里用一个一 Run 就返 nil 的替身，模拟「订阅 channel 干净关闭」。
 func TestLifecycle_ReconnectBacksOff(t *testing.T) {
 	l := NewLifecycle(NewServer(Config{}, NewPool(nil), nil, nil, nil, nil, nil), nil)

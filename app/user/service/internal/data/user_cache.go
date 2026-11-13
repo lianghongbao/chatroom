@@ -19,7 +19,8 @@ type UserCache struct {
 	ttl time.Duration
 }
 
-// NewUserCache 构造 UserCache。Data / Redis 不可用时返 nil（biz 走降级直接读 DB）。
+// NewUserCache 构造 UserCache。d 是存储客户端；
+// Data / Redis 不可用时返 nil（biz 走降级直接读 DB）。
 // TTL 30s 是 UpdateUser 漏走 invalidate 时的兜底。
 func NewUserCache(d *Data) *UserCache {
 	if d == nil || d.Redis() == nil {
@@ -55,7 +56,8 @@ type cacheEntry struct {
 	Ver                 int64     `json:"ver"`
 }
 
-// Get 命中 (user, ver, nil)；未命中 (nil, 0, nil)；Redis 错 (nil, 0, err)。
+// Get 命中返 (user, ver, nil)；未命中 (nil, 0, nil)；Redis 错 (nil, 0, err)。
+// id 是用户 ID。
 func (c *UserCache) Get(ctx context.Context, id string) (*biz.User, int64, error) {
 	if c == nil || c.rdb == nil {
 		return nil, 0, nil
@@ -82,7 +84,8 @@ func (c *UserCache) Get(ctx context.Context, id string) (*biz.User, int64, error
 	}, entry.Ver, nil
 }
 
-// Set 同时确保 verKey 存在（SETNX 0），保证 Version() 不会因 verKey 缺失让缓存值失效。
+// Set 写回缓存。u 是用户资料，ver 是版本号。
+// 同时确保 verKey 存在（SETNX 0），保证 Version() 不会因 verKey 缺失让缓存值失效。
 func (c *UserCache) Set(ctx context.Context, u *biz.User, ver int64) error {
 	if c == nil || c.rdb == nil {
 		return nil
@@ -110,7 +113,8 @@ func (c *UserCache) Set(ctx context.Context, u *biz.User, ver int64) error {
 	return nil
 }
 
-// Invalidate 自增 verKey；verKey 不存在时 INCR 自动设为 1。
+// Invalidate 自增 verKey，让旧缓存值被识别为 stale。id 是用户 ID，返回新 ver。
+// verKey 不存在时 INCR 自动设为 1。
 func (c *UserCache) Invalidate(ctx context.Context, id string) (int64, error) {
 	if c == nil || c.rdb == nil {
 		return 0, nil
@@ -123,7 +127,8 @@ func (c *UserCache) Invalidate(ctx context.Context, id string) (int64, error) {
 	return n, nil
 }
 
-// Version 读 verKey，缺失返 (0, nil)，与「第一次 GetUser 之前」对齐（此时 ver==0 命中）。
+// Version 读 verKey。id 是用户 ID；缺失返 (0, nil)，
+// 与「第一次 GetUser 之前」对齐（此时 ver==0 命中）。
 func (c *UserCache) Version(ctx context.Context, id string) (int64, error) {
 	if c == nil || c.rdb == nil {
 		return 0, nil

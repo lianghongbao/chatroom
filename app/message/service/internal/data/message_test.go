@@ -12,7 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// newTestMessagePublisher 构造接真实 Redis 的消息广播器。
+// newTestMessagePublisher 构造接真实 Redis 的消息广播器。t 用于跳过没有 Redis 的环境。
 func newTestMessagePublisher(t *testing.T) (*MessagePublisher, *redis.Client) {
 	t.Helper()
 	rdb := testutil.NewRedis(t)

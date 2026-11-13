@@ -1,27 +1,12 @@
 // Package health 提供服务的健康检查端点。
 //
-// 两个端点，语义完全不同，别混：
+// 两个端点语义不同：
 //
-//   - liveness（/healthz）——「进程还活着吗」。只看进程本身，
-//     不碰任何外部依赖。依赖挂了**绝不能**让它失败：重启 pod
-//     解决不了 MySQL 宕机，只会把 pod 搞成 CrashLoopBackOff，
-//     故障面反而更大。
+//   - liveness（/healthz）—— 进程是否活着，不碰任何外部依赖。
+//   - readiness（/readyz）—— 依赖是否可用，决定能否接流量。
 //
-//   - readiness（/readyz）——「这个 pod 现在能接流量吗」。检查
-//     关键依赖。依赖挂了就把这个 pod 从 Service 的 endpoint 里摘掉，
-//     流量不再往这儿打。
-//
-// 每个依赖分「硬 / 软」两类，判据只有一条：**这个依赖挂了，
-// 服务还能不能正确处理请求**。
-//
-//   - 硬依赖：挂了服务什么都做不了 → readiness 失败（503）。
-//     本项目的 MySQL 是硬依赖。
-//   - 软依赖：挂了服务降级但还能用 → 只算 degraded，readiness 仍然 200。
-//     本项目的 Redis 在 4 个 DB 服务里是软依赖：不可达时限频 / 黑名单 /
-//     缓存都降级放行，跟代码里的降级约定一致。
-//
-// 把软依赖做成硬依赖会让 Redis 一抖整个集群摘光；把硬依赖做成软依赖
-// 则会让流量继续打进一个什么都做不了的 pod。分清楚这两者是重点。
+// 依赖分硬 / 软两类，判据是「这个依赖挂了，服务还能不能正确处理请求」：
+// 硬依赖挂了 readiness 返 503，软依赖挂了只算 degraded、仍返 200。
 package health
 
 import (
@@ -47,18 +32,15 @@ const (
 	StatusFailed Status = "failed"
 )
 
-// DefaultTimeout 单项依赖检查的默认超时。
-//
-// 比 HTTP server 的 timeout 短：探针应该快速给出结论，
-// 不能跟客户端请求抢连接池。
+// DefaultTimeout 单项依赖检查的默认超时。比 HTTP server 的 timeout 短，
+// 探针要快速给出结论，不能跟客户端请求抢连接池。
 const DefaultTimeout = 2 * time.Second
 
 // Check 一个依赖的检查。
 type Check struct {
 	// Name 检查名，进响应体。
 	Name string
-	// Hard=true → 检查失败 = 服务不可用（readiness 返回 503）。
-	// Hard=false → 检查失败只算降级（readiness 仍然 200）。
+	// Hard=true 时检查失败即服务不可用；false 时只算降级。
 	Hard bool
 	// Probe 探测函数。返回 error 即视为检查失败。
 	Probe func(ctx context.Context) error
@@ -88,12 +70,11 @@ type Checker struct {
 	mu     sync.RWMutex
 	checks []Check
 
-	// lastStatus 上一次的整体状态，用来避免探针每 10 秒打一次
-	// 日志把日志刷爆 —— 只在状态变化时记一条。
+	// lastStatus 上一次的整体状态，只在状态变化时记日志。
 	lastStatus Status
 }
 
-// NewChecker 构造 Checker。timeout <= 0 时用 DefaultTimeout。
+// NewChecker 构造 Checker。timeout 是单项检查超时，<= 0 时用 DefaultTimeout。
 func NewChecker(timeout time.Duration, checks ...Check) *Checker {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -101,7 +82,8 @@ func NewChecker(timeout time.Duration, checks ...Check) *Checker {
 	return &Checker{timeout: timeout, checks: checks, lastStatus: StatusOK}
 }
 
-// Add 追加一个依赖检查。
+// Add 追加一个依赖检查。name 是检查名，hard 表示是否硬依赖，
+// probe 是探测函数。
 func (c *Checker) Add(name string, hard bool, probe func(ctx context.Context) error) {
 	if c == nil || probe == nil {
 		return
@@ -111,10 +93,8 @@ func (c *Checker) Add(name string, hard bool, probe func(ctx context.Context) er
 	c.checks = append(c.checks, Check{Name: name, Hard: hard, Probe: probe})
 }
 
-// Run 跑一遍所有检查，返回整体结果。
-//
-// 各检查**并行**跑：单个依赖的超时不会把总耗时拖成 N 倍，
-// 探针才能在 timeoutSeconds 内给出结论。
+// Run 跑一遍所有检查，返回整体结果。各检查并行跑，
+// 单个依赖超时不会把总耗时拖成 N 倍。
 func (c *Checker) Run(ctx context.Context) Report {
 	if c == nil {
 		return Report{Status: StatusOK, Checks: map[string]Result{}}
@@ -162,7 +142,7 @@ func (c *Checker) Run(ctx context.Context) Report {
 	return report
 }
 
-// runOne 跑单项检查。单次超时不拖累整份报告 —— 超时算这项失败。
+// runOne 跑单项检查。check 是要检查的依赖，超时算这项失败。
 func (c *Checker) runOne(ctx context.Context, check Check) Result {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
@@ -177,10 +157,8 @@ func (c *Checker) runOne(ctx context.Context, check Check) Result {
 	return result
 }
 
-// Ready 返回 readiness handler。
-//
-// 硬依赖全过 → 200；软依赖挂了 → 200 但状态是 degraded；
-// 硬依赖挂了 → 503。
+// Ready 返回 readiness handler。硬依赖全过或只有软依赖失败返 200，
+// 硬依赖失败返 503。
 func (c *Checker) Ready() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		report := c.Run(r.Context())
@@ -196,10 +174,7 @@ func (c *Checker) Ready() http.HandlerFunc {
 	}
 }
 
-// logTransition 只在整体状态变化时记一条日志。
-//
-// 探针每 10 秒打一次，状态不变也每次都记的话，日志会被探针刷爆，
-// 真正的故障信息反而看不见。
+// logTransition 只在整体状态变化时记一条日志。report 是本次检查结果。
 func (c *Checker) logTransition(report Report) {
 	if c == nil {
 		return
@@ -221,9 +196,7 @@ func (c *Checker) logTransition(report Report) {
 	}
 }
 
-// Live 返回 liveness handler。
-//
-// 只报进程活着，不碰依赖 —— 依赖挂了也不能让 liveness 失败。
+// Live 返回 liveness handler。只报进程活着，不碰依赖。
 func Live() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -247,11 +220,7 @@ func (c *Checker) SortedNames() []string {
 	return names
 }
 
-// CheckOf 按名字查一项检查。
-//
-// 给调用方做断言用：硬 / 软依赖的划分是「策略」，写在各自服务的
-// NewHealthChecker 里，这里把它暴露出来才能被测试守住 —— 比如
-// 「Redis 只能算软依赖」这条约定被改坏时，测试要能立刻发现。
+// CheckOf 按名字查一项检查，name 是检查名。查不到返回 false。
 func (c *Checker) CheckOf(name string) (Check, bool) {
 	if c == nil {
 		return Check{}, false

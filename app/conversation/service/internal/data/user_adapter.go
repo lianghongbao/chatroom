@@ -8,7 +8,7 @@ import (
 )
 
 // ConversationAdapter 把 RemoteUserClient 适配成 biz.ConversationProfileFetcher。
-// 本 Adapter 集中处理 proto ↔ DO 转换。cli == nil 时透传「无可用下游」。
+// 集中处理 proto ↔ DO 转换。cli 为 nil 时透传「无可用下游」。
 type ConversationAdapter struct {
 	cli RemoteUserClient
 }

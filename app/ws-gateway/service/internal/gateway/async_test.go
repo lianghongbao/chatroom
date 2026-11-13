@@ -23,7 +23,6 @@ func (s *slowMessageSender) Send(_ context.Context, _ string, _ string, _ uint64
 
 // TestReadPumpNotBlockedBySlowDownstream 下游慢的时候读协程不能被卡住 ——
 // 否则这条连接收不到任何后续帧（包括 pong），会被心跳超时踢掉。
-//
 // 做法：先发一个 chat 帧（下游会阻塞 1 秒），紧接着发一个 ping 帧。
 // 如果读协程被 chat 卡住，pong 就要等 1 秒以后才到。
 func TestReadPumpNotBlockedBySlowDownstream(t *testing.T) {

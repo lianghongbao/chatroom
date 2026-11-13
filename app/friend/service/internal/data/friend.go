@@ -18,12 +18,12 @@ type friendRepo struct {
 	data *Data
 }
 
-// NewFriendRepo 构造 biz.FriendRepo 的 ent 实现。
+// NewFriendRepo 构造 biz.FriendRepo 的 ent 实现。data 是数据层实例。
 func NewFriendRepo(data *Data) biz.FriendRepo {
 	return &friendRepo{data: data}
 }
 
-// toBizFriend ent.Friend PO → biz.Friend DO；po 为 nil 时返 nil
+// toBizFriend 把 ent.Friend PO 折成 biz.Friend DO。po 为 nil 时返 nil。
 func toBizFriend(po *ent.Friend) *biz.Friend {
 	if po == nil {
 		return nil
@@ -35,7 +35,7 @@ func toBizFriend(po *ent.Friend) *biz.Friend {
 	}
 }
 
-// Save 新建好友关系；撞唯一索引时折叠为 ErrFriendAlreadyApplied
+// Save 新建好友关系。f 是待落库的关系；撞唯一索引时折叠为 ErrFriendAlreadyApplied。
 func (r *friendRepo) Save(ctx context.Context, f *biz.Friend) (uint64, error) {
 	po, err := r.data.db.Friend.Create().
 		SetUserID(f.UserID).SetFriendID(f.FriendID).
@@ -71,7 +71,7 @@ func isDeadlockErr(err error) bool {
 	return mysqlErr.Number == 1213 || mysqlErr.Number == 1205
 }
 
-// pairKey 归一化的「两人对」唯一键。两个 uid 升序拼成 "a,b"，
+// pairKey 归一化的「两人对」唯一键。a、b 是两个 uid，升序拼成 "a,b"，
 // 保证 (a,b) 和 (b,a) 落到同一个键 —— 只有归一化之后，
 // 唯一索引才挡得住反向并发（A 申请 B 的同时 B 也申请 A）。
 func pairKey(a, b string) string {
@@ -81,7 +81,7 @@ func pairKey(a, b string) string {
 	return a + "," + b
 }
 
-// FindByID 按主键查好友关系，找不到返 ErrFriendNotFound
+// FindByID 按主键查好友关系。id 是记录主键，找不到返 ErrFriendNotFound。
 func (r *friendRepo) FindByID(ctx context.Context, id uint64) (*biz.Friend, error) {
 	po, err := r.data.db.Friend.Get(ctx, id)
 	if err != nil {
@@ -93,7 +93,8 @@ func (r *friendRepo) FindByID(ctx context.Context, id uint64) (*biz.Friend, erro
 	return toBizFriend(po), nil
 }
 
-// FindByPair 按 (user_id, friend_id) 正向查，找不到返 ErrFriendNotFound
+// FindByPair 按 (user_id, friend_id) 正向查。userID 是发起方，friendID 是接收方，
+// 找不到返 ErrFriendNotFound。
 func (r *friendRepo) FindByPair(ctx context.Context, userID, friendID string) (*biz.Friend, error) {
 	po, err := r.data.db.Friend.Query().
 		Where(friend.UserIDEQ(userID), friend.FriendIDEQ(friendID)).Only(ctx)
@@ -106,7 +107,8 @@ func (r *friendRepo) FindByPair(ctx context.Context, userID, friendID string) (*
 	return toBizFriend(po), nil
 }
 
-// FindBothDirections 一次查 (a,b) 和 (b,a) 两条，0 条 → (nil, nil, nil)
+// FindBothDirections 一次查 (a,b) 和 (b,a) 两条。a、b 是两个 uid，
+// 返回正向与反向两条记录，0 条时返 (nil, nil, nil)。
 func (r *friendRepo) FindBothDirections(ctx context.Context, a, b string) (*biz.Friend, *biz.Friend, error) {
 	pos, err := r.data.db.Friend.Query().
 		Where(friend.Or(
@@ -129,8 +131,9 @@ func (r *friendRepo) FindBothDirections(ctx context.Context, a, b string) (*biz.
 	return forward, reverse, nil
 }
 
-// FindAcceptedByUserIDAndID 数据库层过滤 status=ACCEPTED + id>cursor，顺序走 id 升序。
-// 双向命中：好友关系只存单条 record，caller 既可能在 user_id 列也可能在 friend_id 列，
+// FindAcceptedByUserIDAndID 数据库层过滤 status=ACCEPTED 且 id>cursor，按 id 升序。
+// userID 是操作者 ID，cursor 是上一页末位 ID，limit 是每页条数。
+// 双向命中：好友关系只存单条记录，caller 既可能在 user_id 列也可能在 friend_id 列，
 // 只查 user_id 会漏掉「对方主动加我、我通过了」这类关系。
 func (r *friendRepo) FindAcceptedByUserIDAndID(ctx context.Context, userID string, cursor uint64, limit int) ([]*biz.Friend, error) {
 	q := r.data.db.Friend.Query().
@@ -159,7 +162,9 @@ func (r *friendRepo) FindAcceptedByUserIDAndID(ctx context.Context, userID strin
 	return out, nil
 }
 
-// UpdateStatusIfRecipient 单条 UPDATE 带鉴权 + 状态守卫，命中 0 行折叠 ErrFriendNotFound
+// UpdateStatusIfRecipient 单条 UPDATE 带鉴权 + 状态守卫。
+// id 是记录主键，recipientID 是接收方 ID，from、to 是状态迁移的两端。
+// 命中 0 行折叠 ErrFriendNotFound。
 func (r *friendRepo) UpdateStatusIfRecipient(ctx context.Context, id uint64, recipientID string, from, to biz.FriendStatus) (*biz.Friend, error) {
 	n, err := r.data.db.Friend.Update().
 		Where(friend.IDEQ(id), friend.FriendIDEQ(recipientID), friend.StatusEQ(uint8(from))).
@@ -181,7 +186,8 @@ func (r *friendRepo) UpdateStatusIfRecipient(ctx context.Context, id uint64, rec
 	return toBizFriend(po), nil
 }
 
-// GetRecipientAndStatus 鉴权失败后的最小探测，只读 friend_id + status 两列
+// GetRecipientAndStatus 鉴权失败后的最小探测。id 是记录主键，
+// 返回接收方 ID 与状态，只读 friend_id + status 两列。
 func (r *friendRepo) GetRecipientAndStatus(ctx context.Context, id uint64) (string, biz.FriendStatus, error) {
 	po, err := r.data.db.Friend.Get(ctx, id)
 	if err != nil {
@@ -193,7 +199,8 @@ func (r *friendRepo) GetRecipientAndStatus(ctx context.Context, id uint64) (stri
 	return po.FriendID, biz.FriendStatus(po.Status), nil
 }
 
-// FindPendingByRecipientID 收件箱列表：查作为目标方收到的 PENDING 申请
+// FindPendingByRecipientID 收件箱列表：查作为目标方收到的 PENDING 申请。
+// recipientID 是接收方 ID，cursor 是上一页末位 ID，limit 是每页条数。
 func (r *friendRepo) FindPendingByRecipientID(ctx context.Context, recipientID string, cursor uint64, limit int) ([]*biz.Friend, error) {
 	q := r.data.db.Friend.Query().
 		Where(friend.FriendIDEQ(recipientID), friend.StatusEQ(uint8(biz.FriendStatusPending))).
@@ -215,7 +222,7 @@ func (r *friendRepo) FindPendingByRecipientID(ctx context.Context, recipientID s
 	return out, nil
 }
 
-// CountPendingByRecipientID 收件箱计数：作为目标方收到的 PENDING 申请总数
+// CountPendingByRecipientID 收件箱计数。recipientID 是接收方 ID。
 func (r *friendRepo) CountPendingByRecipientID(ctx context.Context, recipientID string) (uint64, error) {
 	n, err := r.data.db.Friend.Query().
 		Where(friend.FriendIDEQ(recipientID), friend.StatusEQ(uint8(biz.FriendStatusPending))).
@@ -227,17 +234,18 @@ func (r *friendRepo) CountPendingByRecipientID(ctx context.Context, recipientID 
 }
 
 // DeleteByEitherPair 「双向查 + 删」包同一事务，避免两步操作间的竞态。
-// 仅删 status=ACCEPTED 的记录；PENDING/REJECTED 不删。deleted=true 表示删了至少一条。
+// callerID、otherID 是两个 uid。仅删 status=ACCEPTED 的记录；PENDING/REJECTED 不删。
+// deleted=true 表示删了至少一条。
 func (r *friendRepo) DeleteByEitherPair(ctx context.Context, callerID, otherID string) (bool, error) {
 	if r.data == nil || r.data.db == nil {
-		// nil 说明内部 DI 失败，不是 caller 输入错
+		// nil 说明内部 DI 失败，不是 caller 输入错。
 		return false, fmt.Errorf("friendRepo: data layer not initialized")
 	}
 	tx, err := r.data.db.Tx(ctx)
 	if err != nil {
 		return false, err
 	}
-	// defer Rollback 兜底，Commit 后 Rollback 是 no-op
+	// defer Rollback 兜底，Commit 后 Rollback 是 no-op。
 	committed := false
 	defer func() {
 		if !committed {
@@ -256,7 +264,7 @@ func (r *friendRepo) DeleteByEitherPair(ctx context.Context, callerID, otherID s
 		return true, nil
 	}
 
-	// 正向探
+	// 正向探。
 	po, err := client.Friend.Query().
 		Where(friend.UserIDEQ(callerID), friend.FriendIDEQ(otherID)).Only(ctx)
 	if err == nil {
@@ -277,7 +285,7 @@ func (r *friendRepo) DeleteByEitherPair(ctx context.Context, callerID, otherID s
 		return false, err
 	}
 
-	// 反向探
+	// 反向探。
 	po, err = client.Friend.Query().
 		Where(friend.UserIDEQ(otherID), friend.FriendIDEQ(callerID)).Only(ctx)
 	if err != nil {
@@ -300,7 +308,8 @@ func (r *friendRepo) DeleteByEitherPair(ctx context.Context, callerID, otherID s
 	return true, nil
 }
 
-// DeleteByPair 按正向 (user_id, friend_id) 单条删，不命中返 ErrFriendNotFound
+// DeleteByPair 按正向 (user_id, friend_id) 单条删。userID 是发起方，friendID 是接收方，
+// 不命中返 ErrFriendNotFound。
 func (r *friendRepo) DeleteByPair(ctx context.Context, userID, friendID string) error {
 	n, err := r.data.db.Friend.Delete().
 		Where(friend.UserIDEQ(userID), friend.FriendIDEQ(friendID)).Exec(ctx)

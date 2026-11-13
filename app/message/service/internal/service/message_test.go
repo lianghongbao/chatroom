@@ -162,14 +162,14 @@ func (f fakeMemberLister) ListConversationMembers(context.Context, uint64) ([]st
 	return f.members, f.err
 }
 
-// newService 用 fake 造一个真实 usecase + service。
+// newService 用 fake 造一个真实 usecase + service。t 是测试用例。
 //
 // membership 默认放行（调用方在会里），unread / lister 默认空。
 func newService(repo *fakeMessageRepo) *MessageService {
 	return newServiceWith(repo, fakeMembership{isMember: true}, &fakePublisher{}, &fakeUnread{}, fakeMemberLister{})
 }
 
-// newServiceWith 同 newService，但自带各协作者替身。
+// newServiceWith 同 newService，但自带各协作者替身。t 是测试用例。
 func newServiceWith(repo *fakeMessageRepo, membership biz.ConversationMembershipChecker, publisher biz.MessagePublisher, unread biz.UnreadCounter, lister biz.ConversationMemberLister) *MessageService {
 	uc := biz.NewMessageUsecase(repo, membership, publisher, unread, lister, nil)
 	return NewMessageService(uc)

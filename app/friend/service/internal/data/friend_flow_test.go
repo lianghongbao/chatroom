@@ -9,13 +9,13 @@ import (
 	"chatroom/app/friend/service/internal/biz"
 )
 
-// fakeRemoteUserClient 是 RemoteUserClient 的内存替身。它站在**跨服务边界**上 —— 真实链路是 friend 服务经 nacos discovery
-// 调 user 服务的 gRPC 端点 GetFriendProfiles。这里换成同进程调用，
-// 跳过传输层，但保留「friend biz 拿到的是好友的昵称/头像」这个契约。
+// fakeRemoteUserClient 是 RemoteUserClient 的内存替身。它站在跨服务边界上 ——
+// 真实链路是 friend 服务经 nacos discovery 调 user 服务的 gRPC 端点 GetFriendProfiles。
+// 这里换成同进程调用，跳过传输层，但保留「friend biz 拿到的是好友的昵称/头像」这个契约。
 type fakeRemoteUserClient struct {
-	// users uid → 用户资料。
+	// users 是 uid 到用户资料的映射。
 	users map[string]*userv1.UserInfo
-	// err 返回错误（模拟 user 服务不可达）。
+	// err 是统一返回的错误（模拟 user 服务不可达）。
 	err error
 }
 
@@ -23,7 +23,7 @@ func newFakeRemoteUserClient() *fakeRemoteUserClient {
 	return &fakeRemoteUserClient{users: map[string]*userv1.UserInfo{}}
 }
 
-// put 登记一个用户。
+// put 登记一个用户。id 是用户 ID，nickname 是昵称。
 func (c *fakeRemoteUserClient) put(id string, nickname string) {
 	c.users[id] = &userv1.UserInfo{Id: id, Nickname: nickname}
 }
@@ -56,8 +56,9 @@ func (c *fakeRemoteUserClient) GetConversationMemberProfiles(ctx context.Context
 var _ RemoteUserClient = (*fakeRemoteUserClient)(nil)
 
 // TestFriendFlow_ApplyAcceptThenBothSeeEachOther 覆盖 PRD 验收标准
-// 「两个用户能注册、登录、加好友」里 friend 域的部分。全链路：A 申请 B → B 收件箱看到申请 → B 接受 → 双方好友列表都能看到
-// 对方，且昵称/头像已跨服务补全。走的是**生产路径**：biz.FriendUsecase → data.Adapter → data.RemoteUserClient
+// 「两个用户能注册、登录、加好友」里 friend 域的部分。全链路：A 申请 B → B 收件箱看到申请
+// → B 接受 → 双方好友列表都能看到对方，且昵称/头像已跨服务补全。
+// 走的是生产路径：biz.FriendUsecase → data.Adapter → data.RemoteUserClient
 // （这里用 fake 替身）→ proto → DO。
 func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 	d, _ := newTestDB(t)
@@ -75,8 +76,8 @@ func TestFriendFlow_ApplyAcceptThenBothSeeEachOther(t *testing.T) {
 	uc := biz.NewFriendUsecase(
 		NewFriendRepo(d),
 		adapter,
-		nil, // FriendLimiter: nil 关闭
-		nil, // logger
+		nil, // FriendLimiter：nil 关闭限频
+		nil, // logger：nil 走默认
 	)
 
 	// 1. A 申请 B。
@@ -218,8 +219,8 @@ func TestFriendFlow_RemoveFriendBothDirections(t *testing.T) {
 	}
 }
 
-// TestFriendFlow_AdapterStripsContactInfo 覆盖「好友资料不外泄联系方式」。内部凭证端点返回的资料不该带 email / phone —— 好友列表用不上，
-// 外泄了就是隐私漏洞。
+// TestFriendFlow_AdapterStripsContactInfo 覆盖「好友资料不外泄联系方式」。
+// 内部凭证端点返回的资料不该带 email / phone —— 好友列表用不上，外泄了就是隐私漏洞。
 func TestFriendFlow_AdapterStripsContactInfo(t *testing.T) {
 	ctx := context.Background()
 	cli := newFakeRemoteUserClient()

@@ -55,10 +55,8 @@ docker-build:
 
 .PHONY: config
 # 重新生成本服务的 conf proto(internal/conf/conf.pb.go)
-#
-# 走 app/gen-conf.sh —— protoc 从仓库根跑，注册路径是
-# conversation/service/internal/conf/conf.proto，加上服务名这一层前缀避开
-# protobuf 全局注册表的路径撞车。
+# 走 app/gen-conf.sh —— protoc 从仓库根跑，注册路径带服务名这一层前缀，
+# 避开 protobuf 全局注册表的路径撞车。
 config:
 	bash ../../gen-conf.sh $(SERVICE)
 

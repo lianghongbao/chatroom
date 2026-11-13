@@ -1,4 +1,4 @@
-// Package server 是 user 域的 server 装配层：构造 HTTP/gRPC server 并注册本域路由
+// Package server 是 user 域的 server 装配层：构造 HTTP/gRPC server 并注册本域路由。
 package server
 
 import (
@@ -23,7 +23,7 @@ const (
 	InternalOpGetConversationMemberProfiles = "/api.user.v1.User/GetConversationMemberProfiles"
 )
 
-// InternalOps 该域全部内部端点
+// InternalOps 返回该域全部内部端点的 operation 名。
 func InternalOps() []string {
 	return []string{
 		InternalOpGetFriendProfiles,
@@ -32,6 +32,7 @@ func InternalOps() []string {
 }
 
 // authMiddlewares 返回鉴权相关的两个中间件：用户 JWT 与内部凭证。
+// ac 是鉴权配置段，store 是 token 校验器。
 //
 // 白名单（免 JWT）由官方 selector 的 Match 圈定 —— selector 的语义是
 // 「匹配上才执行中间件」，所以这里取反：不在白名单里的 operation 走 JWT。
