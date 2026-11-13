@@ -71,7 +71,7 @@ type Checker struct {
 }
 
 // NewChecker 构造 Checker。
-// timeout 单项检查超时，<= 0 时用 DefaultTimeout
+// timeout 单项检查超时（<= 0 时用 DefaultTimeout）
 // checks 要跑的依赖检查
 func NewChecker(timeout time.Duration, checks ...Check) *Checker {
 	if timeout <= 0 {
@@ -80,8 +80,10 @@ func NewChecker(timeout time.Duration, checks ...Check) *Checker {
 	return &Checker{timeout: timeout, checks: checks, lastStatus: StatusOK}
 }
 
-// Add 追加一个依赖检查。name 是检查名，hard 表示是否硬依赖，
-// probe 是探测函数。
+// Add 追加一个依赖检查。
+// name 检查名
+// hard 是否硬依赖
+// probe 探测函数
 func (c *Checker) Add(name string, hard bool, probe func(ctx context.Context) error) {
 	if c == nil || probe == nil {
 		return

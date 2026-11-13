@@ -62,7 +62,10 @@ func (s *UserService) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequ
 	return convertLoginReply(res, ""), nil
 }
 
-// Logout 登出。req 是登出请求；access 来自 ctx，refresh 解析失败时 refreshJTI 留空。
+// Logout 登出。
+// req 登出请求
+// access 来自 ctx
+// refresh 解析失败时 refreshJTI 留空。
 func (s *UserService) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.LogoutReply, error) {
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
@@ -77,7 +80,9 @@ func (s *UserService) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.Lo
 	return &pb.LogoutReply{}, nil
 }
 
-// parseRefreshJTI 解析 refresh token 拿 JTI。raw 是 token 串；解析失败返空串。
+// parseRefreshJTI 解析 refresh token 拿 JTI。
+// raw 是 token 串
+// 解析失败返空串。
 func (s *UserService) parseRefreshJTI(ctx context.Context, raw string) string {
 	if raw == "" || s.auth == nil {
 		return ""
@@ -90,7 +95,9 @@ func (s *UserService) parseRefreshJTI(ctx context.Context, raw string) string {
 	return jti
 }
 
-// GetUser 返回当前用户资料。req 是查询请求；uid 由 ctx 派生。
+// GetUser 返回当前用户资料。
+// req 查询请求
+// uid 由 ctx 派生。
 func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.UserInfo, error) {
 	uid, ok := middleware.FromContext(ctx)
 	if !ok {
@@ -104,7 +111,7 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 }
 
 // UpdateUser 更新资料。req 是更新请求，partial update 白名单 nickname / avatar；
-// 空 mask 走老全量路径。
+// 空 mask 走全量路径。
 func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UserInfo, error) {
 	uid, ok := middleware.FromContext(ctx)
 	if !ok {
@@ -143,8 +150,7 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	return convertUserReply(u), nil
 }
 
-// ChangePassword 改密。req 是改密请求；改完强制重登
-// （黑名单当前 access + 撤销当前 refresh）。
+// ChangePassword 改密。req 是改密请求；改完强制重登（黑名单当前 access + 撤销当前 refresh）。
 func (s *UserService) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequest) (*pb.ChangePasswordReply, error) {
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
@@ -209,7 +215,7 @@ func (s *UserService) GetUsersByIDs(ctx context.Context, req *pb.GetUsersByIDsRe
 }
 
 // GetFriendProfiles 批量拉好友公开资料，供 friend 服务补全好友列表。req 是批量查询请求。
-// 走内部凭证（X-Internal-Token）鉴权，不走用户 JWT，故不取 ctx 里的 uid。
+// 走内部凭证鉴权，不走用户 JWT，故不取 ctx 里的 uid。
 func (s *UserService) GetFriendProfiles(ctx context.Context, req *pb.GetFriendProfilesRequest) (*pb.GetFriendProfilesReply, error) {
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
@@ -226,8 +232,8 @@ func (s *UserService) GetFriendProfiles(ctx context.Context, req *pb.GetFriendPr
 }
 
 // GetConversationMemberProfiles 批量拉会话成员公开资料，供 conversation 服务补全成员列表。
-// req 是批量查询请求。
-// 走内部凭证（X-Internal-Token）鉴权，不走用户 JWT，故不取 ctx 里的 uid。
+// req 批量查询请求
+// 走内部凭证鉴权，不走用户 JWT，故不取 ctx 里的 uid。
 func (s *UserService) GetConversationMemberProfiles(ctx context.Context, req *pb.GetConversationMemberProfilesRequest) (*pb.GetConversationMemberProfilesReply, error) {
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
@@ -261,8 +267,7 @@ func convertLoginReply(res *biz.LoginResult, uid string) *pb.LoginReply {
 	}
 }
 
-// convertUserReply DO→DTO。
-// u 用户资料
+// convertUserReply DO→DTO。u 是用户资料。
 func convertUserReply(u *biz.User) *pb.UserInfo {
 	if u == nil {
 		return nil

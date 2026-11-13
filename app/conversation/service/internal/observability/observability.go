@@ -1,7 +1,6 @@
 // Package observability 把本服务的 conf 段翻译成 pkg/observability 的 Config。
 //
-// 翻译放在服务这边而不是 pkg 里：pkg/observability 不该认识任何服务的
-// conf proto（那会让共享库反向依赖具体服务）。
+// 翻译放在服务这边：pkg/observability 不该认识任何服务的 conf proto。
 package observability
 
 import (
@@ -9,8 +8,7 @@ import (
 	"chatroom/pkg/observability"
 )
 
-// NewConfig 把 conf.Observability 翻译成 observability.Config。
-// o 本服务的观测配置
+// NewConfig 把 conf.Observability 翻译成 observability.Config。o 是本服务的观测配置。
 func NewConfig(o *conf.Observability) *observability.Config {
 	if o == nil {
 		return nil

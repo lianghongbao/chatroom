@@ -38,9 +38,7 @@ const (
 	MaxAvatarLength   = 512
 )
 
-// validatePassword 校验密码长度。
-// password 明文密码
-// 密码不做 trim，只拒绝「全是空白」的密码。
+// validatePassword 校验密码长度。password 是明文密码；不做 trim，只拒绝「全是空白」的密码。
 func validatePassword(password string) error {
 	if password == "" {
 		return ErrUserInvalidArgument
@@ -84,7 +82,7 @@ func validateProfile(nickname, avatar string) error {
 }
 
 // derefOrEmpty 取可空指针的值。
-// s 为 nil 时返空串
+// s 为 nil 时返空串。
 func derefOrEmpty(s *string) string {
 	if s == nil {
 		return ""
@@ -92,8 +90,7 @@ func derefOrEmpty(s *string) string {
 	return *s
 }
 
-// hashPassword 算 bcrypt 哈希，把 bcrypt 的错误翻译成 typed error。
-// password 明文密码
+// hashPassword 算 bcrypt 哈希，把 bcrypt 的错误翻译成 typed error。password 是明文密码。
 func hashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -135,8 +132,7 @@ const (
 	UserStatusBanned UserStatus = 0 // 禁用账号，登录与刷新 token 均被拦截
 )
 
-// IsBanned 判断账号是否被禁用。
-// u 为 nil 时返 false
+// IsBanned 判断账号是否被禁用。u 为 nil 时返 false。
 func (u *User) IsBanned() bool {
 	return u != nil && u.Status == UserStatusBanned
 }
@@ -145,8 +141,7 @@ func (u *User) IsBanned() bool {
 type UserRepo interface {
 	Save(ctx context.Context, u *User) (string, error)
 	FindByID(ctx context.Context, id string) (*User, error)
-	// FindByIDWithHash 与 FindByID 同义，但保留 PasswordHash。
-	// 改密要拿哈希跟旧密码比对，走 FindByID 会拿到空哈希。
+	// FindByIDWithHash 与 FindByID 同义，但保留 PasswordHash，供改密比对旧密码。
 	FindByIDWithHash(ctx context.Context, id string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	// 批量查；找不到的 id 在结果中不出现，不返错。返回顺序与 ids 无关
@@ -173,8 +168,7 @@ type LoginLimiter interface {
 	Allow(ctx context.Context, username, clientIP string) error
 	// OnSuccess 凭据校验通过后清掉失败计数。
 	OnSuccess(ctx context.Context, username, clientIP string)
-	// OnFailure 凭据校验失败后累加失败计数。参数非法的路径不调用，
-	// 避免被恶意空请求刷到锁定。
+	// OnFailure 凭据校验失败后累加失败计数。参数非法的路径不调用，避免被恶意空请求刷到锁定。
 	OnFailure(ctx context.Context, username, clientIP string)
 }
 
@@ -213,14 +207,13 @@ type LoginResult struct {
 
 // UserCache 用户读缓存抽象。Get 返回的 *User 必须不含 PasswordHash（data 反序列化时清空）。
 type UserCache interface {
-	// Get 命中返 (user, ver, nil)；未命中 (nil, 0, nil)。
-	// Redis 错返 (nil, 0, err)，caller 走 DB 路径。id 是用户 ID。
+	// Get 命中返 (user, ver, nil)；未命中 (nil, 0, nil)。Redis 错返 (nil, 0, err)。
 	Get(ctx context.Context, id string) (*User, int64, error)
-	// Set 写回缓存。u 是用户资料，ver 是版本号。
+	// Set 写回缓存。
 	Set(ctx context.Context, u *User, ver int64) error
-	// Invalidate 自增 verKey，让旧缓存值被识别为 stale。返回新 ver。id 是用户 ID。
+	// Invalidate 自增 verKey，让旧缓存值被识别为 stale。返回新 ver。
 	Invalidate(ctx context.Context, id string) (int64, error)
-	// Version 读当前版本号。id 是用户 ID。
+	// Version 读当前版本号。
 	Version(ctx context.Context, id string) (int64, error)
 }
 
@@ -236,14 +229,14 @@ type UserUsecase struct {
 	logger  *slog.Logger
 }
 
-// NewUserUsecase 构造用户用例。
+// NewUserUsecase 构造用户用例
 // repo 仓储实现
-// auth 鉴权配置，用于签发 JWT，为 nil 时关闭登录
-// lim 登录限频器，为 nil 时关闭限频
+// auth 鉴权配置，为 nil 时关闭登录
+// lim 限频器，为 nil 时关闭限频
 // locker 注册锁，为 nil 时关闭加锁
 // store token 存储，为 nil 时关闭持久化
-// cache 用户资料缓存，为 nil 时关闭缓存
-// logger 日志器，为 nil 时用默认 logger
+// cache 资料缓存，为 nil 时关闭缓存
+// logger 日志器，为 nil 时用默认 logger。
 func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Locker, store TokenStore, cache UserCache, logger *slog.Logger) *UserUsecase {
 	if logger == nil {
 		logger = slog.Default()
@@ -255,9 +248,11 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Loc
 	return uc
 }
 
-// Register 注册用户并返回新用户 ID。username 是用户名，password 是明文密码，
-// nickname 是昵称（可空，留空时回退成 username）。
-// username trim 后小写化，nickname trim 空格。
+// Register 注册用户并返回新用户 ID。
+// username 用户名
+// password 明文密码
+// nickname 是昵称（可空，留空时回退成 username）
+// username trim 后小写化。
 func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname string) (string, error) {
 	username = strings.TrimSpace(username)
 	nickname = strings.TrimSpace(nickname)
@@ -294,8 +289,7 @@ func (uc *UserUsecase) Register(ctx context.Context, username, password, nicknam
 	return uc.repo.Save(ctx, u)
 }
 
-// acquireRegisterLock 取注册锁。username 是用户名。
-// TTL 5s 覆盖 bcrypt + DB Insert 最坏情况。
+// acquireRegisterLock 取注册锁。username 是用户名；TTL 5s。
 func (uc *UserUsecase) acquireRegisterLock(ctx context.Context, username string) (Release, error) {
 	if uc.locker == nil {
 		return func() {}, nil
@@ -304,7 +298,8 @@ func (uc *UserUsecase) acquireRegisterLock(ctx context.Context, username string)
 }
 
 // Login 校验凭据，签发 access + refresh 并落 TokenStore。username 是用户名，
-// password 是明文密码，clientIP 是调用方 IP。返回 token 对与用户 ID。
+// password 明文密码
+// clientIP 调用方 IP。返回 token 对与用户 ID
 func (uc *UserUsecase) Login(ctx context.Context, username, password, clientIP string) (*LoginResult, string, error) {
 	if uc.tokenFn == nil {
 		return nil, "", ErrUserBadCredentials
@@ -377,8 +372,7 @@ func (uc *UserUsecase) Login(ctx context.Context, username, password, clientIP s
 	}, u.ID, nil
 }
 
-// acquireLoginLock 取登录锁。username 是用户名。
-// TTL 2s 覆盖「读 user + bcrypt + 写 token」全链路。
+// acquireLoginLock 取登录锁。username 是用户名；TTL 2s。
 func (uc *UserUsecase) acquireLoginLock(ctx context.Context, username string) (Release, error) {
 	if uc.locker == nil {
 		return func() {}, nil
@@ -387,7 +381,6 @@ func (uc *UserUsecase) acquireLoginLock(ctx context.Context, username string) (R
 }
 
 // notifyFailure 凭据校验失败时调；username 为空（参数非法路径）不调，防止空刷。
-// clientIP 是调用方 IP。
 func (uc *UserUsecase) notifyFailure(ctx context.Context, username, clientIP string) {
 	if uc.lim != nil {
 		uc.lim.OnFailure(ctx, username, clientIP)
@@ -395,7 +388,6 @@ func (uc *UserUsecase) notifyFailure(ctx context.Context, username, clientIP str
 }
 
 // notifySuccess 凭据校验通过后调；清掉 LoginLimiter 失败计数。
-// username 是用户名，clientIP 是调用方 IP。
 func (uc *UserUsecase) notifySuccess(ctx context.Context, username, clientIP string) {
 	if uc.lim != nil {
 		uc.lim.OnSuccess(ctx, username, clientIP)
@@ -403,7 +395,6 @@ func (uc *UserUsecase) notifySuccess(ctx context.Context, username, clientIP str
 }
 
 // Refresh 用 refresh token 换新的一对 token。refreshToken 是旧的 refresh token。
-// 流程：解析 → ConsumeRefresh 删旧 → 签发新对 → SaveRefresh。
 func (uc *UserUsecase) Refresh(ctx context.Context, refreshToken string) (*LoginResult, error) {
 	if uc.tokenFn == nil || uc.store == nil {
 		return nil, ErrRefreshInvalid
@@ -453,8 +444,9 @@ func (uc *UserUsecase) Refresh(ctx context.Context, refreshToken string) (*Login
 }
 
 // Logout 把当前会话的 token 作废：access 进黑名单 + refresh 删除。
-// accessJTI 是 access token 的 JTI，refreshJTI 是 refresh token 的 JTI，
-// accessExp 是 access token 的过期时间。均 warn 不返错。
+// accessJTI access token 的 JTI
+// refreshJTI refresh token 的 JTI
+// accessExp access token 的过期时间；均 warn 不返错
 func (uc *UserUsecase) Logout(ctx context.Context, accessJTI, refreshJTI string, accessExp time.Time) error {
 	if uc.store == nil {
 		return nil
@@ -476,7 +468,8 @@ func (uc *UserUsecase) Logout(ctx context.Context, accessJTI, refreshJTI string,
 	return nil
 }
 
-// parseRefresh 解析校验 refresh token，返回 JTI 与用户 ID。raw 是 token 原文。
+// parseRefresh 解析校验 refresh token，返回 JTI 与用户 ID。
+// raw 是 token 原文
 // 失败一律折叠 ErrRefreshInvalid，不区分原因避免暴露服务端行为。
 func (uc *UserUsecase) parseRefresh(raw string) (jti string, uid string, err error) {
 	uid, jti, _, err = uc.verify(raw, tokenTypeRefresh)
@@ -486,8 +479,7 @@ func (uc *UserUsecase) parseRefresh(raw string) (jti string, uid string, err err
 	return jti, uid, nil
 }
 
-// GetUser 按 ID 读用户资料，id 是用户 ID。
-// cache-aside：先 cache，ver 校验通过直返；未命中 / ver 不匹配 → DB → 回写。
+// GetUser 按 ID 读用户资料，id 是用户 ID。cache-aside：命中且版本一致直返，否则读 DB 并回写。
 func (uc *UserUsecase) GetUser(ctx context.Context, id string) (*User, error) {
 	if id == "" {
 		return nil, ErrUserInvalidArgument
@@ -526,7 +518,10 @@ func (uc *UserUsecase) GetUser(ctx context.Context, id string) (*User, error) {
 	return u, nil
 }
 
-// UpdateUser 全量更新资料。id 是用户 ID，nickname 是昵称，avatar 是头像地址，
+// UpdateUser 全量更新资料。
+// id 用户 ID
+// nickname 昵称
+// avatar 头像地址
 // 两者都必非空；partial update 走 UpdateUserFields。
 func (uc *UserUsecase) UpdateUser(ctx context.Context, id string, nickname, avatar string) (*User, error) {
 	if id == "" {
@@ -554,7 +549,9 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id string, nickname, avat
 	return u, nil
 }
 
-// UpdateUserFields 字段粒度更新。id 是用户 ID，fields 是待改字段集合；
+// UpdateUserFields 字段粒度更新。
+// id 用户 ID
+// fields 待改字段集合
 // 至少一个字段被设置，非 nil 字段不能为空字符串。
 func (uc *UserUsecase) UpdateUserFields(ctx context.Context, id string, fields UserUpdateFields) (*User, error) {
 	if id == "" {
@@ -595,9 +592,10 @@ func (uc *UserUsecase) UpdateUserFields(ctx context.Context, id string, fields U
 	return u, nil
 }
 
-// GetUserByID 读指定用户的资料。viewerID 是调用者 ID，targetID 是被查用户 ID。
-// viewerID == targetID 走完整 User；他人 + 不可见 折叠 NOT_FOUND；
-// 他人 + 可见 清空 Email / Phone。
+// GetUserByID 读指定用户的资料。
+// viewerID 调用者 ID
+// targetID 被查用户 ID
+// 他人 + 不可见折叠 NOT_FOUND；他人 + 可见清空 Email / Phone。
 func (uc *UserUsecase) GetUserByID(ctx context.Context, viewerID, targetID string) (*User, error) {
 	if viewerID == "" || targetID == "" {
 		return nil, ErrUserInvalidArgument
@@ -620,8 +618,10 @@ func (uc *UserUsecase) GetUserByID(ctx context.Context, viewerID, targetID strin
 	return u, nil
 }
 
-// GetUsersByIDs 批量按 ID 查公开资料。viewerID 是调用者 ID，ids 是待查用户 ID 列表。
-// 避免 N+1；上限 200；不存在 / 不可见静默剔除。
+// GetUsersByIDs 批量按 ID 查公开资料。
+// viewerID 调用者 ID
+// ids 待查用户 ID 列表
+// 上限 200，不存在 / 不可见静默剔除。
 func (uc *UserUsecase) GetUsersByIDs(ctx context.Context, viewerID string, ids []string) ([]*User, error) {
 	if viewerID == "" {
 		return nil, ErrUserInvalidArgument
@@ -659,8 +659,7 @@ func (uc *UserUsecase) GetUsersByIDs(ctx context.Context, viewerID string, ids [
 }
 
 // GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表。
-// ids 是待查用户 ID 列表。
-// 与 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定。仅限服务间调用。
+// ids 是待查用户 ID 列表；跳过 is_visible_to_stranger 判定，仅限服务间调用。
 func (uc *UserUsecase) GetFriendProfiles(ctx context.Context, ids []string) ([]*User, error) {
 	if len(ids) == 0 {
 		return []*User{}, nil
@@ -691,8 +690,7 @@ func (uc *UserUsecase) GetFriendProfiles(ctx context.Context, ids []string) ([]*
 }
 
 // GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation
-// 服务补全会话成员列表。ids 是待查用户 ID 列表。
-// 会话成员未必是好友，但同在一个会话里就互相可见，故同样跳过可见性判定。
+// 服务补全会话成员列表。ids 是待查用户 ID 列表；跳过可见性判定。
 func (uc *UserUsecase) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*User, error) {
 	return uc.GetFriendProfiles(ctx, ids)
 }
@@ -770,10 +768,13 @@ func (uc *UserUsecase) loadUsersByIDs(ctx context.Context, ids []string) (map[st
 // maxBatchIDs 单次批量查询上限，与 friend service ListFriends page_size (200) 对齐。
 const maxBatchIDs = 200
 
-// ChangePassword 修改密码。uid 是用户 ID，oldPassword 是旧明文密码，
-// newPassword 是新明文密码，accessJTI / refreshJTI 是当前会话的 token 标识，
-// accessExp 是 access token 的过期时间。
-// 旧密码错 / 用户不存在折叠 ErrUserBadCredentials；改完强制登出当前会话。
+// ChangePassword 修改密码，改完强制登出当前会话。
+// uid 用户 ID
+// oldPassword 旧明文密码
+// newPassword 新明文密码
+// accessJTI 当前会话的 access token 标识
+// refreshJTI 当前会话的 refresh token 标识
+// accessExp access token 的过期时间；旧密码错 / 用户不存在折叠 ErrUserBadCredentials。
 func (uc *UserUsecase) ChangePassword(ctx context.Context, uid string, oldPassword, newPassword, accessJTI, refreshJTI string, accessExp time.Time) error {
 	if uid == "" {
 		return ErrUserInvalidArgument
@@ -819,7 +820,7 @@ func (uc *UserUsecase) ChangePassword(ctx context.Context, uid string, oldPasswo
 	return nil
 }
 
-// signAccess 签发 access token。uid 是用户 ID，返回 token 串、JTI、过期时间。
+// signAccess 签发 access token。uid 是用户 ID，返回 token 串、JTI、过期时间；
 // 默认 15m，access_ttl 未设置回退 token_ttl。
 func (uc *UserUsecase) signAccess(uid string) (string, string, time.Time, error) {
 	ttl, issuer := uc.tokenConfig()
@@ -829,8 +830,7 @@ func (uc *UserUsecase) signAccess(uid string) (string, string, time.Time, error)
 	return uc.sign(uid, tokenTypeAccess, ttl, issuer)
 }
 
-// signRefresh 签发 refresh token。uid 是用户 ID，返回 token 串、JTI、过期时间。
-// 默认 7d。
+// signRefresh 签发 refresh token。uid 是用户 ID，返回 token 串、JTI、过期时间；默认 7d。
 func (uc *UserUsecase) signRefresh(uid string) (string, string, time.Time, error) {
 	ttl, issuer := uc.tokenConfig()
 	ttl = 7 * 24 * time.Hour
@@ -853,8 +853,12 @@ func (uc *UserUsecase) tokenConfig() (time.Duration, string) {
 	return ttl, issuer
 }
 
-// sign access / refresh 共用签发。uid 是用户 ID，typ 是 token 类型，
-// ttl 是有效期，issuer 是签发者；返回 token 串、JTI、过期时间。
+// sign access / refresh 共用签发。
+// uid 用户 ID
+// typ token 类型
+// ttl 有效期
+// issuer 签发者
+// 返回 token 串、JTI、过期时间。
 func (uc *UserUsecase) sign(uid string, typ string, ttl time.Duration, issuer string) (string, string, time.Time, error) {
 	if uc.tokenFn == nil {
 		return "", "", time.Time{}, ErrUserBadCredentials
@@ -881,7 +885,9 @@ func (uc *UserUsecase) signToken(uid string) (string, error) {
 	return tok, err
 }
 
-// verify 解析校验 token。raw 是 token 串，expectedType 是期望的 token 类型；
+// verify 解析校验 token。
+// raw token 串
+// expectedType 期望的 token 类型
 // 返回用户 ID、JTI、过期时间。校验 iss / typ / exp，失败原因不暴露给 caller。
 func (uc *UserUsecase) verify(raw, expectedType string) (string, string, time.Time, error) {
 	_, issuer := uc.tokenConfig()
@@ -929,7 +935,7 @@ func (uc *UserUsecase) verify(raw, expectedType string) (string, string, time.Ti
 }
 
 // toUID 从 JWT claim 取出 uid（UUIDv7 字符串）。
-// v claim 原始值
+// v 是 claim 原始值。
 func toUID(v any) (string, error) {
 	s, ok := v.(string)
 	if !ok || s == "" {

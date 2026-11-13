@@ -15,8 +15,7 @@ const (
 	lockPrefix               = keyPrefix + "lock:"              // 互斥锁前缀，后缀是业务 key
 )
 
-// MessageChannel 消息广播频道名。
-// conversationID 会话 ID
+// MessageChannel 消息广播频道名。conversationID 是会话 ID。
 func MessageChannel(conversationID uint64) string {
 	return msgChannelPrefix + strconv.FormatUint(conversationID, 10)
 }
@@ -32,25 +31,23 @@ func MemberInvalidatedChannel() string {
 }
 
 // TokenBlacklistKey access token 黑名单的 redis key。
-// jti token 的 JTI claim
+// jti 是 token 的 JTI claim。
 func TokenBlacklistKey(jti string) string {
 	return tokenBlacklistPrefix + jti
 }
 
 // RefreshTokenKey refresh token 存储的 redis key。
-// jti token 的 JTI claim
+// jti 是 token 的 JTI claim。
 func RefreshTokenKey(jti string) string {
 	return refreshTokenPrefix + jti
 }
 
-// LockKey 互斥锁的 redis key。
-// key 业务侧的 key（如 "register:lock:alice"）
+// LockKey 互斥锁的 redis key。key 是业务侧的 key（如 "register:lock:alice"）。
 func LockKey(key string) string {
 	return lockPrefix + key
 }
 
-// FormatUint 把 uint64 转成十进制字符串。
-// v 要转换的值
+// FormatUint 把 uint64 转成十进制字符串。v 是要转换的值。
 func FormatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }

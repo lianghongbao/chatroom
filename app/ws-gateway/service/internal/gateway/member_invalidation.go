@@ -10,14 +10,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// MemberInvalidationPayload 成员变更通知的载荷。
-// 跟 conversation 服务 data 层的一致 —— 两边靠 JSON 字段名对齐。
+// MemberInvalidationPayload 成员变更通知的载荷，跟 conversation 服务 data 层靠 JSON 字段名对齐。
 type MemberInvalidationPayload struct {
 	ConversationID uint64 `json:"conversation_id"`
 }
 
-// InvalidatorSubscriber 订阅成员失效通知的订阅器。
-// 单独一个类型 —— wire 靠类型区分 provider，两个 *Subscriber provider 会撞车。
+// InvalidatorSubscriber 订阅成员失效通知的订阅器（单独一个类型，wire 靠类型区分 provider）。
 type InvalidatorSubscriber struct {
 	*Subscriber
 }
@@ -42,7 +40,6 @@ func NewMemberInvalidationSubscriber(rdb *redis.Client, members *MemberCache, lo
 // members 成员缓存
 // payload 通知原文
 // logger 日志器，为 nil 时用默认 logger
-// 解析失败只记日志。
 func HandleMemberInvalidation(members *MemberCache, payload []byte, logger *slog.Logger) {
 	if logger == nil {
 		logger = slog.Default()

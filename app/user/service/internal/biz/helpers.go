@@ -11,7 +11,7 @@ import (
 	kratostransporthttp "github.com/go-kratos/kratos/v3/transport/http"
 )
 
-// newJTI 生成 32 位 hex 字符串，用 crypto/rand 保证安全场景可用。
+// newJTI 生成 32 位 hex 字符串。
 func newJTI() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)

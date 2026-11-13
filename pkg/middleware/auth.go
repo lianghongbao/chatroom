@@ -45,8 +45,7 @@ type options struct {
 	blacklistedReason string
 }
 
-// WithSigningMethod 指定签名算法，默认 HS256。
-// method 签名算法名
+// WithSigningMethod 指定签名算法，默认 HS256。method 是签名算法名。
 func WithSigningMethod(method jwtv5.SigningMethod) Option {
 	return func(o *options) {
 		o.signingMethod = method
@@ -54,15 +53,14 @@ func WithSigningMethod(method jwtv5.SigningMethod) Option {
 }
 
 // WithParserOptions 透传给 jwt.Parser，用于强制校验 iss/sub/exp 等 claim。
-// opts parser 选项
+// opts 是 parser 选项。
 func WithParserOptions(opts ...jwtv5.ParserOption) Option {
 	return func(o *options) {
 		o.parserOptions = opts
 	}
 }
 
-// WithBlacklistedReason 指定「token 已被拉黑」的错误原因。
-// reason 错误原因枚举
+// WithBlacklistedReason 指定「token 已被拉黑」的错误原因。reason 是错误原因枚举。
 func WithBlacklistedReason(reason string) Option {
 	return func(o *options) {
 		if reason != "" {
@@ -128,8 +126,7 @@ func Server(secret, issuer string, store TokenChecker, opts ...Option) middlewar
 // InternalTokenHeader 内部凭证的请求头名
 const InternalTokenHeader = "X-Internal-Token"
 
-// InternalServer 校验服务间内部凭证（X-Internal-Token 头）。
-// secret 为 空时受管辖的端点一律 403
+// InternalServer 校验服务间内部凭证（X-Internal-Token 头）。secret 为空时受管辖的端点一律 403。
 // 管辖范围由调用方用 selector 圈定。
 func InternalServer(secret string) middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
@@ -172,8 +169,7 @@ func OpInList(operation string, list []string) bool {
 	return false
 }
 
-// bearerToken 提取 Bearer token。
-// h 请求头
+// bearerToken 提取 Bearer token。h 是请求头。
 func bearerToken(h string) string {
 	const prefix = "bearer "
 	if len(h) <= len(prefix) {
@@ -322,7 +318,7 @@ func verifyAccess(raw, secret, issuer string, method jwtv5.SigningMethod, parser
 }
 
 // claimToUID 从 sub claim 取 uid。
-// v claim 原文
+// v 是 claim 原文。
 func claimToUID(v any) (string, error) {
 	s, ok := v.(string)
 	if !ok || s == "" {

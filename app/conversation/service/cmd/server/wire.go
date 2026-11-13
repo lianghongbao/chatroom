@@ -22,7 +22,7 @@ import (
 	"github.com/google/wire"
 )
 
-// wireApp 组装 kratos 应用。
+// wireApp 组装 kratos 应用，返回应用与清理函数。
 func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func(), error) {
 	panic(wire.Build(
 		// 本域的 server 层：构造 HTTP/gRPC server 并注册 conversation 域的路由。

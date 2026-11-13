@@ -223,8 +223,7 @@ func shutdownOf(closers []func(context.Context) error) Shutdown {
 // defaultServiceName 是配置里没写 service_name 时的兜底值。
 const defaultServiceName = "chatroom-unknown"
 
-// serviceName 取 service.name 标签值。
-// cfg 观测配置
+// serviceName 取 service.name 标签值。cfg 是观测配置。
 func serviceName(cfg *Config) string {
 	if cfg.ServiceName != "" {
 		return cfg.ServiceName
@@ -235,8 +234,7 @@ func serviceName(cfg *Config) string {
 // defaultUnauthSampleRate 未鉴权请求的默认采样率。
 const defaultUnauthSampleRate = 0.1
 
-// unauthSampleRate 取未鉴权请求的采样率，夹在 0~1。
-// cfg 观测配置
+// unauthSampleRate 取未鉴权请求的采样率，夹在 0~1。cfg 是观测配置。
 func unauthSampleRate(cfg *Config) float64 {
 	if cfg == nil || cfg.UnauthSampleRate <= 0 {
 		return defaultUnauthSampleRate

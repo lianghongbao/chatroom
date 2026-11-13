@@ -9,15 +9,14 @@ import (
 )
 
 // MessageService message.proto 的 transport adapter。
-// 只做请求校验 + 从 ctx 取调用者身份 + DO→DTO 转换。
+// 只做请求校验、从 ctx 取调用者身份、DO→DTO 转换。
 type MessageService struct {
 	pb.UnimplementedMessageServer
 
 	uc *biz.MessageUsecase
 }
 
-// NewMessageService 构造 MessageService。
-// uc 消息用例
+// NewMessageService 构造 MessageService。uc 是消息用例。
 func NewMessageService(uc *biz.MessageUsecase) *MessageService {
 	return &MessageService{uc: uc}
 }
@@ -124,9 +123,8 @@ func (s *MessageService) GetUnreadCount(ctx context.Context, req *pb.GetUnreadCo
 	return out, nil
 }
 
-// messageTypeFromDTO proto MessageType → biz.MessageType。
-// t proto 里的消息类型枚举
-// 未知值返 ErrMessageInvalidArgument。
+// messageTypeFromDTO 把 proto MessageType 转成 biz.MessageType。
+// t 是 proto 里的消息类型枚举，未知值返 ErrMessageInvalidArgument。
 func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
 	switch t {
 	case pb.MessageType_MESSAGE_TYPE_UNSPECIFIED:
@@ -141,8 +139,7 @@ func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
 	}
 }
 
-// convertMessageInfo biz.Message → proto.MessageInfo。
-// m 领域对象
+// convertMessageInfo 把 biz.Message 转成 proto.MessageInfo。m 是领域对象。
 func convertMessageInfo(m *biz.Message) *pb.MessageInfo {
 	if m == nil {
 		return nil
@@ -157,9 +154,7 @@ func convertMessageInfo(m *biz.Message) *pb.MessageInfo {
 	}
 }
 
-// messageTypeToDTO biz.MessageType (1/2) → proto MessageType (1/2)。
-// t 领域里的消息类型
-// 未知值返 UNSPECIFIED。
+// messageTypeToDTO 把 biz.MessageType 转成 proto MessageType。t 是领域里的消息类型，未知值返 UNSPECIFIED。
 func messageTypeToDTO(t biz.MessageType) pb.MessageType {
 	switch t {
 	case biz.MessageTypeText:
@@ -171,8 +166,7 @@ func messageTypeToDTO(t biz.MessageType) pb.MessageType {
 	}
 }
 
-// clampPageSize 限制 page_size 在合法区间（1..200）。
-// n 请求里的分页大小
+// clampPageSize 限制 page_size 在合法区间（1..200）。n 是请求里的分页大小。
 func clampPageSize(n int32) int {
 	if n <= 0 || n > 200 {
 		return 50

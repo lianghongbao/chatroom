@@ -69,7 +69,8 @@ func (l *Lifecycle) Start(ctx context.Context) {
 	}
 }
 
-// runSubscriber 订阅直到 ctx 结束；订阅断了就退避后重连。sub 为 nil 时直接返回。
+// runSubscriber 订阅直到 ctx 结束；订阅断了就退避后重连。
+// sub 订阅器，为 nil 时直接返回。
 func (l *Lifecycle) runSubscriber(ctx context.Context, sub *Subscriber) {
 	if sub == nil {
 		return

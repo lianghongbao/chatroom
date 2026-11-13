@@ -55,9 +55,10 @@ func (r *messageRepo) Create(ctx context.Context, m *biz.Message) (*biz.Message,
 	return toBizMessage(po), nil
 }
 
-// ListByConversation 拉历史消息，按 id 倒序（新的在前）。conversationID 是会话 ID，
-// cursor 的语义是「比这个 id 更旧的」，limit 是单页条数。
-// 返回 (消息列表, 下一页游标)，没有更多时游标为 0。
+// ListByConversation 拉历史消息，按 id 倒序（新的在前）。返回 (消息列表, 下一页游标)，没有更多时游标为 0。
+// conversationID 会话 ID
+// cursor 语义是「比这个 id 更旧的」，0 从最新一条开始
+// limit 单页条数
 func (r *messageRepo) ListByConversation(ctx context.Context, conversationID uint64, cursor uint64, limit int) ([]*biz.Message, uint64, error) {
 	q := r.data.db.Message.Query().
 		Where(message.ConversationIDEQ(conversationID)).
@@ -83,9 +84,10 @@ func (r *messageRepo) ListByConversation(ctx context.Context, conversationID uin
 	return msgs, next, nil
 }
 
-// ListSince 拉「id 严格大于 sinceID」的消息，按 id 正序（旧的在前）。
-// conversationID 是会话 ID，sinceID 为 0 表示从头拉，limit 是单页条数。
-// 返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
+// ListSince 拉「id 严格大于 sinceID」的消息，按 id 正序（旧的在前）。返回 (消息列表, 最后一条消息的 id, 还有更多吗)。
+// conversationID 会话 ID
+// sinceID 0 表示从头拉
+// limit 单页条数
 func (r *messageRepo) ListSince(ctx context.Context, conversationID, sinceID uint64, limit int) ([]*biz.Message, uint64, bool, error) {
 	q := r.data.db.Message.Query().
 		Where(message.ConversationIDEQ(conversationID)).
@@ -121,7 +123,7 @@ type MessagePublisher struct {
 
 // NewMessagePublisher 构造 MessagePublisher。
 // d 共享的数据客户端
-// Redis 不可用时返 nil（不广播）。
+// Redis 不可用时返 nil（不广播）
 func NewMessagePublisher(d *Data) *MessagePublisher {
 	if d == nil || d.Redis() == nil {
 		return nil
@@ -173,9 +175,7 @@ func marshalPublishPayload(m *biz.Message) ([]byte, error) {
 	})
 }
 
-// formatUint 把 uint64 转成十进制字符串。
-// v 待转换的值
-// 消息广播热路径上用 strconv 更快。
+// formatUint 把 uint64 转成十进制字符串。v 是待转换的值。
 func formatUint(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }

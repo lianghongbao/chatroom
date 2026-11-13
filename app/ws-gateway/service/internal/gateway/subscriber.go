@@ -10,8 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Subscriber 订阅 Redis Pub/Sub 上的会话消息频道，把消息推给本实例上的目标连接。
-// 用模式订阅（PSUBSCRIBE）而不是逐个会话订阅 —— 后者要处理订阅/退订的并发和漏订。
+// Subscriber 订阅 Redis Pub/Sub 上的会话消息频道，把消息推给本实例上的目标连接（模式订阅）。
 type Subscriber struct {
 	rdb       *redis.Client
 	pattern   string
@@ -19,7 +18,7 @@ type Subscriber struct {
 	onMessage func(channel string, payload []byte)
 }
 
-// NewSubscriber 构造 Subscriber。
+// NewSubscriber 构造 Subscriber（模式订阅）。
 // rdb Redis 客户端，为 nil 时返 nil（不订阅）
 // onMessage 收到消息时的回调
 func NewSubscriber(rdb *redis.Client, onMessage func(channel string, payload []byte)) *Subscriber {
@@ -49,7 +48,7 @@ func NewChannelSubscriber(rdb *redis.Client, channel string, onMessage func(chan
 }
 
 // Run 阻塞订阅，直到 ctx 结束。返回 ctx 的错误。
-// 订阅 channel 关闭时返回 errSubClosed —— 不是 nil，调用方要靠这个区分重连。
+// 订阅 channel 关闭时返回 errSubClosed，不是 nil，调用方要靠这个区分重连。
 func (s *Subscriber) Run(ctx context.Context) error {
 	if s == nil || s.rdb == nil {
 		return nil
@@ -82,8 +81,7 @@ func (s *Subscriber) Run(ctx context.Context) error {
 // errSubClosed 订阅 channel 关闭了 —— 需要重连。
 var errSubClosed = errors.New("redis subscription closed")
 
-// PublishPayload 广播到 Redis 的消息体。字段跟 message 服务 data 层的一致 ——
-// 两边靠 JSON 字段名对齐。
+// PublishPayload 广播到 Redis 的消息体，字段跟 message 服务 data 层靠 JSON 字段名对齐。
 type PublishPayload struct {
 	MessageID      uint64 `json:"message_id"`
 	ConversationID uint64 `json:"conversation_id"`
@@ -93,8 +91,7 @@ type PublishPayload struct {
 	CreatedAt      int64  `json:"created_at"`
 }
 
-// ConversationIDFromChannel 从频道名解析会话 id。
-// channel 频道名
+// ConversationIDFromChannel 从频道名解析会话 id。channel 是频道名。
 func ConversationIDFromChannel(channel string) uint64 {
 	idx := strings.LastIndex(channel, ":")
 	if idx < 0 || idx == len(channel)-1 {
@@ -110,8 +107,7 @@ func ConversationIDFromChannel(channel string) uint64 {
 	return id
 }
 
-// DecodePublishPayload 解析广播体。
-// payload 广播体原文
+// DecodePublishPayload 解析广播体。payload 是广播体原文。
 func DecodePublishPayload(payload []byte) (*PublishPayload, error) {
 	var p PublishPayload
 	if err := json.Unmarshal(payload, &p); err != nil {

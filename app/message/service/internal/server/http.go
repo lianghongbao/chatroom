@@ -22,7 +22,7 @@ import (
 // c server 配置段
 // ac 鉴权配置
 // obs 观测能力
-// store access token 黑名单查询
+// store 查 access token 黑名单
 // svc 本域的 HTTP 服务实现
 func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.MessageService) *khttp.Server {
 	mws := []kmiddleware.Middleware{

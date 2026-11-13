@@ -51,7 +51,7 @@ func init() {
 // hs HTTP server
 // reg 注册器
 // regCfg registry 配置段，用于读 ServiceName
-// obs 观测能力，用于关掉 exporter
+// obs 观测能力，用于关掉 exporter。
 func newApp(
 	logger *slog.Logger,
 	gs *grpc.Server,

@@ -24,8 +24,7 @@ var ProviderSet = wire.NewSet(
 	NewFriendAdapter, NewFriendLimiter,
 )
 
-// NewRedisCmdable 暴露共享的 redis.Cmdable。
-// d 数据层实例
+// NewRedisCmdable 暴露共享的 redis.Cmdable。d 是数据层实例。
 func NewRedisCmdable(d *Data) redis.Cmdable {
 	return d.Redis()
 }
@@ -38,9 +37,8 @@ type Data struct {
 	rdb   *redis.Client
 }
 
-// NewData 打开 db / redis 客户端。
-// c 数据层配置
-// Redis 缺配置时 rdb 为 nil，下游降级；启动期不 PING 避免阻塞上线。
+// NewData 打开 db / redis 客户端，返回客户端与清理函数。
+// c 是数据层配置；Redis 缺配置时 rdb 为 nil，下游降级。
 func NewData(c *conf.Data) (*Data, func(), error) {
 	dc := c.GetDatabase()
 	if dc == nil {
@@ -91,9 +89,7 @@ func NewData(c *conf.Data) (*Data, func(), error) {
 	return &Data{db: db, sqlDB: sqlDB, rdb: rdb}, cleanup, nil
 }
 
-// Redis 返回共享 redis client，可能为 nil。
-// 必须显式判 d.rdb == nil 再返回，否则会把 nil 的 *redis.Client 装进
-// redis.Cmdable 接口，下游的 nil 判断就失效了。
+// Redis 返回共享 redis client；可能为 nil。
 func (d *Data) Redis() redis.Cmdable {
 	if d == nil || d.rdb == nil {
 		return nil
@@ -102,7 +98,7 @@ func (d *Data) Redis() redis.Cmdable {
 }
 
 // durationOf 把 proto duration 转成 time.Duration。
-// d proto 里的时长
+// d 是 proto 里的时长。
 func durationOf(d *durationpb.Duration) time.Duration {
 	if d == nil {
 		return 0

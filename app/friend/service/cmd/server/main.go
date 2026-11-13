@@ -45,6 +45,13 @@ func init() {
 	flag.StringVar(&flagbootstrap, "bootstrap", "configs/bootstrap.yaml", "bootstrap config path, eg: -bootstrap bootstrap.yaml")
 }
 
+// newApp 组装 kratos 应用。
+// logger 带服务属性的 logger
+// gs gRPC server
+// hs HTTP server
+// reg nacos 注册器
+// regCfg registry 配置段，用于读 ServiceName
+// obs 观测能力，用于停机时关 exporter
 func newApp(
 	logger *slog.Logger,
 	gs *grpc.Server,
@@ -82,6 +89,7 @@ func newApp(
 	return kratos.New(opts...)
 }
 
+// main 启动 friend 服务。
 func main() {
 	flag.Parse()
 	// 第一阶段：base logger 不绑定 service.* 属性，先 set 为全局默认。

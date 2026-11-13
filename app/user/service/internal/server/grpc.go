@@ -17,7 +17,7 @@ import (
 // ac 鉴权配置段
 // obs 观测能力
 // store token 校验器
-// svc 本域的业务服务
+// svc 本域的业务服务。
 func NewGRPCServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.UserService) *grpc.Server {
 	// tracing 必须在最外层：它包住后面的鉴权中间件，401 才会进 trace。
 	// 未鉴权的 span 由 observability 的过滤层按采样率丢弃。
