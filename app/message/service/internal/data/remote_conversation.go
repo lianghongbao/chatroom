@@ -76,12 +76,17 @@ func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth,
 		context.Background(),
 		grpc.WithDiscovery(discoverer),
 		grpc.WithEndpoint(RemoteConversationEndpoint),
-		grpc.WithMiddleware(internalForwarding(internalSecret)),
-		grpc.WithMiddleware(oteltrace.Client(
-			oteltrace.WithTracerProvider(otel.GetTracerProvider()),
-			oteltrace.WithPropagator(otel.GetTextMapPropagator()),
-			oteltrace.WithTracerName("grpc-client"),
-		)),
+		// WithMiddleware 是「赋值」不是「追加」—— 调多次后者会覆盖前者。
+		// 内部凭证和 trace 两个中间件必须放进同一次调用，
+		// 分成两次写的话后一次会盖掉前一次，下游收到的是「没有内部凭证」的请求。
+		grpc.WithMiddleware(
+			internalForwarding(internalSecret),
+			oteltrace.Client(
+				oteltrace.WithTracerProvider(otel.GetTracerProvider()),
+				oteltrace.WithPropagator(otel.GetTextMapPropagator()),
+				oteltrace.WithTracerName("grpc-client"),
+			),
+		),
 		grpc.WithTimeout(1500*time.Millisecond),
 	)
 	if err != nil {
