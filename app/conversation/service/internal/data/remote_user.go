@@ -3,6 +3,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	userv1 "chatroom/api/user/service/v1"
@@ -18,6 +19,12 @@ import (
 
 	"google.golang.org/grpc/metadata"
 )
+
+// errNoRemoteSecret 没配 internal_secret —— 无法通过下游的内部凭证校验。
+//
+// 必须返 error 而不是空结果：下游不可达时返空列表，
+// 调用方分不清「用户真不存在」和「下游挂了」，会把全员误判成不存在。
+var errNoRemoteSecret = errors.New("internal secret not configured")
 
 // RemoteUserClient 暴露调用方实际用到的方法，保持窄接口。
 type RemoteUserClient interface {
@@ -72,7 +79,7 @@ func NewRemoteUserClient(discoverer registry.Discovery, auth *conf.Auth, obs *ob
 
 type remoteUserGRPCClient struct {
 	cli            userv1.UserClient
-	internalSecret string // 服务间内部凭证。空表示未配置，GetFriendProfiles 降级返空
+	internalSecret string // 服务间内部凭证。空表示未配置，相关端点返 errNoRemoteSecret
 }
 
 // GetUserByID 按目标用户查资料。targetID 是被查用户 ID，callerID 不直接使用。
@@ -80,10 +87,13 @@ func (c *remoteUserGRPCClient) GetUserByID(ctx context.Context, _, targetID stri
 	return c.cli.GetUserByID(ctx, &userv1.GetUserByIDRequest{Id: targetID})
 }
 
-// GetFriendProfiles 调 user 的好友资料端点。ids 是用户 ID 列表；未配置 internalSecret 时降级返空。
+// GetFriendProfiles 调 user 的好友资料端点。ids 是用户 ID 列表。
+//
+// 未配置 internalSecret 时返 error —— 不能返空列表：调用方拿空列表跟
+// 「这些用户真不存在」分不开，会把全员判成不存在。
 func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
-		return nil, nil
+		return nil, errNoRemoteSecret
 	}
 	reply, err := c.cli.GetFriendProfiles(ctx, &userv1.GetFriendProfilesRequest{Ids: ids})
 	if err != nil {
@@ -92,10 +102,12 @@ func (c *remoteUserGRPCClient) GetFriendProfiles(ctx context.Context, ids []stri
 	return reply.GetUsers(), nil
 }
 
-// GetConversationMemberProfiles 调 user 的会话成员资料端点。ids 是用户 ID 列表；未配置 internalSecret 时降级返空。
+// GetConversationMemberProfiles 调 user 的会话成员资料端点。ids 是用户 ID 列表。
+//
+// 未配置 internalSecret 时返 error，理由同 GetFriendProfiles。
 func (c *remoteUserGRPCClient) GetConversationMemberProfiles(ctx context.Context, ids []string) ([]*userv1.UserInfo, error) {
 	if c.internalSecret == "" {
-		return nil, nil
+		return nil, errNoRemoteSecret
 	}
 	reply, err := c.cli.GetConversationMemberProfiles(ctx, &userv1.GetConversationMemberProfilesRequest{Ids: ids})
 	if err != nil {

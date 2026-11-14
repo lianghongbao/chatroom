@@ -108,14 +108,25 @@ func (p *Pool) OnlineCount() int {
 
 // All 全部连接。
 func (p *Pool) All() []*Connection {
-
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	out := make([]*Connection, 0, p.Total())
+	// 容量自己数，**不能调 p.Total()** —— 那会再 RLock 一次。
+	// Go 的 RWMutex 不允许递归读锁：有写者排队时第二次 RLock 永久阻塞，
+	// 而 EvictIdle 是后台定时任务，撞上并发增删就会挂死整个网关。
+	out := make([]*Connection, 0, p.totalLocked())
 	for _, list := range p.conns {
 		out = append(out, list...)
 	}
 	return out
+}
+
+// totalLocked 总连接数。**调用方必须已持有读锁**。
+func (p *Pool) totalLocked() int {
+	n := 0
+	for _, list := range p.conns {
+		n += len(list)
+	}
+	return n
 }
 
 // CloseAll 关掉所有连接。

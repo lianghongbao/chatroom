@@ -189,6 +189,65 @@ func TestPool_All(t *testing.T) {
 	}
 }
 
+// TestPool_All_NoDeadlockWithPendingWriter All() 在有写者排队时不能死锁。
+//
+// All() 持读锁后调 Total()，而 Total() 会再取一次读锁 ——
+// Go 的 RWMutex 不允许**同一 goroutine 递归**读锁：
+// 写者优先，有写者排队时第二次 RLock 永久阻塞。
+//
+// 复现条件很挑：必须让写者在 All() 内部第二次取锁**之前**就进入排队队列。
+// 构造方式：先起一个写者让它持锁，再起第二个写者排队，
+// 然后让 All() 的 goroutine 去取读锁 —— 它能拿到（第一个写者还没释放），
+// 但 Total() 的第二次读锁会被卡在排队的写者后面。
+//
+// 这个 bug 很隐蔽：go test -race 抓不到（不是数据竞争），
+// 只在 EvictIdle 这个后台定时任务撞上并发增删时才发作，
+// 表现是整个网关进程挂死。
+func TestPool_All_NoDeadlockWithPendingWriter(t *testing.T) {
+	p := NewPool(nil)
+	p.Add(newTestConn("uid-1"))
+	p.Add(newTestConn("uid-2"))
+
+	// 第一个写者：持锁一小会儿，给第二个写者留出排队窗口。
+	firstWriterDone := make(chan struct{})
+	go func() {
+		p.mu.Lock()
+		time.Sleep(200 * time.Millisecond)
+		p.mu.Unlock()
+		close(firstWriterDone)
+	}()
+
+	// 等第一个写者确实拿到锁。
+	time.Sleep(50 * time.Millisecond)
+
+	// 第二个写者：排队。它会一直等第一个写者释放。
+	secondWriterDone := make(chan struct{})
+	go func() {
+		p.mu.Lock()
+		p.mu.Unlock()
+		close(secondWriterDone)
+	}()
+
+	// 让第二个写者进入排队状态。
+	time.Sleep(50 * time.Millisecond)
+
+	// All() 必须在有限时间内返回。
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		p.All()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("All() 死锁了 —— 持读锁后递归取读锁，有写者排队时永久阻塞")
+	}
+
+	<-firstWriterDone
+	<-secondWriterDone
+}
+
 // TestPool_CloseAll 关掉所有连接。
 func TestPool_CloseAll(t *testing.T) {
 	p := NewPool(nil)
