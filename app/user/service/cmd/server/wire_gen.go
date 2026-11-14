@@ -53,7 +53,8 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	userUsecase := biz.NewUserUsecase(userRepo, auth, loginLimiter, locker, tokenStore, userCache, storageOptions, logger)
 	userService := service.NewUserService(userUsecase, auth)
 	grpcServer := server.NewGRPCServer(confServer, auth, provider, tokenStore, userService)
-	httpServer := server.NewHTTPServer(confServer, auth, provider, tokenStore, userService)
+	checker := data.NewHealthChecker(dataData)
+	httpServer := server.NewHTTPServer(confServer, auth, provider, tokenStore, userService, checker)
 	options := conf.NacosOptions(registry)
 	iNamingClient, cleanup2, err := nacos.NewNamingClient(options)
 	if err != nil {

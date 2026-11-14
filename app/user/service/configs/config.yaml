@@ -19,6 +19,11 @@ data:
     debug: false
     # 表结构以 ent schema 为准，启动时增量对齐（只 ALTER，不删列）
     auto_migrate: true
+    # 连接池。连接额度是所有服务共享的，不是每个服务各有一份。
+    max_open_conns: 10
+    max_idle_conns: 5
+    conn_max_lifetime: 1800s
+    conn_max_idle_time: 300s
   redis:
     addr: "${REDIS_ADDR}"
     read_timeout: 0.2s

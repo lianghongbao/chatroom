@@ -12,7 +12,7 @@ import (
 )
 
 // ProviderSet 是 ws-gateway 的 data providers。网关不落库，只有 Redis 客户端。
-var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewRedisClient, NewSender, NewLister, NewRemoteConversationClient, NewMembershipAdapter, NewUnreadAdapter, NewMembersAdapter, NewMemberListerAdapter, NewUserConversationListerAdapter, NewRemoteMessageClient)
+var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewRedisClient, NewSender, NewLister, NewRemoteConversationClient, NewMembershipAdapter, NewUnreadAdapter, NewMembersAdapter, NewMemberListerAdapter, NewUserConversationListerAdapter, NewRemoteMessageClient, NewHealthChecker)
 
 // Data 持有 redis 长连接客户端。
 type Data struct {

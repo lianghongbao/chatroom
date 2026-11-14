@@ -69,7 +69,8 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	friendUsecase := biz.NewFriendUsecase(friendRepo, friendAdapter, friendLimiter, logger)
 	friendService := service.NewFriendService(friendUsecase)
 	grpcServer := server.NewGRPCServer(confServer, auth, provider, blacklistChecker, friendService)
-	httpServer := server.NewHTTPServer(confServer, auth, provider, blacklistChecker, friendService)
+	checker := data.NewHealthChecker(dataData)
+	httpServer := server.NewHTTPServer(confServer, auth, provider, blacklistChecker, friendService, checker)
 	registrar, cleanup5, err := nacos.NewRegistrar(iNamingClient, options)
 	if err != nil {
 		cleanup4()

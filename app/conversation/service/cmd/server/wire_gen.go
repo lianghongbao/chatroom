@@ -26,7 +26,7 @@ import (
 
 // Injectors from wire.go:
 
-// wireApp 组装 kratos 应用。
+// wireApp 组装 kratos 应用，返回应用与清理函数。
 func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Logger) (*kratos.App, func(), error) {
 	confServer := bootstrap.Server
 	auth := bootstrap.Auth
@@ -69,7 +69,8 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	conversationUsecase := biz.NewConversationUsecase(conversationRepo, conversationAdapter, conversationAdapter, memberInvalidationPublisher, logger)
 	conversationService := service.NewConversationService(conversationUsecase)
 	grpcServer := server.NewGRPCServer(confServer, auth, provider, blacklistChecker, conversationService)
-	httpServer := server.NewHTTPServer(confServer, auth, provider, blacklistChecker, conversationService)
+	checker := data.NewHealthChecker(dataData)
+	httpServer := server.NewHTTPServer(confServer, auth, provider, blacklistChecker, conversationService, checker)
 	registrar, cleanup5, err := nacos.NewRegistrar(iNamingClient, options)
 	if err != nil {
 		cleanup4()

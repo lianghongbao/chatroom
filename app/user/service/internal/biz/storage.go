@@ -117,6 +117,11 @@ func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*os
 	}
 
 	dir := avatarDir(uid)
+	// 没配 url_prefix 时签不出公开地址 —— 客户端拿到空的 public_url，
+	// 上传完不知道该把哪个地址存下来。与其发一个半成品凭证，不如早失败。
+	if uc.oss.Config().URLPrefix == "" {
+		return nil, ErrStorageNotConfigured
+	}
 	return uc.oss.GenerateUploadToken(ctx, oss.UploadOptions{
 		Dir:         dir,
 		Ext:         ext,

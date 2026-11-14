@@ -1,11 +1,10 @@
 package server
 
 import (
-	"net/http"
-
 	convv1 "chatroom/api/conversation/service/v1"
 	"chatroom/app/conversation/service/internal/conf"
 	"chatroom/app/conversation/service/internal/service"
+	"chatroom/pkg/health"
 	"chatroom/pkg/middleware"
 	"chatroom/pkg/observability"
 
@@ -24,7 +23,8 @@ import (
 // obs 观测能力
 // store token 黑名单查询器
 // svc 会话服务
-func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.ConversationService) *khttp.Server {
+// checker 就绪检查器（探依赖）
+func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, store middleware.TokenChecker, svc *service.ConversationService, checker *health.Checker) *khttp.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),
 	}
@@ -54,17 +54,11 @@ func NewHTTPServer(c *conf.Server, ac *conf.Auth, obs *observability.Provider, s
 		opts = append(opts, khttp.Timeout(c.GetHttp().GetTimeout().AsDuration()))
 	}
 	srv := khttp.NewServer(opts...)
-	// 健康检查。必须在 JWT 中间件之前生效（探针不带 token）。
-	srv.Handle("/healthz", httpHealthHandler())
+	// 健康检查：K8s / docker healthcheck 要有端点可探，且必须在 JWT 中间件之前生效（探针不带 token）。
+	// /healthz 是 liveness —— 只报进程活着，不碰任何依赖。
+	// /readyz 是 readiness —— 探依赖，硬依赖挂了返 503，pod 离开 endpoints。
+	srv.Handle("/healthz", health.Live())
+	srv.Handle("/readyz", checker.Ready())
 	convv1.RegisterConversationHTTPServer(srv, svc)
 	return srv
-}
-
-// httpHealthHandler 返回健康检查 handler。
-func httpHealthHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	}
 }

@@ -1,10 +1,9 @@
 package server
 
 import (
-	"net/http"
-
 	"chatroom/app/ws-gateway/service/internal/conf"
 	"chatroom/app/ws-gateway/service/internal/gateway"
+	"chatroom/pkg/health"
 	"chatroom/pkg/observability"
 
 	kmiddleware "github.com/go-kratos/kratos/v3/middleware"
@@ -16,7 +15,8 @@ import (
 // c 服务配置
 // obs 观测能力
 // gw 网关
-func NewHTTPServer(c *conf.Server, obs *observability.Provider, gw *gateway.Server) *khttp.Server {
+// checker 健康检查器
+func NewHTTPServer(c *conf.Server, obs *observability.Provider, gw *gateway.Server, checker *health.Checker) *khttp.Server {
 	mws := []kmiddleware.Middleware{
 		recovery.Recovery(),
 	}
@@ -37,17 +37,11 @@ func NewHTTPServer(c *conf.Server, obs *observability.Provider, gw *gateway.Serv
 	// WS 端点。用 Handle 而不是 Route —— Route 是给 proto 服务注册用的
 	srv.Handle(gw.Path(), gw.Handler())
 
-	// 健康检查。网关不注册 proto 服务，得自己加一个
-	srv.Handle("/healthz", httpHealthHandler())
+	// 健康检查：K8s / docker healthcheck 要有端点可探，且必须在 JWT 中间件之前生效（探针不带 token）
+	// /healthz 是 liveness —— 只报进程活着，不碰任何依赖
+	// /readyz 是 readiness —— 探依赖，硬依赖挂了返 503，pod 离开 endpoints
+	srv.Handle("/healthz", health.Live())
+	srv.Handle("/readyz", checker.Ready())
 
 	return srv
-}
-
-// httpHealthHandler 健康检查 handler。
-func httpHealthHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	}
 }

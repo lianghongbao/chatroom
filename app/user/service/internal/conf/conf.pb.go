@@ -820,9 +820,17 @@ type Data_Database struct {
 	Debug bool `protobuf:"varint,3,opt,name=debug,proto3" json:"debug,omitempty"`
 	// 按 ent schema 增量对齐表结构（启动时只发必要的 ALTER TABLE）。
 	// 不删列 —— 废弃的列手工 DROP。
-	AutoMigrate   bool `protobuf:"varint,4,opt,name=auto_migrate,json=autoMigrate,proto3" json:"auto_migrate,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	AutoMigrate bool `protobuf:"varint,4,opt,name=auto_migrate,json=autoMigrate,proto3" json:"auto_migrate,omitempty"`
+	// 单进程最大连接数。<= 0 用 pkg/dbpool 的默认值（10）。
+	MaxOpenConns int32 `protobuf:"varint,5,opt,name=max_open_conns,json=maxOpenConns,proto3" json:"max_open_conns,omitempty"`
+	// 空闲连接数。<= 0 用默认值（5）。
+	MaxIdleConns int32 `protobuf:"varint,6,opt,name=max_idle_conns,json=maxIdleConns,proto3" json:"max_idle_conns,omitempty"`
+	// 连接最长存活时间。<= 0 用默认值（30m）。
+	ConnMaxLifetime *durationpb.Duration `protobuf:"bytes,7,opt,name=conn_max_lifetime,json=connMaxLifetime,proto3" json:"conn_max_lifetime,omitempty"`
+	// 空闲连接最长保留时间。<= 0 用默认值（5m）。
+	ConnMaxIdleTime *durationpb.Duration `protobuf:"bytes,8,opt,name=conn_max_idle_time,json=connMaxIdleTime,proto3" json:"conn_max_idle_time,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Data_Database) Reset() {
@@ -881,6 +889,34 @@ func (x *Data_Database) GetAutoMigrate() bool {
 		return x.AutoMigrate
 	}
 	return false
+}
+
+func (x *Data_Database) GetMaxOpenConns() int32 {
+	if x != nil {
+		return x.MaxOpenConns
+	}
+	return 0
+}
+
+func (x *Data_Database) GetMaxIdleConns() int32 {
+	if x != nil {
+		return x.MaxIdleConns
+	}
+	return 0
+}
+
+func (x *Data_Database) GetConnMaxLifetime() *durationpb.Duration {
+	if x != nil {
+		return x.ConnMaxLifetime
+	}
+	return nil
+}
+
+func (x *Data_Database) GetConnMaxIdleTime() *durationpb.Duration {
+	if x != nil {
+		return x.ConnMaxIdleTime
+	}
+	return nil
 }
 
 type Data_Redis struct {
@@ -999,15 +1035,19 @@ const file_user_service_internal_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xa6\x03\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\x82\x05\n" +
 	"\x04Data\x12=\n" +
 	"\bdatabase\x18\x01 \x01(\v2!.chatroom.user.conf.Data.DatabaseR\bdatabase\x124\n" +
-	"\x05redis\x18\x02 \x01(\v2\x1e.chatroom.user.conf.Data.RedisR\x05redis\x1as\n" +
+	"\x05redis\x18\x02 \x01(\v2\x1e.chatroom.user.conf.Data.RedisR\x05redis\x1a\xce\x02\n" +
 	"\bDatabase\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12\x14\n" +
 	"\x05debug\x18\x03 \x01(\bR\x05debug\x12!\n" +
-	"\fauto_migrate\x18\x04 \x01(\bR\vautoMigrate\x1a\xb3\x01\n" +
+	"\fauto_migrate\x18\x04 \x01(\bR\vautoMigrate\x12$\n" +
+	"\x0emax_open_conns\x18\x05 \x01(\x05R\fmaxOpenConns\x12$\n" +
+	"\x0emax_idle_conns\x18\x06 \x01(\x05R\fmaxIdleConns\x12E\n" +
+	"\x11conn_max_lifetime\x18\a \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxLifetime\x12F\n" +
+	"\x12conn_max_idle_time\x18\b \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxIdleTime\x1a\xb3\x01\n" +
 	"\x05Redis\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12<\n" +
@@ -1078,13 +1118,15 @@ var file_user_service_internal_conf_conf_proto_depIdxs = []int32{
 	12, // 14: chatroom.user.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
 	12, // 15: chatroom.user.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
 	12, // 16: chatroom.user.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	12, // 17: chatroom.user.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	12, // 18: chatroom.user.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	12, // 17: chatroom.user.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	12, // 18: chatroom.user.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	12, // 19: chatroom.user.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	12, // 20: chatroom.user.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_user_service_internal_conf_conf_proto_init() }

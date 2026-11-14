@@ -262,7 +262,8 @@ func (s *ConversationService) GetMemberProfile(ctx context.Context, req *pb.GetM
 }
 
 // CheckMembership 查某用户是不是会话成员。req 是查询请求，userId 是被查的用户 ID。
-func (s *ConversationService) CheckMembership(ctx context.Context, req *pb.CheckMembershipRequest) (*pb.CheckMembershipReply, error) {	if req == nil || req.GetConversationId() == 0 || req.GetUserId() == "" {
+func (s *ConversationService) CheckMembership(ctx context.Context, req *pb.CheckMembershipRequest) (*pb.CheckMembershipReply, error) {
+	if req == nil || req.GetConversationId() == 0 || req.GetUserId() == "" {
 		return nil, biz.ErrConversationInvalidArgument
 	}
 	isMember, err := s.uc.CheckMembership(ctx, req.GetConversationId(), req.GetUserId())

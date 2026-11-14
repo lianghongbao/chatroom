@@ -84,6 +84,14 @@ message Data {
     // 按 ent schema 增量对齐表结构（启动时只发必要的 ALTER TABLE）。
     // 不删列 —— 废弃的列手工 DROP。
     bool auto_migrate = 4;
+    // 单进程最大连接数。<= 0 用 pkg/dbpool 的默认值（10）。
+    int32 max_open_conns = 5;
+    // 空闲连接数。<= 0 用默认值（5）。
+    int32 max_idle_conns = 6;
+    // 连接最长存活时间。<= 0 用默认值（30m）。
+    google.protobuf.Duration conn_max_lifetime = 7;
+    // 空闲连接最长保留时间。<= 0 用默认值（5m）。
+    google.protobuf.Duration conn_max_idle_time = 8;
   }
   message Redis {
     string network = 1;

@@ -8,6 +8,7 @@ import (
 
 	"chatroom/app/conversation/service/internal/conf"
 	"chatroom/app/conversation/service/internal/data/ent"
+	"chatroom/pkg/dbpool"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/schema"
@@ -19,7 +20,7 @@ import (
 )
 
 // ProviderSet conversation 服务的 data 层 providers。
-var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewRedisClient, NewConversationRepo, NewConversationAdapter, NewRemoteUserClient, NewMemberInvalidationPublisher)
+var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewRedisClient, NewConversationRepo, NewConversationAdapter, NewRemoteUserClient, NewMemberInvalidationPublisher, NewHealthChecker)
 
 // NewRedisCmdable 暴露共享的 redis.Cmdable。
 // d 是 data 客户端。
@@ -54,6 +55,15 @@ func NewData(c *conf.Data) (*Data, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// 连接池参数 —— database/sql 的默认值在生产上不安全：
+	// MaxOpenConns 默认无限，ConnMaxLifetime 默认「永不复用」，
+	// 后者在 MySQL 代理重启后表现为零星 500。
+	dbpool.Apply(sqlDB, dbpool.Options{
+		MaxOpenConns:    int(dc.GetMaxOpenConns()),
+		MaxIdleConns:    int(dc.GetMaxIdleConns()),
+		ConnMaxLifetime: durationOf(dc.GetConnMaxLifetime()),
+		ConnMaxIdleTime: durationOf(dc.GetConnMaxIdleTime()),
+	})
 	db := ent.NewClient(ent.Driver(entsql.OpenDB(dc.GetDriver(), sqlDB)))
 	if dc.GetDebug() {
 		db = db.Debug()
