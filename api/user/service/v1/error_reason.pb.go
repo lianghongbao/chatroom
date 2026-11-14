@@ -36,21 +36,24 @@ const (
 	ErrorReason_USER_INVALID_OLD_PASSWORD ErrorReason = 8
 	// 账号被禁用（status=0）。登录 / 刷新 token 时拦截。
 	ErrorReason_USER_BANNED ErrorReason = 9
+	// 手机号已被占用（全局唯一）。注册 / 改手机号时拦截。
+	ErrorReason_USER_PHONE_TAKEN ErrorReason = 10
 )
 
 // Enum value maps for ErrorReason.
 var (
 	ErrorReason_name = map[int32]string{
-		0: "USER_UNSPECIFIED",
-		1: "USER_NOT_FOUND",
-		2: "USER_INVALID_ARGUMENT",
-		3: "USER_ALREADY_EXISTS",
-		4: "USER_BAD_CREDENTIALS",
-		5: "USER_LOGIN_LOCKED",
-		6: "USER_REFRESH_INVALID",
-		7: "USER_TOKEN_BLACKLISTED",
-		8: "USER_INVALID_OLD_PASSWORD",
-		9: "USER_BANNED",
+		0:  "USER_UNSPECIFIED",
+		1:  "USER_NOT_FOUND",
+		2:  "USER_INVALID_ARGUMENT",
+		3:  "USER_ALREADY_EXISTS",
+		4:  "USER_BAD_CREDENTIALS",
+		5:  "USER_LOGIN_LOCKED",
+		6:  "USER_REFRESH_INVALID",
+		7:  "USER_TOKEN_BLACKLISTED",
+		8:  "USER_INVALID_OLD_PASSWORD",
+		9:  "USER_BANNED",
+		10: "USER_PHONE_TAKEN",
 	}
 	ErrorReason_value = map[string]int32{
 		"USER_UNSPECIFIED":          0,
@@ -63,6 +66,7 @@ var (
 		"USER_TOKEN_BLACKLISTED":    7,
 		"USER_INVALID_OLD_PASSWORD": 8,
 		"USER_BANNED":               9,
+		"USER_PHONE_TAKEN":          10,
 	}
 )
 
@@ -97,7 +101,7 @@ var File_user_service_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_user_service_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"\"user/service/v1/error_reason.proto\x12\vapi.user.v1*\x82\x02\n" +
+	"\"user/service/v1/error_reason.proto\x12\vapi.user.v1*\x98\x02\n" +
 	"\vErrorReason\x12\x14\n" +
 	"\x10USER_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eUSER_NOT_FOUND\x10\x01\x12\x19\n" +
@@ -108,7 +112,9 @@ const file_user_service_v1_error_reason_proto_rawDesc = "" +
 	"\x14USER_REFRESH_INVALID\x10\x06\x12\x1a\n" +
 	"\x16USER_TOKEN_BLACKLISTED\x10\a\x12\x1d\n" +
 	"\x19USER_INVALID_OLD_PASSWORD\x10\b\x12\x0f\n" +
-	"\vUSER_BANNED\x10\tB<\n" +
+	"\vUSER_BANNED\x10\t\x12\x14\n" +
+	"\x10USER_PHONE_TAKEN\x10\n" +
+	"B<\n" +
 	"\vapi.user.v1P\x01Z\x1fchatroom/api/user/service/v1;v1\xa2\x02\tAPIUserV1b\x06proto3"
 
 var (

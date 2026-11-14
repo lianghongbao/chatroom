@@ -28,6 +28,8 @@ const (
 	User_ChangePassword_FullMethodName                = "/api.user.v1.User/ChangePassword"
 	User_GetUserByID_FullMethodName                   = "/api.user.v1.User/GetUserByID"
 	User_GetUsersByIDs_FullMethodName                 = "/api.user.v1.User/GetUsersByIDs"
+	User_GetUserByUsername_FullMethodName             = "/api.user.v1.User/GetUserByUsername"
+	User_GetUserByPhone_FullMethodName                = "/api.user.v1.User/GetUserByPhone"
 	User_GetFriendProfiles_FullMethodName             = "/api.user.v1.User/GetFriendProfiles"
 	User_GetConversationMemberProfiles_FullMethodName = "/api.user.v1.User/GetConversationMemberProfiles"
 )
@@ -58,6 +60,25 @@ type UserClient interface {
 	GetUserByID(ctx context.Context, in *GetUserByIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	// 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
 	GetUsersByIDs(ctx context.Context, in *GetUsersByIDsRequest, opts ...grpc.CallOption) (*GetUsersByIDsReply, error)
+	// GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+	// 加好友时用用户名找人更现实。
+	//
+	// 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+	// 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+	// 返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+	// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+	// （通配符只吃单段路径，且注册在前先匹配）。
+	GetUserByUsername(ctx context.Context, in *GetUserByUsernameRequest, opts ...grpc.CallOption) (*UserInfo, error)
+	// GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+	//
+	// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+	// 所以最多一个结果。返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+	// /api/user/{id} 通配符吃掉。
+	GetUserByPhone(ctx context.Context, in *GetUserByPhoneRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	// GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
 	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
 	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
@@ -169,6 +190,26 @@ func (c *userClient) GetUsersByIDs(ctx context.Context, in *GetUsersByIDsRequest
 	return out, nil
 }
 
+func (c *userClient) GetUserByUsername(ctx context.Context, in *GetUserByUsernameRequest, opts ...grpc.CallOption) (*UserInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UserInfo)
+	err := c.cc.Invoke(ctx, User_GetUserByUsername_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userClient) GetUserByPhone(ctx context.Context, in *GetUserByPhoneRequest, opts ...grpc.CallOption) (*UserInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UserInfo)
+	err := c.cc.Invoke(ctx, User_GetUserByPhone_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *userClient) GetFriendProfiles(ctx context.Context, in *GetFriendProfilesRequest, opts ...grpc.CallOption) (*GetFriendProfilesReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetFriendProfilesReply)
@@ -215,6 +256,25 @@ type UserServer interface {
 	GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error)
 	// 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
 	GetUsersByIDs(context.Context, *GetUsersByIDsRequest) (*GetUsersByIDsReply, error)
+	// GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+	// 加好友时用用户名找人更现实。
+	//
+	// 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+	// 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+	// 返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+	// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+	// （通配符只吃单段路径，且注册在前先匹配）。
+	GetUserByUsername(context.Context, *GetUserByUsernameRequest) (*UserInfo, error)
+	// GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+	//
+	// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+	// 所以最多一个结果。返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+	// /api/user/{id} 通配符吃掉。
+	GetUserByPhone(context.Context, *GetUserByPhoneRequest) (*UserInfo, error)
 	// GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
 	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
 	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
@@ -262,6 +322,12 @@ func (UnimplementedUserServer) GetUserByID(context.Context, *GetUserByIDRequest)
 }
 func (UnimplementedUserServer) GetUsersByIDs(context.Context, *GetUsersByIDsRequest) (*GetUsersByIDsReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUsersByIDs not implemented")
+}
+func (UnimplementedUserServer) GetUserByUsername(context.Context, *GetUserByUsernameRequest) (*UserInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUserByUsername not implemented")
+}
+func (UnimplementedUserServer) GetUserByPhone(context.Context, *GetUserByPhoneRequest) (*UserInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUserByPhone not implemented")
 }
 func (UnimplementedUserServer) GetFriendProfiles(context.Context, *GetFriendProfilesRequest) (*GetFriendProfilesReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetFriendProfiles not implemented")
@@ -452,6 +518,42 @@ func _User_GetUsersByIDs_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _User_GetUserByUsername_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserByUsernameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).GetUserByUsername(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_GetUserByUsername_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).GetUserByUsername(ctx, req.(*GetUserByUsernameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _User_GetUserByPhone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserByPhoneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).GetUserByPhone(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_GetUserByPhone_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).GetUserByPhone(ctx, req.(*GetUserByPhoneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _User_GetFriendProfiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetFriendProfilesRequest)
 	if err := dec(in); err != nil {
@@ -530,6 +632,14 @@ var User_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUsersByIDs",
 			Handler:    _User_GetUsersByIDs_Handler,
+		},
+		{
+			MethodName: "GetUserByUsername",
+			Handler:    _User_GetUserByUsername_Handler,
+		},
+		{
+			MethodName: "GetUserByPhone",
+			Handler:    _User_GetUserByPhone_Handler,
 		},
 		{
 			MethodName: "GetFriendProfiles",

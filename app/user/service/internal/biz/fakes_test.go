@@ -68,6 +68,15 @@ func (r *fakeUserRepo) FindByUsername(ctx context.Context, username string) (*Us
 	return nil, ErrUserNotFound
 }
 
+func (r *fakeUserRepo) FindByPhone(ctx context.Context, phone string) (*User, error) {
+	for _, u := range r.users {
+		if u.Phone == phone {
+			return u, nil
+		}
+	}
+	return nil, ErrUserNotFound
+}
+
 func (r *fakeUserRepo) FindByIDs(ctx context.Context, ids []string) ([]*User, error) {
 	out := make([]*User, 0, len(ids))
 	for _, id := range ids {
@@ -98,6 +107,12 @@ func (r *fakeUserRepo) UpdateFields(ctx context.Context, id string, fields UserU
 	}
 	if fields.Avatar != nil {
 		u.Avatar = *fields.Avatar
+	}
+	if fields.Phone != nil {
+		u.Phone = *fields.Phone
+	}
+	if fields.Email != nil {
+		u.Email = *fields.Email
 	}
 	return u, nil
 }

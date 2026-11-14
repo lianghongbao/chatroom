@@ -84,6 +84,35 @@ service User {
         };
     }
 
+    // GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+    // 加好友时用用户名找人更现实。
+    //
+    // 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+    // 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+    // 返回的资料不含 email / phone。
+    //
+    // 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+    // 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+    // （通配符只吃单段路径，且注册在前先匹配）。
+    rpc GetUserByUsername (GetUserByUsernameRequest) returns (UserInfo) {
+        option (google.api.http) = {
+            get: "/api/user/lookup/username"
+        };
+    }
+
+    // GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+    //
+    // 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+    // 所以最多一个结果。返回的资料不含 email / phone。
+    //
+    // 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+    // /api/user/{id} 通配符吃掉。
+    rpc GetUserByPhone (GetUserByPhoneRequest) returns (UserInfo) {
+        option (google.api.http) = {
+            get: "/api/user/lookup/phone"
+        };
+    }
+
     // GetFriendProfiles 批量拉「好友可见」的公开资料，供 friend 服务补全好友列表的昵称/头像/注册时间。
     // 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
     // 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
@@ -150,6 +179,13 @@ message RegisterRequest {
   string password = 2;
   // 留空回退到 username。
   string nickname = 3;
+  // 手机号（可选）。加好友时用它找人，全局唯一。
+  // 留空 = 不填；已被人占用则注册失败。
+  string phone = 4;
+  // 邮箱（可选）。**不加唯一索引、也不做格式校验** —— 目前只是个备注字段，
+  // 将来接「验证码改密 / 找回密码」时再视业务收紧。
+  // 留空 = 不填。
+  string email = 5;
 }
 
 message RegisterReply {
@@ -194,6 +230,12 @@ message UpdateUserRequest {
   string avatar = 2;
   // 列出本次要更新的字段路径；未列出字段保持原值。
   google.protobuf.FieldMask update_mask = 3;
+  // 手机号。跟 nickname / avatar 一样，**只在 update_mask 列出 "phone" 时才生效**。
+  // 传空串表示「清空手机号」。
+  string phone = 4;
+  // 邮箱。跟 phone 一样，**只在 update_mask 列出 "email" 时才生效**。
+  // 传空串表示「清空邮箱」。不唯一、不校验格式。
+  string email = 5;
 }
 
 message ChangePasswordRequest {
@@ -221,4 +263,16 @@ message GetUsersByIDsRequest {
 // GetUsersByIDsReply 顺序与 ids 无关，caller 按 user.id 自行索引。
 message GetUsersByIDsReply {
   repeated UserInfo users = 1;
+}
+
+// GetUserByUsernameRequest 按用户名精确查公开资料。
+message GetUserByUsernameRequest {
+  // 用户名。精确匹配（不区分大小写：username 存库时已小写化）。
+  string username = 1;
+}
+
+// GetUserByPhoneRequest 按手机号精确查公开资料。
+message GetUserByPhoneRequest {
+  // 手机号。精确匹配（中国大陆 11 位）。
+  string phone = 1;
 }

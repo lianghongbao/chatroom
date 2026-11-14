@@ -52,6 +52,9 @@ type fakeRepo struct {
 	findByUsernameRet *biz.User
 	findByUsernameErr error
 
+	findByPhoneRet *biz.User
+	findByPhoneErr error
+
 	findByIDsRet []*biz.User
 	findByIDsErr error
 	findByIDsIDs []string
@@ -112,6 +115,13 @@ func (f *fakeRepo) FindByUsername(_ context.Context, username string) (*biz.User
 		return nil, f.findByUsernameErr
 	}
 	return f.findByUsernameRet, nil
+}
+
+func (f *fakeRepo) FindByPhone(_ context.Context, phone string) (*biz.User, error) {
+	if f.findByPhoneErr != nil {
+		return nil, f.findByPhoneErr
+	}
+	return f.findByPhoneRet, nil
 }
 
 func (f *fakeRepo) FindByIDs(_ context.Context, ids []string) ([]*biz.User, error) {
@@ -906,5 +916,118 @@ func TestServiceGetConversationMemberProfiles_PropagatesError(t *testing.T) {
 
 	if _, err := s.GetConversationMemberProfiles(context.Background(), &pb.GetConversationMemberProfilesRequest{Ids: []string{"uid-1"}}); err != wantErr {
 		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+}
+
+// TestServiceGetUserByUsername_ReturnsUser 按用户名查到人，返的资料带 uid。
+func TestServiceGetUserByUsername_ReturnsUser(t *testing.T) {
+	repo := &fakeRepo{findByUsernameRet: &biz.User{
+		ID:       "uid-7",
+		Username: "alice",
+		Nickname: "Alice",
+		CreatedAt: time.Now(),
+	}}
+	s := newServiceWithRepo(repo)
+
+	reply, err := s.GetUserByUsername(context.Background(), &pb.GetUserByUsernameRequest{Username: "alice"})
+	if err != nil {
+		t.Fatalf("GetUserByUsername: %v", err)
+	}
+	if reply.GetId() != "uid-7" {
+		t.Errorf("Id = %q, want uid-7", reply.GetId())
+	}
+	if reply.GetUsername() != "alice" {
+		t.Errorf("Username = %q, want alice", reply.GetUsername())
+	}
+}
+
+// TestServiceGetUserByUsername_NilRequest 空请求返参数错误。
+func TestServiceGetUserByUsername_NilRequest(t *testing.T) {
+	s := newServiceWithRepo(&fakeRepo{})
+	if _, err := s.GetUserByUsername(context.Background(), nil); !kratoserrors.IsBadRequest(err) {
+		t.Fatalf("error = %v, want bad request", err)
+	}
+}
+
+// TestServiceGetUserByUsername_EmptyUsername 空用户名返参数错误。
+func TestServiceGetUserByUsername_EmptyUsername(t *testing.T) {
+	s := newServiceWithRepo(&fakeRepo{})
+	if _, err := s.GetUserByUsername(context.Background(), &pb.GetUserByUsernameRequest{}); !kratoserrors.IsBadRequest(err) {
+		t.Fatalf("error = %v, want bad request", err)
+	}
+}
+
+// TestServiceGetUserByUsername_PropagatesError 查无此人时把底层错误带出去，
+// service 层不吞 —— 前端靠 404 区分「没有这个用户名」和「服务挂了」。
+func TestServiceGetUserByUsername_PropagatesError(t *testing.T) {
+	wantErr := errors.New("boom")
+	repo := &fakeRepo{findByUsernameErr: wantErr}
+	s := newServiceWithRepo(repo)
+
+	if _, err := s.GetUserByUsername(context.Background(), &pb.GetUserByUsernameRequest{Username: "alice"}); err != wantErr {
+		t.Fatalf("error = %v, want %v", err, wantErr)
+	}
+}
+
+// TestServiceGetUserByPhone_ReturnsUser 按手机号查到人。
+func TestServiceGetUserByPhone_ReturnsUser(t *testing.T) {
+	repo := &fakeRepo{findByPhoneRet: &biz.User{
+		ID:        "uid-7",
+		Username:  "alice",
+		Nickname:  "Alice",
+		CreatedAt: time.Now(),
+	}}
+	s := newServiceWithRepo(repo)
+
+	reply, err := s.GetUserByPhone(context.Background(), &pb.GetUserByPhoneRequest{Phone: "13812345678"})
+	if err != nil {
+		t.Fatalf("GetUserByPhone: %v", err)
+	}
+	if reply.GetId() != "uid-7" {
+		t.Errorf("Id = %q, want uid-7", reply.GetId())
+	}
+}
+
+// TestServiceGetUserByPhone_NilRequest 空请求返参数错误。
+func TestServiceGetUserByPhone_NilRequest(t *testing.T) {
+	s := newServiceWithRepo(&fakeRepo{})
+	if _, err := s.GetUserByPhone(context.Background(), nil); !kratoserrors.IsBadRequest(err) {
+		t.Fatalf("error = %v, want bad request", err)
+	}
+}
+
+// TestServiceGetUserByPhone_EmptyPhone 空手机号返参数错误。
+func TestServiceGetUserByPhone_EmptyPhone(t *testing.T) {
+	s := newServiceWithRepo(&fakeRepo{})
+	if _, err := s.GetUserByPhone(context.Background(), &pb.GetUserByPhoneRequest{}); !kratoserrors.IsBadRequest(err) {
+		t.Fatalf("error = %v, want bad request", err)
+	}
+}
+
+// TestServiceUpdateUser_PassesPhoneToUsecase mask 里带 phone 时要把手机号传下去。
+func TestServiceUpdateUser_PassesPhoneToUsecase(t *testing.T) {
+	repo := &fakeRepo{updateFieldsRet: &biz.User{
+		ID:        "uid-7",
+		Username:  "alice",
+		CreatedAt: time.Now(),
+	}}
+	s := newServiceWithRepo(repo)
+
+	ctx := authedCtxWithToken(t, jwtFor(t, "test-secret", "uid-7"), "test-secret")
+	_, err := s.UpdateUser(ctx, &pb.UpdateUserRequest{
+		Phone:      "13812345678",
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"phone"}},
+	})
+	if err != nil {
+		t.Fatalf("UpdateUser: %v", err)
+	}
+	if !repo.updateFieldsCalls.called {
+		t.Fatal("usecase.UpdateUserFields not called")
+	}
+	if repo.updateFieldsCalls.fields.Phone == nil {
+		t.Fatal("Phone 没传给 usecase")
+	}
+	if *repo.updateFieldsCalls.fields.Phone != "13812345678" {
+		t.Errorf("Phone = %q, want 13812345678", *repo.updateFieldsCalls.fields.Phone)
 	}
 }

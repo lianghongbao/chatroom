@@ -52,3 +52,4 @@ observability:
   metrics_addr: ""
   tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'
   service_name: "${NACOS_SERVICE_NAME:chatroom-conversation}"
+  unauth_sample_rate: 0.1

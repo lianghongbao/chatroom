@@ -27,11 +27,12 @@ func NewUserService(uc *biz.UserUsecase, auth *conf.Auth) *UserService {
 }
 
 // Register 注册用户。req 是注册请求，返回新用户 ID。
+// phone 可空，非空时全局唯一。email 可空，不唯一也不校验格式。
 func (s *UserService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
 	}
-	id, err := s.uc.Register(ctx, req.GetUsername(), req.GetPassword(), req.GetNickname())
+	id, err := s.uc.Register(ctx, req.GetUsername(), req.GetPassword(), req.GetNickname(), req.GetPhone(), req.GetEmail())
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +111,8 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 	return convertUserReply(u), nil
 }
 
-// UpdateUser 更新资料。req 是更新请求，partial update 白名单 nickname / avatar；
-// 空 mask 走全量路径。
+// UpdateUser 更新资料。req 是更新请求，partial update 白名单 nickname / avatar / phone / email；
+// 空 mask 走全量路径（只有 nickname + avatar）。
 func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UserInfo, error) {
 	uid, ok := middleware.FromContext(ctx)
 	if !ok {
@@ -139,6 +140,14 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 		case "avatar":
 			v := req.GetAvatar()
 			fields.Avatar = &v
+		case "phone":
+			// 空串 = 清空手机号 —— 跟 nickname / avatar 不同，这里允许空值。
+			v := req.GetPhone()
+			fields.Phone = &v
+		case "email":
+			// 空串 = 清空邮箱。语义跟 phone 一样。
+			v := req.GetEmail()
+			fields.Email = &v
 		default:
 			// 非白名单字段忽略，不报错
 		}
@@ -212,6 +221,32 @@ func (s *UserService) GetUsersByIDs(ctx context.Context, req *pb.GetUsersByIDsRe
 		out.Users = append(out.Users, convertUserReply(u))
 	}
 	return out, nil
+}
+
+// GetUserByUsername 按用户名精确查公开资料。req 是按用户名查询的请求。
+// 加好友时用户记不住 uid，用用户名找人。不做可见性判定，但清空邮箱/电话。
+func (s *UserService) GetUserByUsername(ctx context.Context, req *pb.GetUserByUsernameRequest) (*pb.UserInfo, error) {
+	if req == nil || req.GetUsername() == "" {
+		return nil, biz.ErrUserInvalidArgument
+	}
+	u, err := s.uc.GetUserByUsername(ctx, req.GetUsername())
+	if err != nil {
+		return nil, err
+	}
+	return convertUserReply(u), nil
+}
+
+// GetUserByPhone 按手机号精确查公开资料。req 是按手机号查询的请求。
+// 加好友时用户常常只记得手机号。不做可见性判定，但清空邮箱/电话。
+func (s *UserService) GetUserByPhone(ctx context.Context, req *pb.GetUserByPhoneRequest) (*pb.UserInfo, error) {
+	if req == nil || req.GetPhone() == "" {
+		return nil, biz.ErrUserInvalidArgument
+	}
+	u, err := s.uc.GetUserByPhone(ctx, req.GetPhone())
+	if err != nil {
+		return nil, err
+	}
+	return convertUserReply(u), nil
 }
 
 // GetFriendProfiles 批量拉好友公开资料，供 friend 服务补全好友列表。req 是批量查询请求。
