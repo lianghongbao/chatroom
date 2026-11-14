@@ -8,6 +8,7 @@ import (
 
 	conversationv1 "chatroom/api/conversation/service/v1"
 	"chatroom/app/message/service/internal/conf"
+	"chatroom/pkg/breaker"
 	"chatroom/pkg/observability"
 
 	oteltrace "github.com/go-kratos/kratos/contrib/otel/v3/tracing"
@@ -88,6 +89,7 @@ func NewRemoteConversationClient(discoverer registry.Discovery, auth *conf.Auth,
 				oteltrace.WithPropagator(otel.GetTextMapPropagator()),
 				oteltrace.WithTracerName("grpc-client"),
 			),
+			breaker.Client(),
 		),
 		grpc.WithTimeout(1500*time.Millisecond),
 	)

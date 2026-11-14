@@ -9,6 +9,7 @@ import (
 
 	messagev1 "chatroom/api/message/service/v1"
 
+	"chatroom/pkg/breaker"
 	"chatroom/pkg/observability"
 
 	oteltrace "github.com/go-kratos/kratos/contrib/otel/v3/tracing"
@@ -42,11 +43,16 @@ func NewRemoteMessageClient(discoverer registry.Discovery, obs *observability.Pr
 	conn, err := grpc.NewClient(
 		context.Background(),
 		grpc.WithDiscovery(discoverer),
-		grpc.WithMiddleware(oteltrace.Client(
-			oteltrace.WithTracerProvider(otel.GetTracerProvider()),
-			oteltrace.WithPropagator(otel.GetTextMapPropagator()),
-			oteltrace.WithTracerName("grpc-client"),
-		)),
+		grpc.WithMiddleware(
+			oteltrace.Client(
+				oteltrace.WithTracerProvider(otel.GetTracerProvider()),
+				oteltrace.WithPropagator(otel.GetTextMapPropagator()),
+				oteltrace.WithTracerName("grpc-client"),
+			),
+			// 熔断放最内层 —— 紧挨着 RPC 调用。
+			// 被熔断拒掉的请求仍然过得去 tracing，trace 里能看到这次拒绝。
+			breaker.Client(),
+		),
 		grpc.WithEndpoint(RemoteMessageEndpoint),
 		grpc.WithTimeout(2*time.Second),
 	)
