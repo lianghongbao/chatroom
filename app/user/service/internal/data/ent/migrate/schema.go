@@ -16,8 +16,8 @@ var (
 		{Name: "avatar", Type: field.TypeString, Comment: "头像 URL", Default: ""},
 		{Name: "password_hash", Type: field.TypeString, Comment: "bcrypt 哈希, 60 字节"},
 		{Name: "created_at", Type: field.TypeTime, Comment: "注册时间"},
-		{Name: "email", Type: field.TypeString, Nullable: true, Comment: "邮箱, 可选"},
-		{Name: "phone", Type: field.TypeString, Nullable: true, Comment: "手机号, 可选"},
+		{Name: "email", Type: field.TypeString, Nullable: true, Comment: "邮箱, 可选, 不唯一"},
+		{Name: "phone", Type: field.TypeString, Nullable: true, Comment: "手机号, 可选, 全局唯一"},
 		{Name: "is_visible_to_stranger", Type: field.TypeBool, Comment: "是否对陌生人可见", Default: false},
 		{Name: "status", Type: field.TypeUint8, Comment: "账号状态 1=正常 0=禁用", Default: 1},
 	}
@@ -31,6 +31,11 @@ var (
 				Name:    "user_username",
 				Unique:  true,
 				Columns: []*schema.Column{UsersColumns[1]},
+			},
+			{
+				Name:    "user_phone",
+				Unique:  true,
+				Columns: []*schema.Column{UsersColumns[7]},
 			},
 		},
 	}

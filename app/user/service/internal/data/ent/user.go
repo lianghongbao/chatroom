@@ -28,9 +28,9 @@ type User struct {
 	PasswordHash string `json:"-"`
 	// 注册时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
-	// 邮箱, 可选
+	// 邮箱, 可选, 不唯一
 	Email *string `json:"email,omitempty"`
-	// 手机号, 可选
+	// 手机号, 可选, 全局唯一
 	Phone *string `json:"phone,omitempty"`
 	// 是否对陌生人可见
 	IsVisibleToStranger bool `json:"is_visible_to_stranger,omitempty"`

@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"strings"
 
 	"chatroom/app/user/service/internal/biz"
 	"chatroom/app/user/service/internal/data/ent"
@@ -51,19 +52,41 @@ func derefString(s *string) string {
 }
 
 // Save 新建用户并返回新用户 ID。
-// 撞 username 唯一索引时折叠为 ErrUserAlreadyExists，兜底 Register 并发竞态。
+// 撞 username 唯一索引时折叠为 ErrUserAlreadyExists，撞 phone 唯一索引时折叠为
+// ErrUserPhoneTaken —— 两者都是兜底 Register 并发竞态（两个请求同时通过了
+// 应用层的占用检查，靠唯一索引仲裁）。
 func (r *userRepo) Save(ctx context.Context, u *biz.User) (string, error) {
-	po, err := r.data.db.User.Create().
+	builder := r.data.db.User.Create().
 		SetUsername(u.Username).SetNickname(u.Nickname).
-		SetAvatar(u.Avatar).SetPasswordHash(u.PasswordHash).
-		Save(ctx)
+		SetAvatar(u.Avatar).SetPasswordHash(u.PasswordHash)
+	// 空串不写 —— 保持 NULL，让唯一索引放过「没填手机号」的账号。
+	if u.Phone != "" {
+		builder = builder.SetPhone(u.Phone)
+	}
+	// 邮箱同理：空串保持 NULL（没有唯一索引，但 NULL 比空串语义清楚）。
+	if u.Email != "" {
+		builder = builder.SetEmail(u.Email)
+	}
+	po, err := builder.Save(ctx)
 	if err != nil {
 		if ent.IsConstraintError(err) {
+			if isPhoneConstraint(err) {
+				return "", biz.ErrUserPhoneTaken
+			}
 			return "", biz.ErrUserAlreadyExists
 		}
 		return "", err
 	}
 	return po.ID, nil
+}
+
+// isPhoneConstraint 判断唯一索引冲突是不是撞在 phone 上。
+// err 是 ent 返回的约束错误。
+//
+// MySQL 的错误信息里带索引名（Duplicate entry '13800000000' for key 'user_phone'），
+// ent 不暴露结构化的错误码，只能从消息里认。
+func isPhoneConstraint(err error) bool {
+	return strings.Contains(err.Error(), "phone")
 }
 
 // FindByID 按主键查用户。id 是用户 ID；找不到返 ErrUserNotFound；返回的 DO PasswordHash 已清空。
@@ -104,6 +127,19 @@ func (r *userRepo) FindByUsername(ctx context.Context, username string) (*biz.Us
 	return toBizUser(po, false), nil
 }
 
+// FindByPhone 按手机号查用户。phone 是手机号；找不到返 ErrUserNotFound；
+// 手机号全局唯一，最多一个结果。返回的 DO 保留 PasswordHash。
+func (r *userRepo) FindByPhone(ctx context.Context, phone string) (*biz.User, error) {
+	po, err := r.data.db.User.Query().Where(user.PhoneEQ(phone)).Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, biz.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return toBizUser(po, false), nil
+}
+
 // FindByIDs 批量按 ID 查用户。ids 是用户 ID 列表；空 ids 返空切片；
 // 找不到的 id 在结果中不出现，不返错。返回顺序与 ids 无关。
 func (r *userRepo) FindByIDs(ctx context.Context, ids []string) ([]*biz.User, error) {
@@ -140,10 +176,30 @@ func (r *userRepo) UpdateFields(ctx context.Context, id string, fields biz.UserU
 	if fields.Avatar != nil {
 		upd.SetAvatar(*fields.Avatar)
 	}
+	if fields.Phone != nil {
+		// 空串 = 清空手机号，写 NULL（唯一索引放过 NULL）。
+		if *fields.Phone == "" {
+			upd.ClearPhone()
+		} else {
+			upd.SetPhone(*fields.Phone)
+		}
+	}
+	if fields.Email != nil {
+		// 空串 = 清空邮箱，写 NULL。
+		if *fields.Email == "" {
+			upd.ClearEmail()
+		} else {
+			upd.SetEmail(*fields.Email)
+		}
+	}
 	po, err := upd.Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, biz.ErrUserNotFound
+		}
+		// 撞 phone 唯一索引 = 手机号被别人占了。
+		if ent.IsConstraintError(err) && isPhoneConstraint(err) {
+			return nil, biz.ErrUserPhoneTaken
 		}
 		return nil, err
 	}

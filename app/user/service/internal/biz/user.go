@@ -26,6 +26,8 @@ var (
 	ErrUserInvalidOldPassword = kratoserrors.Unauthorized(v1.ErrorReason_USER_INVALID_OLD_PASSWORD.String(), "invalid old password")
 	// ErrUserBanned 账号被禁用（status=0）。登录 / 刷新 token 时返回。
 	ErrUserBanned = kratoserrors.Forbidden(v1.ErrorReason_USER_BANNED.String(), "account is disabled")
+	// ErrUserPhoneTaken 手机号已被占用（全局唯一）。注册 / 改手机号时返回。
+	ErrUserPhoneTaken = kratoserrors.Conflict(v1.ErrorReason_USER_PHONE_TAKEN.String(), "phone number already taken")
 )
 
 // 输入长度上限。schema 里没给 username / nickname / avatar 定 MaxLen，
@@ -36,7 +38,41 @@ const (
 	MaxUsernameLength = 36
 	MaxNicknameLength = 64
 	MaxAvatarLength   = 512
+	// PhoneLength 中国大陆手机号长度。11 位：1 开头 + 3~9 + 9 位数字。
+	PhoneLength = 11
 )
+
+// validatePhone 校验手机号格式。
+// phone 是待校验的手机号；空串视为「不填」，返回 nil。
+//
+// 只做格式校验，不查库 —— 唯一性由数据库的唯一索引最终仲裁
+// （并发下两个请求同时通过应用层校验，靠索引兜住）。
+func validatePhone(phone string) error {
+	if phone == "" {
+		return nil
+	}
+	if len(phone) != PhoneLength {
+		return ErrUserInvalidArgument
+	}
+	// 首位必须是 1，第二位 3-9（正则里就是 [3-9]），其余 9 位必须是数字。
+	for i, c := range phone {
+		switch {
+		case i == 0:
+			if c != '1' {
+				return ErrUserInvalidArgument
+			}
+		case i == 1:
+			if c < '3' || c > '9' {
+				return ErrUserInvalidArgument
+			}
+		default:
+			if c < '0' || c > '9' {
+				return ErrUserInvalidArgument
+			}
+		}
+	}
+	return nil
+}
 
 // validatePassword 校验密码长度。password 是明文密码；不做 trim，只拒绝「全是空白」的密码。
 func validatePassword(password string) error {
@@ -144,10 +180,12 @@ type UserRepo interface {
 	// FindByIDWithHash 与 FindByID 同义，但保留 PasswordHash，供改密比对旧密码。
 	FindByIDWithHash(ctx context.Context, id string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
+	// FindByPhone 按手机号查用户。手机号全局唯一，最多一个结果。
+	FindByPhone(ctx context.Context, phone string) (*User, error)
 	// 批量查；找不到的 id 在结果中不出现，不返错。返回顺序与 ids 无关
 	FindByIDs(ctx context.Context, ids []string) ([]*User, error)
 	Update(ctx context.Context, id string, nickname, avatar string) (*User, error)
-	// 仅传非 nil 指针的字段被写入。Email / Phone 不在此，靠专门端点改
+	// 仅传非 nil 指针的字段被写入。Phone / Email 都在里面（见 UserUpdateFields）。
 	UpdateFields(ctx context.Context, id string, fields UserUpdateFields) (*User, error)
 	UpdatePassword(ctx context.Context, id string, newHash string) error
 	// 改账号状态（禁用 / 解禁）。调用方是管理侧，不开放给普通用户
@@ -158,6 +196,11 @@ type UserRepo interface {
 type UserUpdateFields struct {
 	Nickname *string
 	Avatar   *string
+	// Phone 手机号。指针非 nil 时写入；指向空串表示「清空手机号」。
+	Phone *string
+	// Email 邮箱。指针非 nil 时写入；指向空串表示「清空邮箱」。
+	// 不唯一、不校验格式 —— 目前只是备注字段。
+	Email *string
 }
 
 // LoginLimiter 登录频控抽象。
@@ -252,10 +295,14 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Loc
 // username 用户名
 // password 明文密码
 // nickname 是昵称（可空，留空时回退成 username）
+// phone 是手机号（可空，留空表示不填）。非空时全局唯一，被占用返 ErrUserPhoneTaken。
+// email 是邮箱（可空，留空表示不填）。不唯一、不校验格式。
 // username trim 后小写化。
-func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname string) (string, error) {
+func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname, phone, email string) (string, error) {
 	username = strings.TrimSpace(username)
 	nickname = strings.TrimSpace(nickname)
+	phone = strings.TrimSpace(phone)
+	email = strings.TrimSpace(email)
 	if err := validateUsername(username); err != nil {
 		return "", err
 	}
@@ -263,6 +310,9 @@ func (uc *UserUsecase) Register(ctx context.Context, username, password, nicknam
 		return "", err
 	}
 	if err := validateProfile(nickname, ""); err != nil {
+		return "", err
+	}
+	if err := validatePhone(phone); err != nil {
 		return "", err
 	}
 	username = strings.ToLower(username)
@@ -281,11 +331,20 @@ func (uc *UserUsecase) Register(ctx context.Context, username, password, nicknam
 	} else if err != nil && !errors.Is(err, ErrUserNotFound) {
 		return "", err
 	}
+	// 手机号占用检查。并发下可能双双通过 —— 靠数据库唯一索引最终仲裁
+	// （data 层把唯一索引冲突翻译成 ErrUserPhoneTaken）。
+	if phone != "" {
+		if existing, err := uc.repo.FindByPhone(ctx, phone); err == nil && existing != nil {
+			return "", ErrUserPhoneTaken
+		} else if err != nil && !errors.Is(err, ErrUserNotFound) {
+			return "", err
+		}
+	}
 	hash, err := hashPassword(password)
 	if err != nil {
 		return "", err
 	}
-	u := &User{Username: username, Nickname: nickname, PasswordHash: hash}
+	u := &User{Username: username, Nickname: nickname, PasswordHash: hash, Phone: phone, Email: email}
 	return uc.repo.Save(ctx, u)
 }
 
@@ -552,12 +611,13 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id string, nickname, avat
 // UpdateUserFields 字段粒度更新。
 // id 用户 ID
 // fields 待改字段集合
-// 至少一个字段被设置，非 nil 字段不能为空字符串。
+// 至少一个字段被设置；nickname / avatar 非 nil 时不能为空字符串。
+// phone / email 例外：空串表示「清空」。
 func (uc *UserUsecase) UpdateUserFields(ctx context.Context, id string, fields UserUpdateFields) (*User, error) {
 	if id == "" {
 		return nil, ErrUserInvalidArgument
 	}
-	if fields.Nickname == nil && fields.Avatar == nil {
+	if fields.Nickname == nil && fields.Avatar == nil && fields.Phone == nil && fields.Email == nil {
 		return nil, ErrUserInvalidArgument
 	}
 	if fields.Nickname != nil {
@@ -576,6 +636,30 @@ func (uc *UserUsecase) UpdateUserFields(ctx context.Context, id string, fields U
 	}
 	if err := validateProfile(derefOrEmpty(fields.Nickname), derefOrEmpty(fields.Avatar)); err != nil {
 		return nil, err
+	}
+	// 手机号：空串表示「清空」，所以不能像 nickname 那样把空串判为非法。
+	// 非空时才校验格式。
+	if fields.Phone != nil {
+		v := strings.TrimSpace(*fields.Phone)
+		if err := validatePhone(v); err != nil {
+			return nil, err
+		}
+		// 占用检查 —— 改自己的号不能撞上别人的。
+		// 撞唯一索引的最终仲裁在 data 层。
+		if v != "" {
+			if existing, err := uc.repo.FindByPhone(ctx, v); err == nil && existing != nil && existing.ID != id {
+				return nil, ErrUserPhoneTaken
+			} else if err != nil && !errors.Is(err, ErrUserNotFound) {
+				return nil, err
+			}
+		}
+		fields.Phone = &v
+	}
+	// 邮箱：空串表示「清空」，语义跟手机号一样。不用查库占位 —— 邮箱不唯一。
+	// 也不校验格式：等真正接「验证码改密」时再加。
+	if fields.Email != nil {
+		v := strings.TrimSpace(*fields.Email)
+		fields.Email = &v
 	}
 
 	u, err := uc.repo.UpdateFields(ctx, id, fields)
@@ -615,6 +699,57 @@ func (uc *UserUsecase) GetUserByID(ctx context.Context, viewerID, targetID strin
 		u.Email = ""
 		u.Phone = ""
 	}
+	return u, nil
+}
+
+// GetUserByUsername 按用户名精确查公开资料。
+// username 用户名
+//
+// 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。
+// 好友申请本来就允许陌生人互相发起，对方关了可见性就查不到人的话，
+// 加好友这条路直接堵死。Email / Phone 一律清空 —— 查到的永远是「别人」。
+func (uc *UserUsecase) GetUserByUsername(ctx context.Context, username string) (*User, error) {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, ErrUserInvalidArgument
+	}
+	if err := validateUsername(username); err != nil {
+		return nil, err
+	}
+	// username 存库时已小写化（见 Register），查询侧同样小写化才能对上。
+	username = strings.ToLower(username)
+
+	u, err := uc.repo.FindByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	u.PasswordHash = ""
+	u.Email = ""
+	u.Phone = ""
+	return u, nil
+}
+
+// GetUserByPhone 按手机号精确查公开资料。
+// phone 手机号
+//
+// 跟 GetUserByUsername 语义一致：不做「对陌生人可见」判定，
+// 手机号全局唯一所以最多一个结果。Email / Phone 一律清空 —— 查到的永远是「别人」。
+func (uc *UserUsecase) GetUserByPhone(ctx context.Context, phone string) (*User, error) {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return nil, ErrUserInvalidArgument
+	}
+	if err := validatePhone(phone); err != nil {
+		return nil, err
+	}
+
+	u, err := uc.repo.FindByPhone(ctx, phone)
+	if err != nil {
+		return nil, err
+	}
+	u.PasswordHash = ""
+	u.Email = ""
+	u.Phone = ""
 	return u, nil
 }
 

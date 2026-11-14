@@ -20,4 +20,6 @@ enum ErrorReason {
   USER_INVALID_OLD_PASSWORD = 8;
   // 账号被禁用（status=0）。登录 / 刷新 token 时拦截。
   USER_BANNED = 9;
+  // 手机号已被占用（全局唯一）。注册 / 改手机号时拦截。
+  USER_PHONE_TAKEN = 10;
 }

@@ -164,6 +164,61 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.user.v1.LogoutReply'
+    /api/user/lookup/phone:
+        get:
+            tags:
+                - User
+            description: |-
+                GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+
+                 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+                 所以最多一个结果。返回的资料不含 email / phone。
+
+                 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+                 /api/user/{id} 通配符吃掉。
+            operationId: User_GetUserByPhone
+            parameters:
+                - name: phone
+                  in: query
+                  description: 手机号。精确匹配（中国大陆 11 位）。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.UserInfo'
+    /api/user/lookup/username:
+        get:
+            tags:
+                - User
+            description: |-
+                GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+                 加好友时用用户名找人更现实。
+
+                 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+                 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+                 返回的资料不含 email / phone。
+
+                 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+                 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+                 （通配符只吃单段路径，且注册在前先匹配）。
+            operationId: User_GetUserByUsername
+            parameters:
+                - name: username
+                  in: query
+                  description: 用户名。精确匹配（不区分大小写：username 存库时已小写化）。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.UserInfo'
     /api/user/refresh:
         post:
             tags:
@@ -347,6 +402,17 @@ components:
                 nickname:
                     type: string
                     description: 留空回退到 username。
+                phone:
+                    type: string
+                    description: |-
+                        手机号（可选）。加好友时用它找人，全局唯一。
+                         留空 = 不填；已被人占用则注册失败。
+                email:
+                    type: string
+                    description: |-
+                        邮箱（可选）。**不加唯一索引、也不做格式校验** —— 目前只是个备注字段，
+                         将来接「验证码改密 / 找回密码」时再视业务收紧。
+                         留空 = 不填。
         api.user.v1.UpdateUserRequest:
             type: object
             properties:
@@ -358,6 +424,16 @@ components:
                     type: string
                     description: 列出本次要更新的字段路径；未列出字段保持原值。
                     format: field-mask
+                phone:
+                    type: string
+                    description: |-
+                        手机号。跟 nickname / avatar 一样，**只在 update_mask 列出 "phone" 时才生效**。
+                         传空串表示「清空手机号」。
+                email:
+                    type: string
+                    description: |-
+                        邮箱。跟 phone 一样，**只在 update_mask 列出 "email" 时才生效**。
+                         传空串表示「清空邮箱」。不唯一、不校验格式。
         api.user.v1.UserInfo:
             type: object
             properties:

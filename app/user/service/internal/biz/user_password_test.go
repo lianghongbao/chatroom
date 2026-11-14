@@ -52,7 +52,7 @@ func TestChangePassword_KeepsPasswordWhitespace(t *testing.T) {
 	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil)
 
 	const pwd = " pass "
-	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice"); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice", "", ""); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -69,7 +69,7 @@ func TestLogin_PasswordWhitespaceRoundTrip(t *testing.T) {
 	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil)
 
 	const pwd = " pass "
-	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice"); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice", "", ""); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestRegister_RejectsOverlongInputs(t *testing.T) {
 			auth := &conf.Auth{JwtSecret: "a1b2c3d4e5f67890abcdef1234567890"}
 			uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil)
 
-			_, err := uc.Register(context.Background(), tc.username, tc.password, tc.nickname)
+			_, err := uc.Register(context.Background(), tc.username, tc.password, tc.nickname, "", "")
 			if !errors.Is(err, ErrUserInvalidArgument) {
 				t.Errorf("err = %v, want ErrUserInvalidArgument", err)
 			}

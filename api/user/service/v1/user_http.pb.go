@@ -22,6 +22,8 @@ const OperationUserGetConversationMemberProfiles = "/api.user.v1.User/GetConvers
 const OperationUserGetFriendProfiles = "/api.user.v1.User/GetFriendProfiles"
 const OperationUserGetUser = "/api.user.v1.User/GetUser"
 const OperationUserGetUserByID = "/api.user.v1.User/GetUserByID"
+const OperationUserGetUserByPhone = "/api.user.v1.User/GetUserByPhone"
+const OperationUserGetUserByUsername = "/api.user.v1.User/GetUserByUsername"
 const OperationUserGetUsersByIDs = "/api.user.v1.User/GetUsersByIDs"
 const OperationUserLogin = "/api.user.v1.User/Login"
 const OperationUserLogout = "/api.user.v1.User/Logout"
@@ -47,6 +49,25 @@ type UserHTTPServer interface {
 	GetUser(context.Context, *GetUserRequest) (*UserInfo, error)
 	// GetUserByID 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
 	GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error)
+	// GetUserByPhone GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+	//
+	// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+	// 所以最多一个结果。返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+	// /api/user/{id} 通配符吃掉。
+	GetUserByPhone(context.Context, *GetUserByPhoneRequest) (*UserInfo, error)
+	// GetUserByUsername GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+	// 加好友时用用户名找人更现实。
+	//
+	// 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+	// 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+	// 返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+	// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+	// （通配符只吃单段路径，且注册在前先匹配）。
+	GetUserByUsername(context.Context, *GetUserByUsernameRequest) (*UserInfo, error)
 	// GetUsersByIDs 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
 	GetUsersByIDs(context.Context, *GetUsersByIDsRequest) (*GetUsersByIDsReply, error)
 	// Login 登录。返回 access (15m) + refresh (7d) 双 token；token_type="Bearer"。
@@ -72,6 +93,8 @@ func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
 	r.Handle("POST", "/api/user/change_password", _User_ChangePassword0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/user/{id}", _User_GetUserByID0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/batch", _User_GetUsersByIDs0_HTTP_Handler(srv))
+	r.Handle("GET", "/api/user/lookup/username", _User_GetUserByUsername0_HTTP_Handler(srv))
+	r.Handle("GET", "/api/user/lookup/phone", _User_GetUserByPhone0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/friend_profiles", _User_GetFriendProfiles0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/conversation_member_profiles", _User_GetConversationMemberProfiles0_HTTP_Handler(srv))
 }
@@ -250,6 +273,44 @@ func _User_GetUsersByIDs0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context
 	}
 }
 
+func _User_GetUserByUsername0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetUserByUsernameRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserGetUserByUsername)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetUserByUsername(ctx, req.(*GetUserByUsernameRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UserInfo)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _User_GetUserByPhone0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetUserByPhoneRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserGetUserByPhone)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetUserByPhone(ctx, req.(*GetUserByPhoneRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*UserInfo)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _User_GetFriendProfiles0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GetFriendProfilesRequest
@@ -306,6 +367,25 @@ type UserHTTPClient interface {
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
 	// GetUserByID 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
 	GetUserByID(ctx context.Context, req *GetUserByIDRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
+	// GetUserByPhone GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+	//
+	// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+	// 所以最多一个结果。返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+	// /api/user/{id} 通配符吃掉。
+	GetUserByPhone(ctx context.Context, req *GetUserByPhoneRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
+	// GetUserByUsername GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+	// 加好友时用用户名找人更现实。
+	//
+	// 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+	// 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+	// 返回的资料不含 email / phone。
+	//
+	// 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+	// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+	// （通配符只吃单段路径，且注册在前先匹配）。
+	GetUserByUsername(ctx context.Context, req *GetUserByUsernameRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
 	// GetUsersByIDs 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
 	GetUsersByIDs(ctx context.Context, req *GetUsersByIDsRequest, opts ...http.CallOption) (rsp *GetUsersByIDsReply, err error)
 	// Login 登录。返回 access (15m) + refresh (7d) 双 token；token_type="Bearer"。
@@ -414,6 +494,55 @@ func (c *UserHTTPClientImpl) GetUserByID(ctx context.Context, in *GetUserByIDReq
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
 		http.Operation(OperationUserGetUserByID),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUserByPhone GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
+//
+// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
+// 所以最多一个结果。返回的资料不含 email / phone。
+//
+// 路由是 /api/user/lookup/phone —— 多一段路径，不会被 GetUserByID 的
+// /api/user/{id} 通配符吃掉。
+func (c *UserHTTPClientImpl) GetUserByPhone(ctx context.Context, in *GetUserByPhoneRequest, opts ...http.CallOption) (*UserInfo, error) {
+	var out UserInfo
+	pattern := "/api/user/lookup/phone"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationUserGetUserByPhone),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUserByUsername GetUserByUsername 按用户名精确查公开资料。uid 是 UUIDv7 字符串，用户记不住，
+// 加好友时用用户名找人更现实。
+//
+// 跟 GetUserByID 的区别：**不做「对陌生人可见」判定**。好友申请本来就允许
+// 陌生人互相发起，对方关了可见性就查不到人的话，加好友这条路直接堵死。
+// 返回的资料不含 email / phone。
+//
+// 路由是 /api/user/lookup/username 而不是 /api/user/by_username ——
+// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
+// （通配符只吃单段路径，且注册在前先匹配）。
+func (c *UserHTTPClientImpl) GetUserByUsername(ctx context.Context, in *GetUserByUsernameRequest, opts ...http.CallOption) (*UserInfo, error) {
+	var out UserInfo
+	pattern := "/api/user/lookup/username"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationUserGetUserByUsername),
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
