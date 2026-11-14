@@ -103,8 +103,8 @@ func appendHost(list []string, raw string) []string {
 // uid 当前用户 ID
 // ext 文件后缀，不带点
 //
-// 返回预签名的直传地址 —— 客户端把文件 PUT 过去，服务端不碰文件字节。
-func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*oss.PresignedUpload, error) {
+// 返回 PostObject 表单 —— 客户端把文件 POST 到 OSS，服务端不碰文件字节。
+func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*oss.PostUploadForm, error) {
 	if uc.oss == nil {
 		return nil, ErrStorageNotConfigured
 	}
@@ -115,6 +115,11 @@ func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*os
 	if err := oss.ValidateExt(ext, uc.avatarExts); err != nil {
 		return nil, ErrUploadExtNotAllowed
 	}
+	// 大小上限必须有值 —— 没有上限就等于没开这个功能，
+	// 不该签出一个什么都能传的表单。
+	if uc.avatarMaxSize <= 0 {
+		return nil, ErrStorageNotConfigured
+	}
 
 	dir := avatarDir(uid)
 	// 没配 url_prefix 时签不出公开地址 —— 客户端拿到空的 public_url，
@@ -122,12 +127,13 @@ func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*os
 	if uc.oss.Config().URLPrefix == "" {
 		return nil, ErrStorageNotConfigured
 	}
-	return uc.oss.GenerateUploadToken(ctx, oss.UploadOptions{
-		Dir:         dir,
-		Ext:         ext,
-		ContentType: oss.MIMEByExt(ext),
-		AllowedExts: uc.avatarExts,
-		MaxSize:     uc.avatarMaxSize,
+	return uc.oss.GeneratePostUploadForm(ctx, oss.PostUploadOptions{
+		Dir:          dir,
+		Ext:          ext,
+		AllowedExts:  uc.avatarExts,
+		MinSize:      1,
+		MaxSize:      uc.avatarMaxSize,
+		ContentTypes: uc.avatarContentTypes(),
 	})
 }
 

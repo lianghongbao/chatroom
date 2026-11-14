@@ -214,15 +214,16 @@ func TestMIMEByExt(t *testing.T) {
 	}
 }
 
-func TestGenerateUploadTokenExtNotAllowed(t *testing.T) {
+func TestGeneratePostUploadFormExtNotAllowed(t *testing.T) {
 	client, err := NewClient(testConfig())
 	if err != nil {
 		t.Fatalf("构造客户端失败：%v", err)
 	}
-	_, err = client.GenerateUploadToken(t.Context(), UploadOptions{
+	_, err = client.GeneratePostUploadForm(t.Context(), PostUploadOptions{
 		Dir:         "avatar/u1/",
 		Ext:         "exe",
 		AllowedExts: []string{"png"},
+		MaxSize:     1024,
 	})
 	if err != ErrInvalidExt {
 		t.Fatalf("期望 ErrInvalidExt，实际 %v", err)

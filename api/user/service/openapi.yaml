@@ -264,11 +264,15 @@ paths:
             description: |-
                 GetUploadToken 签发头像直传凭证。
 
-                 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
-                 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+                 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+                 服务端不碰文件字节。上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+
+                 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+                 content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+                 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
 
                  key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
-                 自己的目录。上传前要再校验对象存在性和大小。
+                 自己的目录。上传后还要再校验对象存在性和大小。
             operationId: User_GetUploadToken
             requestBody:
                 content:
@@ -360,27 +364,44 @@ components:
         api.user.v1.GetUploadTokenReply:
             type: object
             properties:
-                method:
+                host:
                     type: string
-                    description: 上传方法，恒为 PUT。客户端按这个方法发。
-                url:
-                    type: string
-                    description: 带签名的直传地址。客户端把文件 PUT 到这里。
-                fileKey:
-                    type: string
-                    description: 完整 object key。
-                publicUrl:
-                    type: string
-                    description: 上传后可访问的地址。客户端上传完把它塞进 UpdateUser 的 avatar。
-                signedHeaders:
+                    description: |-
+                        OSS 上传地址，客户端 POST 到这里。
+
+                         例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+                         PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+                fields:
                     type: object
                     additionalProperties:
                         type: string
-                    description: 客户端必须带上的请求头。
+                    description: |-
+                        表单字段。客户端原样塞进 FormData 提交。
+
+                         包含 key / policy / x-oss-signature-version / x-oss-credential /
+                         x-oss-date / x-oss-security-token / x-oss-signature /
+                         success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+
+                         file 域不放这里 —— 文件本身由客户端从本地读。
+                fileKey:
+                    type: string
+                    description: object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+                publicUrl:
+                    type: string
+                    description: 上传后可访问的地址。客户端上传完把它塞进 UpdateUser 的 avatar。
                 expireAt:
                     type: string
                     description: 过期时间，Unix 秒。
-            description: GetUploadTokenReply 直传凭证。
+                maxSize:
+                    type: string
+                    description: |-
+                        允许的最大字节数，0 表示不限。
+
+                         **服务端强制** —— policy 的 content-length-range 里带着这个值，
+                         超限的请求 OSS 直接拒（EntityTooLarge），文件不会落盘。
+                         这个字段是给客户端的提示，让它能在上传前就拦下超限文件，
+                         省一次注定失败的直传。
+            description: GetUploadTokenReply 直传凭证 —— OSS PostObject 表单。
         api.user.v1.GetUploadTokenRequest:
             type: object
             properties:

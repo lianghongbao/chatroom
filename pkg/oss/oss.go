@@ -1,4 +1,4 @@
-// Package oss 对接阿里云 OSS：签发直传凭证（STS + V4 签名）、拼公开 URL、校验对象。
+// Package oss 对接阿里云 OSS：签发直传凭证（STS + V4 PostObject policy）、拼公开 URL、校验对象。
 //
 // 本包不含业务语义 —— 不知道「头像」是什么，只知道 key 前缀和后缀白名单。
 // 业务规则（哪些后缀算头像、上多大）由各服务自己的 biz 层决定。
@@ -6,8 +6,20 @@
 // 客户端直传流程：
 //
 //  1. 客户端调业务接口拿上传凭证（STS 临时 AK + V4 policy + 签名）
-//  2. 客户端直接 POST 文件到 OSS，服务端不碰文件字节
-//  3. 客户端把 OSS 返回的 URL 提交给业务接口落库
+//  2. 客户端直接 POST multipart/form-data 到 OSS，服务端不碰文件字节
+//  3. 客户端把 OSS 的公开地址提交给业务接口落库
+//
+// 用 PostObject 而不是预签名 PUT，是因为**大小上限能不能被服务端强制**：
+//
+//   - 预签名 PUT 的签名只覆盖 canonical request，表达不了「文件最大 N 字节」。
+//     OSS 收到多大就收多大，只能事后查大小 —— 那时文件已经落盘了。
+//   - PostObject 的 policy 能带 content-length-range，OSS **在收数据前**就拒掉
+//     超限请求（EntityTooLarge），文件不会落盘。
+//
+// 阿里云官方没有 bucket 级的「限制单文件大小」功能 —— policy 是唯一的强制点。
+//
+// 上限仍然有后手：提交头像地址时 CheckObject 查真实大小，超限直接拒。
+// 这道关防的是「有人绕过 policy，手工构造 URL 指到别处的超大文件」。
 package oss
 
 import (
@@ -27,6 +39,8 @@ var (
 	ErrObjectNotFound = errors.New("oss: 对象不存在")
 	// ErrObjectMismatch 对象大小或 content-type 跟预期不符。
 	ErrObjectMismatch = errors.New("oss: 对象属性不匹配")
+	// ErrInvalidMaxSize 没给有效的文件大小上限。
+	ErrInvalidMaxSize = errors.New("oss: 文件大小上限无效")
 )
 
 // SignatureVersion OSS V4 签名版本号。

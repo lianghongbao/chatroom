@@ -1182,21 +1182,35 @@ func (x *GetUploadTokenRequest) GetExt() string {
 	return ""
 }
 
-// GetUploadTokenReply 直传凭证。
+// GetUploadTokenReply 直传凭证 —— OSS PostObject 表单。
 type GetUploadTokenReply struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 上传方法，恒为 PUT。客户端按这个方法发。
-	Method string `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
-	// 带签名的直传地址。客户端把文件 PUT 到这里。
-	Url string `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
-	// 完整 object key。
+	// OSS 上传地址，客户端 POST 到这里。
+	//
+	// 例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+	// PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+	Host string `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	// 表单字段。客户端原样塞进 FormData 提交。
+	//
+	// 包含 key / policy / x-oss-signature-version / x-oss-credential /
+	// x-oss-date / x-oss-security-token / x-oss-signature /
+	// success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+	//
+	// file 域不放这里 —— 文件本身由客户端从本地读。
+	Fields map[string]string `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
 	FileKey string `protobuf:"bytes,3,opt,name=file_key,json=fileKey,proto3" json:"file_key,omitempty"`
 	// 上传后可访问的地址。客户端上传完把它塞进 UpdateUser 的 avatar。
 	PublicUrl string `protobuf:"bytes,4,opt,name=public_url,json=publicUrl,proto3" json:"public_url,omitempty"`
-	// 客户端必须带上的请求头。
-	SignedHeaders map[string]string `protobuf:"bytes,5,rep,name=signed_headers,json=signedHeaders,proto3" json:"signed_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// 过期时间，Unix 秒。
-	ExpireAt      int64 `protobuf:"varint,6,opt,name=expire_at,json=expireAt,proto3" json:"expire_at,omitempty"`
+	ExpireAt int64 `protobuf:"varint,5,opt,name=expire_at,json=expireAt,proto3" json:"expire_at,omitempty"`
+	// 允许的最大字节数，0 表示不限。
+	//
+	// **服务端强制** —— policy 的 content-length-range 里带着这个值，
+	// 超限的请求 OSS 直接拒（EntityTooLarge），文件不会落盘。
+	// 这个字段是给客户端的提示，让它能在上传前就拦下超限文件，
+	// 省一次注定失败的直传。
+	MaxSize       int64 `protobuf:"varint,6,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1231,18 +1245,18 @@ func (*GetUploadTokenReply) Descriptor() ([]byte, []int) {
 	return file_user_service_v1_user_proto_rawDescGZIP(), []int{22}
 }
 
-func (x *GetUploadTokenReply) GetMethod() string {
+func (x *GetUploadTokenReply) GetHost() string {
 	if x != nil {
-		return x.Method
+		return x.Host
 	}
 	return ""
 }
 
-func (x *GetUploadTokenReply) GetUrl() string {
+func (x *GetUploadTokenReply) GetFields() map[string]string {
 	if x != nil {
-		return x.Url
+		return x.Fields
 	}
-	return ""
+	return nil
 }
 
 func (x *GetUploadTokenReply) GetFileKey() string {
@@ -1259,16 +1273,16 @@ func (x *GetUploadTokenReply) GetPublicUrl() string {
 	return ""
 }
 
-func (x *GetUploadTokenReply) GetSignedHeaders() map[string]string {
-	if x != nil {
-		return x.SignedHeaders
-	}
-	return nil
-}
-
 func (x *GetUploadTokenReply) GetExpireAt() int64 {
 	if x != nil {
 		return x.ExpireAt
+	}
+	return 0
+}
+
+func (x *GetUploadTokenReply) GetMaxSize() int64 {
+	if x != nil {
+		return x.MaxSize
 	}
 	return 0
 }
@@ -1347,16 +1361,16 @@ const file_user_service_v1_user_proto_rawDesc = "" +
 	"\x15GetUserByPhoneRequest\x12\x14\n" +
 	"\x05phone\x18\x01 \x01(\tR\x05phone\")\n" +
 	"\x15GetUploadTokenRequest\x12\x10\n" +
-	"\x03ext\x18\x01 \x01(\tR\x03ext\"\xb4\x02\n" +
-	"\x13GetUploadTokenReply\x12\x16\n" +
-	"\x06method\x18\x01 \x01(\tR\x06method\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\x12\x19\n" +
+	"\x03ext\x18\x01 \x01(\tR\x03ext\"\x9c\x02\n" +
+	"\x13GetUploadTokenReply\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12D\n" +
+	"\x06fields\x18\x02 \x03(\v2,.api.user.v1.GetUploadTokenReply.FieldsEntryR\x06fields\x12\x19\n" +
 	"\bfile_key\x18\x03 \x01(\tR\afileKey\x12\x1d\n" +
 	"\n" +
-	"public_url\x18\x04 \x01(\tR\tpublicUrl\x12Z\n" +
-	"\x0esigned_headers\x18\x05 \x03(\v23.api.user.v1.GetUploadTokenReply.SignedHeadersEntryR\rsignedHeaders\x12\x1b\n" +
-	"\texpire_at\x18\x06 \x01(\x03R\bexpireAt\x1a@\n" +
-	"\x12SignedHeadersEntry\x12\x10\n" +
+	"public_url\x18\x04 \x01(\tR\tpublicUrl\x12\x1b\n" +
+	"\texpire_at\x18\x05 \x01(\x03R\bexpireAt\x12\x19\n" +
+	"\bmax_size\x18\x06 \x01(\x03R\amaxSize\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xae\f\n" +
 	"\x04User\x12c\n" +
@@ -1414,7 +1428,7 @@ var file_user_service_v1_user_proto_goTypes = []any{
 	(*GetUserByPhoneRequest)(nil),                // 20: api.user.v1.GetUserByPhoneRequest
 	(*GetUploadTokenRequest)(nil),                // 21: api.user.v1.GetUploadTokenRequest
 	(*GetUploadTokenReply)(nil),                  // 22: api.user.v1.GetUploadTokenReply
-	nil,                                          // 23: api.user.v1.GetUploadTokenReply.SignedHeadersEntry
+	nil,                                          // 23: api.user.v1.GetUploadTokenReply.FieldsEntry
 	(*fieldmaskpb.FieldMask)(nil),                // 24: google.protobuf.FieldMask
 }
 var file_user_service_v1_user_proto_depIdxs = []int32{
@@ -1422,7 +1436,7 @@ var file_user_service_v1_user_proto_depIdxs = []int32{
 	4,  // 1: api.user.v1.GetConversationMemberProfilesReply.users:type_name -> api.user.v1.UserInfo
 	24, // 2: api.user.v1.UpdateUserRequest.update_mask:type_name -> google.protobuf.FieldMask
 	4,  // 3: api.user.v1.GetUsersByIDsReply.users:type_name -> api.user.v1.UserInfo
-	23, // 4: api.user.v1.GetUploadTokenReply.signed_headers:type_name -> api.user.v1.GetUploadTokenReply.SignedHeadersEntry
+	23, // 4: api.user.v1.GetUploadTokenReply.fields:type_name -> api.user.v1.GetUploadTokenReply.FieldsEntry
 	5,  // 5: api.user.v1.User.Register:input_type -> api.user.v1.RegisterRequest
 	7,  // 6: api.user.v1.User.Login:input_type -> api.user.v1.LoginRequest
 	9,  // 7: api.user.v1.User.RefreshToken:input_type -> api.user.v1.RefreshTokenRequest

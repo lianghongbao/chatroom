@@ -59,11 +59,15 @@ type UserClient interface {
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordReply, error)
 	// GetUploadToken 签发头像直传凭证。
 	//
-	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
-	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
 	//
 	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
-	// 自己的目录。上传前要再校验对象存在性和大小。
+	// 自己的目录。上传后还要再校验对象存在性和大小。
 	GetUploadToken(ctx context.Context, in *GetUploadTokenRequest, opts ...grpc.CallOption) (*GetUploadTokenReply, error)
 	// 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
 	GetUserByID(ctx context.Context, in *GetUserByIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
@@ -273,11 +277,15 @@ type UserServer interface {
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordReply, error)
 	// GetUploadToken 签发头像直传凭证。
 	//
-	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
-	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
 	//
 	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
-	// 自己的目录。上传前要再校验对象存在性和大小。
+	// 自己的目录。上传后还要再校验对象存在性和大小。
 	GetUploadToken(context.Context, *GetUploadTokenRequest) (*GetUploadTokenReply, error)
 	// 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
 	GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error)

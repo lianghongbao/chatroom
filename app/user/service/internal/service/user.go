@@ -7,6 +7,7 @@ import (
 	"chatroom/app/user/service/internal/biz"
 	"chatroom/app/user/service/internal/conf"
 	"chatroom/pkg/middleware"
+	"chatroom/pkg/oss"
 
 	"github.com/go-kratos/kratos/v3/log"
 )
@@ -159,9 +160,9 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	return convertUserReply(u), nil
 }
 
-// GetUploadToken 签发头像直传凭证。req 是签发请求，返回预签名的直传地址。
+// GetUploadToken 签发头像直传凭证。req 是签发请求，返回 PostObject 表单。
 //
-// 客户端拿到地址后直接 PUT 文件到 OSS，服务端不碰文件字节。
+// 客户端拿到表单字段后直接 POST 文件到 OSS，服务端不碰文件字节。
 func (s *UserService) GetUploadToken(ctx context.Context, req *pb.GetUploadTokenRequest) (*pb.GetUploadTokenReply, error) {
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
@@ -175,13 +176,34 @@ func (s *UserService) GetUploadToken(ctx context.Context, req *pb.GetUploadToken
 		return nil, err
 	}
 	return &pb.GetUploadTokenReply{
-		Method:        token.Method,
-		Url:           token.Url,
-		FileKey:       token.FileKey,
-		PublicUrl:     token.PublicUrl,
-		SignedHeaders: token.SignedHeaders,
-		ExpireAt:      token.ExpireAt,
+		Host:      token.Host,
+		Fields:    postFormFields(token),
+		FileKey:   token.Key,
+		PublicUrl: token.PublicUrl,
+		ExpireAt:  token.ExpireAt,
+		MaxSize:   token.MaxSize,
 	}, nil
+}
+
+// postFormFields 把 PostObject 凭证转成客户端要提交的表单域。
+// token 签发出来的凭证
+//
+// key 放在 fields 里 —— 客户端自己指定 object key，
+// 服务端给的只是推荐值；policy 限定了前缀，客户端改不出自己的目录。
+func postFormFields(token *oss.PostUploadForm) map[string]string {
+	if token == nil {
+		return nil
+	}
+	return map[string]string{
+		"key":                     token.Key,
+		"policy":                  token.Policy,
+		"x-oss-signature-version": oss.SignatureVersion,
+		"x-oss-credential":        token.Credential,
+		"x-oss-date":              token.DateTime,
+		"x-oss-security-token":    token.SecurityToken,
+		"x-oss-signature":         token.Signature,
+		"success_action_status":   "200",
+	}
 }
 
 // ChangePassword 改密。req 是改密请求；改完强制重登（黑名单当前 access + 撤销当前 refresh）。

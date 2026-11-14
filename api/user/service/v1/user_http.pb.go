@@ -48,11 +48,15 @@ type UserHTTPServer interface {
 	GetFriendProfiles(context.Context, *GetFriendProfilesRequest) (*GetFriendProfilesReply, error)
 	// GetUploadToken GetUploadToken 签发头像直传凭证。
 	//
-	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
-	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
 	//
 	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
-	// 自己的目录。上传前要再校验对象存在性和大小。
+	// 自己的目录。上传后还要再校验对象存在性和大小。
 	GetUploadToken(context.Context, *GetUploadTokenRequest) (*GetUploadTokenReply, error)
 	// GetUser 当前用户资料。
 	GetUser(context.Context, *GetUserRequest) (*UserInfo, error)
@@ -394,11 +398,15 @@ type UserHTTPClient interface {
 	GetFriendProfiles(ctx context.Context, req *GetFriendProfilesRequest, opts ...http.CallOption) (rsp *GetFriendProfilesReply, err error)
 	// GetUploadToken GetUploadToken 签发头像直传凭证。
 	//
-	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
-	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
 	//
 	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
-	// 自己的目录。上传前要再校验对象存在性和大小。
+	// 自己的目录。上传后还要再校验对象存在性和大小。
 	GetUploadToken(ctx context.Context, req *GetUploadTokenRequest, opts ...http.CallOption) (rsp *GetUploadTokenReply, err error)
 	// GetUser 当前用户资料。
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
@@ -508,11 +516,15 @@ func (c *UserHTTPClientImpl) GetFriendProfiles(ctx context.Context, in *GetFrien
 
 // GetUploadToken GetUploadToken 签发头像直传凭证。
 //
-// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
-// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+// 服务端不碰文件字节。上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+//
+// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
 //
 // key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
-// 自己的目录。上传前要再校验对象存在性和大小。
+// 自己的目录。上传后还要再校验对象存在性和大小。
 func (c *UserHTTPClientImpl) GetUploadToken(ctx context.Context, in *GetUploadTokenRequest, opts ...http.CallOption) (*GetUploadTokenReply, error) {
 	var out GetUploadTokenReply
 	pattern := "/api/user/upload_token"
