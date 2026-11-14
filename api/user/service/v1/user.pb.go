@@ -1136,6 +1136,143 @@ func (x *GetUserByPhoneRequest) GetPhone() string {
 	return ""
 }
 
+// GetUploadTokenRequest 签发头像直传凭证。
+type GetUploadTokenRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 文件后缀，不带点，如 "png"。必须在白名单内。
+	Ext           string `protobuf:"bytes,1,opt,name=ext,proto3" json:"ext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUploadTokenRequest) Reset() {
+	*x = GetUploadTokenRequest{}
+	mi := &file_user_service_v1_user_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUploadTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUploadTokenRequest) ProtoMessage() {}
+
+func (x *GetUploadTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_user_service_v1_user_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUploadTokenRequest.ProtoReflect.Descriptor instead.
+func (*GetUploadTokenRequest) Descriptor() ([]byte, []int) {
+	return file_user_service_v1_user_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetUploadTokenRequest) GetExt() string {
+	if x != nil {
+		return x.Ext
+	}
+	return ""
+}
+
+// GetUploadTokenReply 直传凭证。
+type GetUploadTokenReply struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 上传方法，恒为 PUT。客户端按这个方法发。
+	Method string `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
+	// 带签名的直传地址。客户端把文件 PUT 到这里。
+	Url string `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	// 完整 object key。
+	FileKey string `protobuf:"bytes,3,opt,name=file_key,json=fileKey,proto3" json:"file_key,omitempty"`
+	// 上传后可访问的地址。客户端上传完把它塞进 UpdateUser 的 avatar。
+	PublicUrl string `protobuf:"bytes,4,opt,name=public_url,json=publicUrl,proto3" json:"public_url,omitempty"`
+	// 客户端必须带上的请求头。
+	SignedHeaders map[string]string `protobuf:"bytes,5,rep,name=signed_headers,json=signedHeaders,proto3" json:"signed_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// 过期时间，Unix 秒。
+	ExpireAt      int64 `protobuf:"varint,6,opt,name=expire_at,json=expireAt,proto3" json:"expire_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUploadTokenReply) Reset() {
+	*x = GetUploadTokenReply{}
+	mi := &file_user_service_v1_user_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUploadTokenReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUploadTokenReply) ProtoMessage() {}
+
+func (x *GetUploadTokenReply) ProtoReflect() protoreflect.Message {
+	mi := &file_user_service_v1_user_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUploadTokenReply.ProtoReflect.Descriptor instead.
+func (*GetUploadTokenReply) Descriptor() ([]byte, []int) {
+	return file_user_service_v1_user_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetUploadTokenReply) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *GetUploadTokenReply) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *GetUploadTokenReply) GetFileKey() string {
+	if x != nil {
+		return x.FileKey
+	}
+	return ""
+}
+
+func (x *GetUploadTokenReply) GetPublicUrl() string {
+	if x != nil {
+		return x.PublicUrl
+	}
+	return ""
+}
+
+func (x *GetUploadTokenReply) GetSignedHeaders() map[string]string {
+	if x != nil {
+		return x.SignedHeaders
+	}
+	return nil
+}
+
+func (x *GetUploadTokenReply) GetExpireAt() int64 {
+	if x != nil {
+		return x.ExpireAt
+	}
+	return 0
+}
+
 var File_user_service_v1_user_proto protoreflect.FileDescriptor
 
 const file_user_service_v1_user_proto_rawDesc = "" +
@@ -1208,7 +1345,20 @@ const file_user_service_v1_user_proto_rawDesc = "" +
 	"\x18GetUserByUsernameRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\"-\n" +
 	"\x15GetUserByPhoneRequest\x12\x14\n" +
-	"\x05phone\x18\x01 \x01(\tR\x05phone2\xb3\v\n" +
+	"\x05phone\x18\x01 \x01(\tR\x05phone\")\n" +
+	"\x15GetUploadTokenRequest\x12\x10\n" +
+	"\x03ext\x18\x01 \x01(\tR\x03ext\"\xb4\x02\n" +
+	"\x13GetUploadTokenReply\x12\x16\n" +
+	"\x06method\x18\x01 \x01(\tR\x06method\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x19\n" +
+	"\bfile_key\x18\x03 \x01(\tR\afileKey\x12\x1d\n" +
+	"\n" +
+	"public_url\x18\x04 \x01(\tR\tpublicUrl\x12Z\n" +
+	"\x0esigned_headers\x18\x05 \x03(\v23.api.user.v1.GetUploadTokenReply.SignedHeadersEntryR\rsignedHeaders\x12\x1b\n" +
+	"\texpire_at\x18\x06 \x01(\x03R\bexpireAt\x1a@\n" +
+	"\x12SignedHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xae\f\n" +
 	"\x04User\x12c\n" +
 	"\bRegister\x12\x1c.api.user.v1.RegisterRequest\x1a\x1a.api.user.v1.RegisterReply\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/user/register\x12W\n" +
 	"\x05Login\x12\x19.api.user.v1.LoginRequest\x1a\x17.api.user.v1.LoginReply\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/user/login\x12g\n" +
@@ -1217,7 +1367,8 @@ const file_user_service_v1_user_proto_rawDesc = "" +
 	"\aGetUser\x12\x1b.api.user.v1.GetUserRequest\x1a\x15.api.user.v1.UserInfo\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/user/info\x12^\n" +
 	"\n" +
 	"UpdateUser\x12\x1e.api.user.v1.UpdateUserRequest\x1a\x15.api.user.v1.UserInfo\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\x1a\x0e/api/user/info\x12|\n" +
-	"\x0eChangePassword\x12\".api.user.v1.ChangePasswordRequest\x1a .api.user.v1.ChangePasswordReply\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api/user/change_password\x12]\n" +
+	"\x0eChangePassword\x12\".api.user.v1.ChangePasswordRequest\x1a .api.user.v1.ChangePasswordReply\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api/user/change_password\x12y\n" +
+	"\x0eGetUploadToken\x12\".api.user.v1.GetUploadTokenRequest\x1a .api.user.v1.GetUploadTokenReply\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/user/upload_token\x12]\n" +
 	"\vGetUserByID\x12\x1f.api.user.v1.GetUserByIDRequest\x1a\x15.api.user.v1.UserInfo\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/user/{id}\x12o\n" +
 	"\rGetUsersByIDs\x12!.api.user.v1.GetUsersByIDsRequest\x1a\x1f.api.user.v1.GetUsersByIDsReply\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/user/batch\x12t\n" +
 	"\x11GetUserByUsername\x12%.api.user.v1.GetUserByUsernameRequest\x1a\x15.api.user.v1.UserInfo\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/api/user/lookup/username\x12k\n" +
@@ -1238,7 +1389,7 @@ func file_user_service_v1_user_proto_rawDescGZIP() []byte {
 	return file_user_service_v1_user_proto_rawDescData
 }
 
-var file_user_service_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_user_service_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_user_service_v1_user_proto_goTypes = []any{
 	(*GetFriendProfilesRequest)(nil),             // 0: api.user.v1.GetFriendProfilesRequest
 	(*GetFriendProfilesReply)(nil),               // 1: api.user.v1.GetFriendProfilesReply
@@ -1261,44 +1412,50 @@ var file_user_service_v1_user_proto_goTypes = []any{
 	(*GetUsersByIDsReply)(nil),                   // 18: api.user.v1.GetUsersByIDsReply
 	(*GetUserByUsernameRequest)(nil),             // 19: api.user.v1.GetUserByUsernameRequest
 	(*GetUserByPhoneRequest)(nil),                // 20: api.user.v1.GetUserByPhoneRequest
-	(*fieldmaskpb.FieldMask)(nil),                // 21: google.protobuf.FieldMask
+	(*GetUploadTokenRequest)(nil),                // 21: api.user.v1.GetUploadTokenRequest
+	(*GetUploadTokenReply)(nil),                  // 22: api.user.v1.GetUploadTokenReply
+	nil,                                          // 23: api.user.v1.GetUploadTokenReply.SignedHeadersEntry
+	(*fieldmaskpb.FieldMask)(nil),                // 24: google.protobuf.FieldMask
 }
 var file_user_service_v1_user_proto_depIdxs = []int32{
 	4,  // 0: api.user.v1.GetFriendProfilesReply.users:type_name -> api.user.v1.UserInfo
 	4,  // 1: api.user.v1.GetConversationMemberProfilesReply.users:type_name -> api.user.v1.UserInfo
-	21, // 2: api.user.v1.UpdateUserRequest.update_mask:type_name -> google.protobuf.FieldMask
+	24, // 2: api.user.v1.UpdateUserRequest.update_mask:type_name -> google.protobuf.FieldMask
 	4,  // 3: api.user.v1.GetUsersByIDsReply.users:type_name -> api.user.v1.UserInfo
-	5,  // 4: api.user.v1.User.Register:input_type -> api.user.v1.RegisterRequest
-	7,  // 5: api.user.v1.User.Login:input_type -> api.user.v1.LoginRequest
-	9,  // 6: api.user.v1.User.RefreshToken:input_type -> api.user.v1.RefreshTokenRequest
-	10, // 7: api.user.v1.User.Logout:input_type -> api.user.v1.LogoutRequest
-	12, // 8: api.user.v1.User.GetUser:input_type -> api.user.v1.GetUserRequest
-	13, // 9: api.user.v1.User.UpdateUser:input_type -> api.user.v1.UpdateUserRequest
-	14, // 10: api.user.v1.User.ChangePassword:input_type -> api.user.v1.ChangePasswordRequest
-	16, // 11: api.user.v1.User.GetUserByID:input_type -> api.user.v1.GetUserByIDRequest
-	17, // 12: api.user.v1.User.GetUsersByIDs:input_type -> api.user.v1.GetUsersByIDsRequest
-	19, // 13: api.user.v1.User.GetUserByUsername:input_type -> api.user.v1.GetUserByUsernameRequest
-	20, // 14: api.user.v1.User.GetUserByPhone:input_type -> api.user.v1.GetUserByPhoneRequest
-	0,  // 15: api.user.v1.User.GetFriendProfiles:input_type -> api.user.v1.GetFriendProfilesRequest
-	2,  // 16: api.user.v1.User.GetConversationMemberProfiles:input_type -> api.user.v1.GetConversationMemberProfilesRequest
-	6,  // 17: api.user.v1.User.Register:output_type -> api.user.v1.RegisterReply
-	8,  // 18: api.user.v1.User.Login:output_type -> api.user.v1.LoginReply
-	8,  // 19: api.user.v1.User.RefreshToken:output_type -> api.user.v1.LoginReply
-	11, // 20: api.user.v1.User.Logout:output_type -> api.user.v1.LogoutReply
-	4,  // 21: api.user.v1.User.GetUser:output_type -> api.user.v1.UserInfo
-	4,  // 22: api.user.v1.User.UpdateUser:output_type -> api.user.v1.UserInfo
-	15, // 23: api.user.v1.User.ChangePassword:output_type -> api.user.v1.ChangePasswordReply
-	4,  // 24: api.user.v1.User.GetUserByID:output_type -> api.user.v1.UserInfo
-	18, // 25: api.user.v1.User.GetUsersByIDs:output_type -> api.user.v1.GetUsersByIDsReply
-	4,  // 26: api.user.v1.User.GetUserByUsername:output_type -> api.user.v1.UserInfo
-	4,  // 27: api.user.v1.User.GetUserByPhone:output_type -> api.user.v1.UserInfo
-	1,  // 28: api.user.v1.User.GetFriendProfiles:output_type -> api.user.v1.GetFriendProfilesReply
-	3,  // 29: api.user.v1.User.GetConversationMemberProfiles:output_type -> api.user.v1.GetConversationMemberProfilesReply
-	17, // [17:30] is the sub-list for method output_type
-	4,  // [4:17] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	23, // 4: api.user.v1.GetUploadTokenReply.signed_headers:type_name -> api.user.v1.GetUploadTokenReply.SignedHeadersEntry
+	5,  // 5: api.user.v1.User.Register:input_type -> api.user.v1.RegisterRequest
+	7,  // 6: api.user.v1.User.Login:input_type -> api.user.v1.LoginRequest
+	9,  // 7: api.user.v1.User.RefreshToken:input_type -> api.user.v1.RefreshTokenRequest
+	10, // 8: api.user.v1.User.Logout:input_type -> api.user.v1.LogoutRequest
+	12, // 9: api.user.v1.User.GetUser:input_type -> api.user.v1.GetUserRequest
+	13, // 10: api.user.v1.User.UpdateUser:input_type -> api.user.v1.UpdateUserRequest
+	14, // 11: api.user.v1.User.ChangePassword:input_type -> api.user.v1.ChangePasswordRequest
+	21, // 12: api.user.v1.User.GetUploadToken:input_type -> api.user.v1.GetUploadTokenRequest
+	16, // 13: api.user.v1.User.GetUserByID:input_type -> api.user.v1.GetUserByIDRequest
+	17, // 14: api.user.v1.User.GetUsersByIDs:input_type -> api.user.v1.GetUsersByIDsRequest
+	19, // 15: api.user.v1.User.GetUserByUsername:input_type -> api.user.v1.GetUserByUsernameRequest
+	20, // 16: api.user.v1.User.GetUserByPhone:input_type -> api.user.v1.GetUserByPhoneRequest
+	0,  // 17: api.user.v1.User.GetFriendProfiles:input_type -> api.user.v1.GetFriendProfilesRequest
+	2,  // 18: api.user.v1.User.GetConversationMemberProfiles:input_type -> api.user.v1.GetConversationMemberProfilesRequest
+	6,  // 19: api.user.v1.User.Register:output_type -> api.user.v1.RegisterReply
+	8,  // 20: api.user.v1.User.Login:output_type -> api.user.v1.LoginReply
+	8,  // 21: api.user.v1.User.RefreshToken:output_type -> api.user.v1.LoginReply
+	11, // 22: api.user.v1.User.Logout:output_type -> api.user.v1.LogoutReply
+	4,  // 23: api.user.v1.User.GetUser:output_type -> api.user.v1.UserInfo
+	4,  // 24: api.user.v1.User.UpdateUser:output_type -> api.user.v1.UserInfo
+	15, // 25: api.user.v1.User.ChangePassword:output_type -> api.user.v1.ChangePasswordReply
+	22, // 26: api.user.v1.User.GetUploadToken:output_type -> api.user.v1.GetUploadTokenReply
+	4,  // 27: api.user.v1.User.GetUserByID:output_type -> api.user.v1.UserInfo
+	18, // 28: api.user.v1.User.GetUsersByIDs:output_type -> api.user.v1.GetUsersByIDsReply
+	4,  // 29: api.user.v1.User.GetUserByUsername:output_type -> api.user.v1.UserInfo
+	4,  // 30: api.user.v1.User.GetUserByPhone:output_type -> api.user.v1.UserInfo
+	1,  // 31: api.user.v1.User.GetFriendProfiles:output_type -> api.user.v1.GetFriendProfilesReply
+	3,  // 32: api.user.v1.User.GetConversationMemberProfiles:output_type -> api.user.v1.GetConversationMemberProfilesReply
+	19, // [19:33] is the sub-list for method output_type
+	5,  // [5:19] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_user_service_v1_user_proto_init() }
@@ -1313,7 +1470,7 @@ func file_user_service_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_service_v1_user_proto_rawDesc), len(file_user_service_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

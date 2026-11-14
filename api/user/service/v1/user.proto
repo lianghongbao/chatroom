@@ -69,6 +69,20 @@ service User {
         };
     }
 
+    // GetUploadToken 签发头像直传凭证。
+    //
+    // 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+    // 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+    //
+    // key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+    // 自己的目录。上传前要再校验对象存在性和大小。
+    rpc GetUploadToken (GetUploadTokenRequest) returns (GetUploadTokenReply) {
+        option (google.api.http) = {
+            post: "/api/user/upload_token"
+            body: "*"
+        };
+    }
+
     // 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
     rpc GetUserByID (GetUserByIDRequest) returns (UserInfo) {
         option (google.api.http) = {
@@ -275,4 +289,26 @@ message GetUserByUsernameRequest {
 message GetUserByPhoneRequest {
   // 手机号。精确匹配（中国大陆 11 位）。
   string phone = 1;
+}
+
+// GetUploadTokenRequest 签发头像直传凭证。
+message GetUploadTokenRequest {
+  // 文件后缀，不带点，如 "png"。必须在白名单内。
+  string ext = 1;
+}
+
+// GetUploadTokenReply 直传凭证。
+message GetUploadTokenReply {
+  // 上传方法，恒为 PUT。客户端按这个方法发。
+  string method = 1;
+  // 带签名的直传地址。客户端把文件 PUT 到这里。
+  string url = 2;
+  // 完整 object key。
+  string file_key = 3;
+  // 上传后可访问的地址。客户端上传完把它塞进 UpdateUser 的 avatar。
+  string public_url = 4;
+  // 客户端必须带上的请求头。
+  map<string, string> signed_headers = 5;
+  // 过期时间，Unix 秒。
+  int64 expire_at = 6;
 }

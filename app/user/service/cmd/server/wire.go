@@ -14,6 +14,7 @@ import (
 	"chatroom/app/user/service/internal/observability"
 	"chatroom/app/user/service/internal/server"
 	"chatroom/app/user/service/internal/service"
+	"chatroom/app/user/service/internal/storage"
 	"chatroom/pkg/middleware"
 	"chatroom/pkg/nacos"
 	pkgobs "chatroom/pkg/observability"
@@ -37,13 +38,17 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options。
 		conf.NacosOptions,
 		// 把 *conf.Bootstrap 的子字段暴露为独立 provider，各层直接吃 *conf.Xxx，不做二次翻译
-		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability"),
+		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability", "Storage"),
 		// 观测能力：conf.Observability → observability.Config → *observability.Provider。
 		// Provider 构造时即注册 otel 全局 provider，server 依赖 *Provider，
 		// 依赖关系保证了它先于 server 建好。
 		observability.NewConfig,
 		pkgobs.NewPromRegistry,
 		pkgobs.New,
+		// 对象存储：没配就返回 nil client，头像上传能力自动关闭，
+		// 不影响服务的其他功能。
+		storage.NewClient,
+		biz.NewStorageOptions,
 		// *data.TokenStore 同时实现 biz.TokenStore 和 middleware.TokenChecker，显式绑定让 wire 拉到正确的窄接口
 		wire.Bind(new(biz.TokenStore), new(*data.TokenStore)),
 		wire.Bind(new(middleware.TokenChecker), new(*data.TokenStore)),

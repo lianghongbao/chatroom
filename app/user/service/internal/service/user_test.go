@@ -353,7 +353,7 @@ const testSecret = "test-secret-32-bytes-long-xxxxxx"
 // locker —— 全部是 biz 层声明的接口。
 func newService(repo *fakeRepo, store *fakeTokenStore, lim *fakeLimiter, lock *fakeLocker) *UserService {
 	auth := &conf.Auth{JwtSecret: testSecret, TokenIssuer: "chatroom"}
-	uc := biz.NewUserUsecase(repo, auth, lim, lock, store, nil, nil)
+	uc := biz.NewUserUsecase(repo, auth, lim, lock, store, nil, biz.StorageOptions{}, nil)
 	return NewUserService(uc, auth)
 }
 
@@ -922,9 +922,9 @@ func TestServiceGetConversationMemberProfiles_PropagatesError(t *testing.T) {
 // TestServiceGetUserByUsername_ReturnsUser 按用户名查到人，返的资料带 uid。
 func TestServiceGetUserByUsername_ReturnsUser(t *testing.T) {
 	repo := &fakeRepo{findByUsernameRet: &biz.User{
-		ID:       "uid-7",
-		Username: "alice",
-		Nickname: "Alice",
+		ID:        "uid-7",
+		Username:  "alice",
+		Nickname:  "Alice",
 		CreatedAt: time.Now(),
 	}}
 	s := newServiceWithRepo(repo)

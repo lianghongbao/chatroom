@@ -9,6 +9,7 @@ import (
 
 	v1 "chatroom/api/user/service/v1"
 	"chatroom/app/user/service/internal/conf"
+	"chatroom/pkg/oss"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/golang-jwt/jwt/v5"
@@ -262,14 +263,18 @@ type UserCache interface {
 
 // UserUsecase 用户用例。
 type UserUsecase struct {
-	repo    UserRepo
-	auth    *conf.Auth
-	lim     LoginLimiter
-	locker  Locker
-	store   TokenStore
-	cache   UserCache
-	tokenFn func(uid string) (string, error) // auth 配置有效时才赋值，避免冷启动签发空密钥 token
-	logger  *slog.Logger
+	repo          UserRepo
+	auth          *conf.Auth
+	lim           LoginLimiter
+	locker        Locker
+	store         TokenStore
+	cache         UserCache
+	tokenFn       func(uid string) (string, error) // auth 配置有效时才赋值，避免冷启动签发空密钥 token
+	logger        *slog.Logger
+	oss           *oss.Client // 对象存储客户端，为 nil 时关闭上传
+	ossHosts      []string    // 头像地址允许的 host
+	avatarExts    []string    // 头像允许的后缀白名单
+	avatarMaxSize int64       // 头像最大字节数，0 表示不限
 }
 
 // NewUserUsecase 构造用户用例
@@ -279,8 +284,9 @@ type UserUsecase struct {
 // locker 注册锁，为 nil 时关闭加锁
 // store token 存储，为 nil 时关闭持久化
 // cache 资料缓存，为 nil 时关闭缓存
+// storage 对象存储能力，为零值时关闭头像上传
 // logger 日志器，为 nil 时用默认 logger。
-func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Locker, store TokenStore, cache UserCache, logger *slog.Logger) *UserUsecase {
+func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Locker, store TokenStore, cache UserCache, storage StorageOptions, logger *slog.Logger) *UserUsecase {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -288,6 +294,10 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Loc
 	if auth != nil && auth.GetJwtSecret() != "" {
 		uc.tokenFn = uc.signToken
 	}
+	uc.oss = storage.Client
+	uc.ossHosts = storage.AllowedHosts
+	uc.avatarExts = storage.AllowedExts
+	uc.avatarMaxSize = storage.MaxSize
 	return uc
 }
 
@@ -594,6 +604,14 @@ func (uc *UserUsecase) UpdateUser(ctx context.Context, id string, nickname, avat
 	if err := validateProfile(nickname, avatar); err != nil {
 		return nil, err
 	}
+	// 配了对象存储就校验头像地址 —— host / 前缀 / 后缀白名单 + 对象真实存在。
+	if uc.oss != nil {
+		clean, err := uc.ValidateAvatarURL(ctx, id, avatar)
+		if err != nil {
+			return nil, err
+		}
+		avatar = clean
+	}
 	u, err := uc.repo.Update(ctx, id, nickname, avatar)
 	if err != nil {
 		return nil, err
@@ -631,6 +649,15 @@ func (uc *UserUsecase) UpdateUserFields(ctx context.Context, id string, fields U
 		v := strings.TrimSpace(*fields.Avatar)
 		if v == "" {
 			return nil, ErrUserInvalidArgument
+		}
+		// 配了对象存储就校验地址 —— host / 前缀 / 后缀白名单 + 对象真实存在。
+		// 没配就只留长度校验（历史行为）。
+		if uc.oss != nil {
+			clean, err := uc.ValidateAvatarURL(ctx, id, v)
+			if err != nil {
+				return nil, err
+			}
+			v = clean
 		}
 		fields.Avatar = &v
 	}

@@ -13,6 +13,7 @@ import (
 	"chatroom/app/user/service/internal/observability"
 	"chatroom/app/user/service/internal/server"
 	"chatroom/app/user/service/internal/service"
+	"chatroom/app/user/service/internal/storage"
 	"chatroom/pkg/nacos"
 	observability2 "chatroom/pkg/observability"
 	"github.com/go-kratos/kratos/v3"
@@ -25,7 +26,7 @@ import (
 
 // Injectors from wire.go:
 
-// wireApp 组装 kratos 应用。
+// wireApp 组装 kratos 应用。入参依次是引导配置、registry 配置段与 logger。
 func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Logger) (*kratos.App, func(), error) {
 	confServer := bootstrap.Server
 	auth := bootstrap.Auth
@@ -46,7 +47,10 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	loginLimiter := data.NewLoginLimiter(dataData, auth)
 	locker := data.NewLocker(dataData)
 	userCache := data.NewUserCache(dataData)
-	userUsecase := biz.NewUserUsecase(userRepo, auth, loginLimiter, locker, tokenStore, userCache, logger)
+	confStorage := bootstrap.Storage
+	client := storage.NewClient(confStorage, logger)
+	storageOptions := biz.NewStorageOptions(client, confStorage)
+	userUsecase := biz.NewUserUsecase(userRepo, auth, loginLimiter, locker, tokenStore, userCache, storageOptions, logger)
 	userService := service.NewUserService(userUsecase, auth)
 	grpcServer := server.NewGRPCServer(confServer, auth, provider, tokenStore, userService)
 	httpServer := server.NewHTTPServer(confServer, auth, provider, tokenStore, userService)

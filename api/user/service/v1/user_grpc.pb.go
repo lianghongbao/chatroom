@@ -26,6 +26,7 @@ const (
 	User_GetUser_FullMethodName                       = "/api.user.v1.User/GetUser"
 	User_UpdateUser_FullMethodName                    = "/api.user.v1.User/UpdateUser"
 	User_ChangePassword_FullMethodName                = "/api.user.v1.User/ChangePassword"
+	User_GetUploadToken_FullMethodName                = "/api.user.v1.User/GetUploadToken"
 	User_GetUserByID_FullMethodName                   = "/api.user.v1.User/GetUserByID"
 	User_GetUsersByIDs_FullMethodName                 = "/api.user.v1.User/GetUsersByIDs"
 	User_GetUserByUsername_FullMethodName             = "/api.user.v1.User/GetUserByUsername"
@@ -56,6 +57,14 @@ type UserClient interface {
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	// 改密。旧错 / 用户不存在折叠为同一错误（防撞库枚举），改完强制登出当前会话。
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordReply, error)
+	// GetUploadToken 签发头像直传凭证。
+	//
+	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。上传前要再校验对象存在性和大小。
+	GetUploadToken(ctx context.Context, in *GetUploadTokenRequest, opts ...grpc.CallOption) (*GetUploadTokenReply, error)
 	// 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
 	GetUserByID(ctx context.Context, in *GetUserByIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	// 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
@@ -170,6 +179,16 @@ func (c *userClient) ChangePassword(ctx context.Context, in *ChangePasswordReque
 	return out, nil
 }
 
+func (c *userClient) GetUploadToken(ctx context.Context, in *GetUploadTokenRequest, opts ...grpc.CallOption) (*GetUploadTokenReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUploadTokenReply)
+	err := c.cc.Invoke(ctx, User_GetUploadToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *userClient) GetUserByID(ctx context.Context, in *GetUserByIDRequest, opts ...grpc.CallOption) (*UserInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UserInfo)
@@ -252,6 +271,14 @@ type UserServer interface {
 	UpdateUser(context.Context, *UpdateUserRequest) (*UserInfo, error)
 	// 改密。旧错 / 用户不存在折叠为同一错误（防撞库枚举），改完强制登出当前会话。
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordReply, error)
+	// GetUploadToken 签发头像直传凭证。
+	//
+	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。上传前要再校验对象存在性和大小。
+	GetUploadToken(context.Context, *GetUploadTokenRequest) (*GetUploadTokenReply, error)
 	// 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
 	GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error)
 	// 批量按 ID 查公开资料，避免 N+1；不可见 / 不存在的 id 静默剔除。
@@ -316,6 +343,9 @@ func (UnimplementedUserServer) UpdateUser(context.Context, *UpdateUserRequest) (
 }
 func (UnimplementedUserServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
+}
+func (UnimplementedUserServer) GetUploadToken(context.Context, *GetUploadTokenRequest) (*GetUploadTokenReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUploadToken not implemented")
 }
 func (UnimplementedUserServer) GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserByID not implemented")
@@ -482,6 +512,24 @@ func _User_ChangePassword_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _User_GetUploadToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUploadTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).GetUploadToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_GetUploadToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).GetUploadToken(ctx, req.(*GetUploadTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _User_GetUserByID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetUserByIDRequest)
 	if err := dec(in); err != nil {
@@ -624,6 +672,10 @@ var User_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangePassword",
 			Handler:    _User_ChangePassword_Handler,
+		},
+		{
+			MethodName: "GetUploadToken",
+			Handler:    _User_GetUploadToken_Handler,
 		},
 		{
 			MethodName: "GetUserByID",

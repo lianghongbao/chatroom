@@ -22,4 +22,14 @@ enum ErrorReason {
   USER_BANNED = 9;
   // 手机号已被占用（全局唯一）。注册 / 改手机号时拦截。
   USER_PHONE_TAKEN = 10;
+  // 对象存储没配。签发上传凭证时返回。
+  USER_STORAGE_NOT_CONFIGURED = 11;
+  // 上传文件后缀不在白名单内。
+  USER_UPLOAD_EXT_NOT_ALLOWED = 12;
+  // OSS 上没有这个对象 —— 客户端拿了凭证却没真上传。
+  USER_UPLOAD_OBJECT_NOT_FOUND = 13;
+  // 对象大小或类型跟策略不符。
+  USER_UPLOAD_OBJECT_MISMATCH = 14;
+  // 头像地址不是本系统签发的（host / 前缀 / 后缀不匹配）。
+  USER_UPLOAD_URL_INVALID = 15;
 }

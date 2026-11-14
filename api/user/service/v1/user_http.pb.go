@@ -20,6 +20,7 @@ const _ = http.SupportPackageIsVersion3
 const OperationUserChangePassword = "/api.user.v1.User/ChangePassword"
 const OperationUserGetConversationMemberProfiles = "/api.user.v1.User/GetConversationMemberProfiles"
 const OperationUserGetFriendProfiles = "/api.user.v1.User/GetFriendProfiles"
+const OperationUserGetUploadToken = "/api.user.v1.User/GetUploadToken"
 const OperationUserGetUser = "/api.user.v1.User/GetUser"
 const OperationUserGetUserByID = "/api.user.v1.User/GetUserByID"
 const OperationUserGetUserByPhone = "/api.user.v1.User/GetUserByPhone"
@@ -45,6 +46,14 @@ type UserHTTPServer interface {
 	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
 	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 	GetFriendProfiles(context.Context, *GetFriendProfilesRequest) (*GetFriendProfilesReply, error)
+	// GetUploadToken GetUploadToken 签发头像直传凭证。
+	//
+	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。上传前要再校验对象存在性和大小。
+	GetUploadToken(context.Context, *GetUploadTokenRequest) (*GetUploadTokenReply, error)
 	// GetUser 当前用户资料。
 	GetUser(context.Context, *GetUserRequest) (*UserInfo, error)
 	// GetUserByID 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
@@ -91,6 +100,7 @@ func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
 	r.Handle("GET", "/api/user/info", _User_GetUser0_HTTP_Handler(srv))
 	r.Handle("PUT", "/api/user/info", _User_UpdateUser0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/change_password", _User_ChangePassword0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/user/upload_token", _User_GetUploadToken0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/user/{id}", _User_GetUserByID0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/batch", _User_GetUsersByIDs0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/user/lookup/username", _User_GetUserByUsername0_HTTP_Handler(srv))
@@ -232,6 +242,25 @@ func _User_ChangePassword0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Contex
 	}
 }
 
+func _User_GetUploadToken0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetUploadTokenRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserGetUploadToken)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetUploadToken(ctx, req.(*GetUploadTokenRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetUploadTokenReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _User_GetUserByID0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GetUserByIDRequest
@@ -363,6 +392,14 @@ type UserHTTPClient interface {
 	// 跟 GetUsersByIDs 的区别：跳过 is_visible_to_stranger 判定 —— 对方已是好友。
 	// 仅供服务间调用，需带 X-Internal-Token（不走用户 JWT）。返回的 UserInfo 不含 email / phone。
 	GetFriendProfiles(ctx context.Context, req *GetFriendProfilesRequest, opts ...http.CallOption) (rsp *GetFriendProfilesReply, err error)
+	// GetUploadToken GetUploadToken 签发头像直传凭证。
+	//
+	// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+	// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。上传前要再校验对象存在性和大小。
+	GetUploadToken(ctx context.Context, req *GetUploadTokenRequest, opts ...http.CallOption) (rsp *GetUploadTokenReply, err error)
 	// GetUser 当前用户资料。
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
 	// GetUserByID 按 ID 查公开资料；目标用户关「对陌生人可见」时折叠 NOT_FOUND。
@@ -460,6 +497,30 @@ func (c *UserHTTPClientImpl) GetFriendProfiles(ctx context.Context, in *GetFrien
 		http.Accept("application/protojson"),
 		http.ContentType("application/protojson"),
 		http.Operation(OperationUserGetFriendProfiles),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUploadToken GetUploadToken 签发头像直传凭证。
+//
+// 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+// 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+//
+// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+// 自己的目录。上传前要再校验对象存在性和大小。
+func (c *UserHTTPClientImpl) GetUploadToken(ctx context.Context, in *GetUploadTokenRequest, opts ...http.CallOption) (*GetUploadTokenReply, error) {
+	var out GetUploadTokenReply
+	pattern := "/api/user/upload_token"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationUserGetUploadToken),
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)

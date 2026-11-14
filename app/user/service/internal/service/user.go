@@ -159,6 +159,31 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 	return convertUserReply(u), nil
 }
 
+// GetUploadToken 签发头像直传凭证。req 是签发请求，返回预签名的直传地址。
+//
+// 客户端拿到地址后直接 PUT 文件到 OSS，服务端不碰文件字节。
+func (s *UserService) GetUploadToken(ctx context.Context, req *pb.GetUploadTokenRequest) (*pb.GetUploadTokenReply, error) {
+	if req == nil {
+		return nil, biz.ErrUserInvalidArgument
+	}
+	uid, ok := middleware.FromContext(ctx)
+	if !ok {
+		return nil, biz.ErrUserInvalidArgument
+	}
+	token, err := s.uc.GetUploadToken(ctx, uid, req.GetExt())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetUploadTokenReply{
+		Method:        token.Method,
+		Url:           token.Url,
+		FileKey:       token.FileKey,
+		PublicUrl:     token.PublicUrl,
+		SignedHeaders: token.SignedHeaders,
+		ExpireAt:      token.ExpireAt,
+	}, nil
+}
+
 // ChangePassword 改密。req 是改密请求；改完强制重登（黑名单当前 access + 撤销当前 refresh）。
 func (s *UserService) ChangePassword(ctx context.Context, req *pb.ChangePasswordRequest) (*pb.ChangePasswordReply, error) {
 	if req == nil {

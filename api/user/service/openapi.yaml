@@ -257,6 +257,32 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.user.v1.RegisterReply'
+    /api/user/upload_token:
+        post:
+            tags:
+                - User
+            description: |-
+                GetUploadToken 签发头像直传凭证。
+
+                 客户端拿到预签名地址后**直接 PUT 到 OSS**，服务端不碰文件字节。
+                 上传完再把 public_url 塞进 UpdateUser 的 avatar 字段。
+
+                 key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+                 自己的目录。上传前要再校验对象存在性和大小。
+            operationId: User_GetUploadToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.user.v1.GetUploadTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.GetUploadTokenReply'
     /api/user/{id}:
         get:
             tags:
@@ -331,6 +357,37 @@ components:
                         type: string
                     description: 待查用户 uid 列表。单次最多 200 个，超出截断。
             description: GetFriendProfilesRequest 批量拉好友公开资料。
+        api.user.v1.GetUploadTokenReply:
+            type: object
+            properties:
+                method:
+                    type: string
+                    description: 上传方法，恒为 PUT。客户端按这个方法发。
+                url:
+                    type: string
+                    description: 带签名的直传地址。客户端把文件 PUT 到这里。
+                fileKey:
+                    type: string
+                    description: 完整 object key。
+                publicUrl:
+                    type: string
+                    description: 上传后可访问的地址。客户端上传完把它塞进 UpdateUser 的 avatar。
+                signedHeaders:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: 客户端必须带上的请求头。
+                expireAt:
+                    type: string
+                    description: 过期时间，Unix 秒。
+            description: GetUploadTokenReply 直传凭证。
+        api.user.v1.GetUploadTokenRequest:
+            type: object
+            properties:
+                ext:
+                    type: string
+                    description: 文件后缀，不带点，如 "png"。必须在白名单内。
+            description: GetUploadTokenRequest 签发头像直传凭证。
         api.user.v1.GetUsersByIDsReply:
             type: object
             properties:

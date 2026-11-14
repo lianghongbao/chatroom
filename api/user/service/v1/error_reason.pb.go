@@ -38,6 +38,16 @@ const (
 	ErrorReason_USER_BANNED ErrorReason = 9
 	// 手机号已被占用（全局唯一）。注册 / 改手机号时拦截。
 	ErrorReason_USER_PHONE_TAKEN ErrorReason = 10
+	// 对象存储没配。签发上传凭证时返回。
+	ErrorReason_USER_STORAGE_NOT_CONFIGURED ErrorReason = 11
+	// 上传文件后缀不在白名单内。
+	ErrorReason_USER_UPLOAD_EXT_NOT_ALLOWED ErrorReason = 12
+	// OSS 上没有这个对象 —— 客户端拿了凭证却没真上传。
+	ErrorReason_USER_UPLOAD_OBJECT_NOT_FOUND ErrorReason = 13
+	// 对象大小或类型跟策略不符。
+	ErrorReason_USER_UPLOAD_OBJECT_MISMATCH ErrorReason = 14
+	// 头像地址不是本系统签发的（host / 前缀 / 后缀不匹配）。
+	ErrorReason_USER_UPLOAD_URL_INVALID ErrorReason = 15
 )
 
 // Enum value maps for ErrorReason.
@@ -54,19 +64,29 @@ var (
 		8:  "USER_INVALID_OLD_PASSWORD",
 		9:  "USER_BANNED",
 		10: "USER_PHONE_TAKEN",
+		11: "USER_STORAGE_NOT_CONFIGURED",
+		12: "USER_UPLOAD_EXT_NOT_ALLOWED",
+		13: "USER_UPLOAD_OBJECT_NOT_FOUND",
+		14: "USER_UPLOAD_OBJECT_MISMATCH",
+		15: "USER_UPLOAD_URL_INVALID",
 	}
 	ErrorReason_value = map[string]int32{
-		"USER_UNSPECIFIED":          0,
-		"USER_NOT_FOUND":            1,
-		"USER_INVALID_ARGUMENT":     2,
-		"USER_ALREADY_EXISTS":       3,
-		"USER_BAD_CREDENTIALS":      4,
-		"USER_LOGIN_LOCKED":         5,
-		"USER_REFRESH_INVALID":      6,
-		"USER_TOKEN_BLACKLISTED":    7,
-		"USER_INVALID_OLD_PASSWORD": 8,
-		"USER_BANNED":               9,
-		"USER_PHONE_TAKEN":          10,
+		"USER_UNSPECIFIED":             0,
+		"USER_NOT_FOUND":               1,
+		"USER_INVALID_ARGUMENT":        2,
+		"USER_ALREADY_EXISTS":          3,
+		"USER_BAD_CREDENTIALS":         4,
+		"USER_LOGIN_LOCKED":            5,
+		"USER_REFRESH_INVALID":         6,
+		"USER_TOKEN_BLACKLISTED":       7,
+		"USER_INVALID_OLD_PASSWORD":    8,
+		"USER_BANNED":                  9,
+		"USER_PHONE_TAKEN":             10,
+		"USER_STORAGE_NOT_CONFIGURED":  11,
+		"USER_UPLOAD_EXT_NOT_ALLOWED":  12,
+		"USER_UPLOAD_OBJECT_NOT_FOUND": 13,
+		"USER_UPLOAD_OBJECT_MISMATCH":  14,
+		"USER_UPLOAD_URL_INVALID":      15,
 	}
 )
 
@@ -101,7 +121,7 @@ var File_user_service_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_user_service_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"\"user/service/v1/error_reason.proto\x12\vapi.user.v1*\x98\x02\n" +
+	"\"user/service/v1/error_reason.proto\x12\vapi.user.v1*\xba\x03\n" +
 	"\vErrorReason\x12\x14\n" +
 	"\x10USER_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eUSER_NOT_FOUND\x10\x01\x12\x19\n" +
@@ -114,7 +134,12 @@ const file_user_service_v1_error_reason_proto_rawDesc = "" +
 	"\x19USER_INVALID_OLD_PASSWORD\x10\b\x12\x0f\n" +
 	"\vUSER_BANNED\x10\t\x12\x14\n" +
 	"\x10USER_PHONE_TAKEN\x10\n" +
-	"B<\n" +
+	"\x12\x1f\n" +
+	"\x1bUSER_STORAGE_NOT_CONFIGURED\x10\v\x12\x1f\n" +
+	"\x1bUSER_UPLOAD_EXT_NOT_ALLOWED\x10\f\x12 \n" +
+	"\x1cUSER_UPLOAD_OBJECT_NOT_FOUND\x10\r\x12\x1f\n" +
+	"\x1bUSER_UPLOAD_OBJECT_MISMATCH\x10\x0e\x12\x1b\n" +
+	"\x17USER_UPLOAD_URL_INVALID\x10\x0fB<\n" +
 	"\vapi.user.v1P\x01Z\x1fchatroom/api/user/service/v1;v1\xa2\x02\tAPIUserV1b\x06proto3"
 
 var (
