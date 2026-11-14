@@ -124,11 +124,16 @@ type UserExistenceChecker interface {
 	CheckUsersExist(ctx context.Context, ids []string) ([]string, error)
 }
 
-// UserProfile 成员的公开资料快照。conversation biz 只用昵称 / 头像。
+// UserProfile 成员的公开资料快照。
+//
+// Username / CreatedAt 只在「查单个成员资料」时用到 —— 成员列表只显示昵称头像，
+// 那两个字段是多余的，缺了也不影响。
 type UserProfile struct {
-	UserID   string
-	Nickname string
-	Avatar   string
+	UserID    string
+	Username  string
+	Nickname  string
+	Avatar    string
+	CreatedAt time.Time
 }
 
 // MemberInvalidationPublisher 成员变更通知（Redis Pub/Sub）。
@@ -607,6 +612,67 @@ func (uc *ConversationUsecase) ListMembers(ctx context.Context, callerID string,
 	// 成员资料是补充信息，拉不到就留空占位，不影响主路径。
 	uc.fillProfiles(ctx, []*Conversation{conv})
 	return conv, nil
+}
+
+// GetMemberProfile 查会话里某个成员的公开资料。
+// ctx 上下文
+// callerID 调用方 uid
+// conversationID 会话 ID
+// userID 要查的成员 uid
+//
+// 调用方必须是会话成员，否则返 ErrConversationNotFound（不泄露会话是否存在）。
+// 被查的人也必须是成员 —— 传一个会话外的 uid 要跟「查不到」一个待遇，
+// 否则就成了拿会话 ID 探测任意用户资料的口子。
+//
+// 资料走内部端点拉，跳过 is_visible_to_stranger 判定：同会话即互相可见。
+func (uc *ConversationUsecase) GetMemberProfile(ctx context.Context, callerID string, conversationID uint64, userID string) (*UserProfile, error) {
+	if uc.repo == nil {
+		return nil, ErrConversationInvalidArgument
+	}
+	if callerID == "" || conversationID == 0 || userID == "" {
+		return nil, ErrConversationInvalidArgument
+	}
+
+	conv, err := uc.repo.FindByID(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	isMember, err := uc.repo.IsMember(ctx, conversationID, callerID)
+	if err != nil {
+		return nil, err
+	}
+	// 非成员看不到会话 —— 折叠成 NOT_FOUND，不泄露「会话存在但你不是成员」。
+	if !isMember {
+		return nil, ErrConversationNotFound
+	}
+
+	// 被查的人也得是成员。
+	targetIsMember := false
+	for _, id := range conv.MemberIDs {
+		if id == userID {
+			targetIsMember = true
+			break
+		}
+	}
+	if !targetIsMember {
+		return nil, ErrConversationNotFound
+	}
+
+	if uc.profiles == nil {
+		return nil, ErrConversationNotFound
+	}
+	profiles, err := uc.profiles.FetchProfiles(ctx, []string{userID})
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range profiles {
+		if p != nil && p.UserID == userID {
+			return p, nil
+		}
+	}
+	// 资料拉不到 —— 当查不到处理。成员列表里本来就允许昵称头像留空占位，
+	// 这里同样不因为下游抖动就报错。
+	return nil, ErrConversationNotFound
 }
 
 // UpdateConversation 改群名。仅群主可调用，单聊不支持。

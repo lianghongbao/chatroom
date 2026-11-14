@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"errors"
+	"time"
 
 	"chatroom/app/conversation/service/internal/biz"
 )
@@ -33,9 +34,11 @@ func (a *ConversationAdapter) FetchProfiles(ctx context.Context, ids []string) (
 			continue
 		}
 		out = append(out, &biz.UserProfile{
-			UserID:   u.GetId(),
-			Nickname: u.GetNickname(),
-			Avatar:   u.GetAvatar(),
+			UserID:    u.GetId(),
+			Username:  u.GetUsername(),
+			Nickname:  u.GetNickname(),
+			Avatar:    u.GetAvatar(),
+			CreatedAt: time.Unix(u.GetCreatedAt(), 0),
 		})
 	}
 	return out, nil

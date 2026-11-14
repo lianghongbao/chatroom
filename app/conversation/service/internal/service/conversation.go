@@ -239,9 +239,30 @@ func (s *ConversationService) ListMembers(ctx context.Context, req *pb.ListMembe
 	return out, nil
 }
 
-// CheckMembership 查某用户是不是会话成员。req 是查询请求，userId 是被查的用户 ID。
-func (s *ConversationService) CheckMembership(ctx context.Context, req *pb.CheckMembershipRequest) (*pb.CheckMembershipReply, error) {
+// GetMemberProfile 查会话成员的公开资料。req 是查询请求，conversationId 是会话 ID，userId 是被查的成员。
+func (s *ConversationService) GetMemberProfile(ctx context.Context, req *pb.GetMemberProfileRequest) (*pb.GetMemberProfileReply, error) {
 	if req == nil || req.GetConversationId() == 0 || req.GetUserId() == "" {
+		return nil, biz.ErrConversationInvalidArgument
+	}
+	uid, ok := middleware.FromContext(ctx)
+	if !ok {
+		return nil, biz.ErrConversationInvalidArgument
+	}
+	profile, err := s.uc.GetMemberProfile(ctx, uid, req.GetConversationId(), req.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetMemberProfileReply{
+		Id:        profile.UserID,
+		Username:  profile.Username,
+		Nickname:  profile.Nickname,
+		Avatar:    profile.Avatar,
+		CreatedAt: profile.CreatedAt.Unix(),
+	}, nil
+}
+
+// CheckMembership 查某用户是不是会话成员。req 是查询请求，userId 是被查的用户 ID。
+func (s *ConversationService) CheckMembership(ctx context.Context, req *pb.CheckMembershipRequest) (*pb.CheckMembershipReply, error) {	if req == nil || req.GetConversationId() == 0 || req.GetUserId() == "" {
 		return nil, biz.ErrConversationInvalidArgument
 	}
 	isMember, err := s.uc.CheckMembership(ctx, req.GetConversationId(), req.GetUserId())

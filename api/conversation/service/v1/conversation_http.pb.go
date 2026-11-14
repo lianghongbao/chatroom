@@ -23,6 +23,7 @@ const OperationConversationClearUnread = "/api.conversation.v1.Conversation/Clea
 const OperationConversationCreateConversation = "/api.conversation.v1.Conversation/CreateConversation"
 const OperationConversationDissolveConversation = "/api.conversation.v1.Conversation/DissolveConversation"
 const OperationConversationGetConversation = "/api.conversation.v1.Conversation/GetConversation"
+const OperationConversationGetMemberProfile = "/api.conversation.v1.Conversation/GetMemberProfile"
 const OperationConversationGetUnread = "/api.conversation.v1.Conversation/GetUnread"
 const OperationConversationLeaveConversation = "/api.conversation.v1.Conversation/LeaveConversation"
 const OperationConversationListConversationMembers = "/api.conversation.v1.Conversation/ListConversationMembers"
@@ -52,6 +53,14 @@ type ConversationHTTPServer interface {
 	DissolveConversation(context.Context, *DissolveConversationRequest) (*DissolveConversationReply, error)
 	// GetConversation GetConversation 会话详情。仅会话成员可见。
 	GetConversation(context.Context, *GetConversationRequest) (*GetConversationReply, error)
+	// GetMemberProfile GetMemberProfile 查会话里某个成员的公开资料。
+	//
+	// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+	// 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+	// 同理也不暴露 email / phone。
+	//
+	// 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+	GetMemberProfile(context.Context, *GetMemberProfileRequest) (*GetMemberProfileReply, error)
 	// GetUnread GetUnread 查某个成员的会话级未读数。
 	GetUnread(context.Context, *GetUnreadRequest) (*GetUnreadReply, error)
 	// LeaveConversation LeaveConversation 主动退群。群主不能退（需先转让群主）。
@@ -96,6 +105,7 @@ func RegisterConversationHTTPServer(s *http.Server, srv ConversationHTTPServer) 
 	r.Handle("POST", "/api/conversation/owner/transfer", _Conversation_TransferOwner0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/dissolve", _Conversation_DissolveConversation0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/conversation/members/list", _Conversation_ListMembers0_HTTP_Handler(srv))
+	r.Handle("GET", "/api/conversation/members/profile", _Conversation_GetMemberProfile0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/membership/check", _Conversation_CheckMembership0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/unread/update", _Conversation_UpdateUnread0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/unread/batch_update", _Conversation_UpdateUnreadBatch0_HTTP_Handler(srv))
@@ -296,6 +306,25 @@ func _Conversation_ListMembers0_HTTP_Handler(srv ConversationHTTPServer) func(ct
 	}
 }
 
+func _Conversation_GetMemberProfile0_HTTP_Handler(srv ConversationHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetMemberProfileRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationConversationGetMemberProfile)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetMemberProfile(ctx, req.(*GetMemberProfileRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetMemberProfileReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _Conversation_CheckMembership0_HTTP_Handler(srv ConversationHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in CheckMembershipRequest
@@ -464,6 +493,14 @@ type ConversationHTTPClient interface {
 	DissolveConversation(ctx context.Context, req *DissolveConversationRequest, opts ...http.CallOption) (rsp *DissolveConversationReply, err error)
 	// GetConversation GetConversation 会话详情。仅会话成员可见。
 	GetConversation(ctx context.Context, req *GetConversationRequest, opts ...http.CallOption) (rsp *GetConversationReply, err error)
+	// GetMemberProfile GetMemberProfile 查会话里某个成员的公开资料。
+	//
+	// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+	// 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+	// 同理也不暴露 email / phone。
+	//
+	// 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+	GetMemberProfile(ctx context.Context, req *GetMemberProfileRequest, opts ...http.CallOption) (rsp *GetMemberProfileReply, err error)
 	// GetUnread GetUnread 查某个成员的会话级未读数。
 	GetUnread(ctx context.Context, req *GetUnreadRequest, opts ...http.CallOption) (rsp *GetUnreadReply, err error)
 	// LeaveConversation LeaveConversation 主动退群。群主不能退（需先转让群主）。
@@ -605,6 +642,29 @@ func (c *ConversationHTTPClientImpl) GetConversation(ctx context.Context, in *Ge
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
 		http.Operation(OperationConversationGetConversation),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetMemberProfile GetMemberProfile 查会话里某个成员的公开资料。
+//
+// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+// 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+// 同理也不暴露 email / phone。
+//
+// 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+func (c *ConversationHTTPClientImpl) GetMemberProfile(ctx context.Context, in *GetMemberProfileRequest, opts ...http.CallOption) (*GetMemberProfileReply, error) {
+	var out GetMemberProfileReply
+	pattern := "/api/conversation/members/profile"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationConversationGetMemberProfile),
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)

@@ -1311,3 +1311,82 @@ func TestConversation_ClearUnreadInvalidArgument(t *testing.T) {
 		t.Fatal("user_id=0 应该返错")
 	}
 }
+
+// TestConversation_GetMemberProfile 查会话成员的公开资料。
+func TestConversation_GetMemberProfile(t *testing.T) {
+	repo := newFakeConvRepo()
+	fetcher := &fakeConvFetcher{profiles: map[string]*UserProfile{
+		"uid-1": {UserID: "uid-1", Username: "alice", Nickname: "Alice", Avatar: "a.png"},
+		"uid-2": {UserID: "uid-2", Username: "bob", Nickname: "Bob", Avatar: "b.png"},
+	}}
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+
+	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+
+	profile, err := uc.GetMemberProfile(context.Background(), "uid-1", c.ID, "uid-2")
+	if err != nil {
+		t.Fatalf("查成员资料失败: %v", err)
+	}
+	if profile.Nickname != "Bob" {
+		t.Fatalf("昵称 = %q, want Bob", profile.Nickname)
+	}
+	if profile.Username != "bob" {
+		t.Fatalf("用户名 = %q, want bob", profile.Username)
+	}
+}
+
+// TestConversation_GetMemberProfileRejectsNonMember 非成员查资料被拒。
+func TestConversation_GetMemberProfileRejectsNonMember(t *testing.T) {
+	uc, _ := newTestConvUsecase()
+
+	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+
+	_, err = uc.GetMemberProfile(context.Background(), "uid-999", c.ID, "uid-1")
+	if !errors.Is(err, ErrConversationNotFound) {
+		t.Fatalf("非成员查资料应被拒，实际 %v", err)
+	}
+}
+
+// TestConversation_GetMemberProfileRejectsNonMemberTarget 查会话外的人被拒。
+//
+// 不拒的话就成了「拿会话 ID 探测任意用户资料」的口子 ——
+// 必须跟「查不到」一个待遇。
+func TestConversation_GetMemberProfileRejectsNonMemberTarget(t *testing.T) {
+	repo := newFakeConvRepo()
+	fetcher := &fakeConvFetcher{profiles: map[string]*UserProfile{
+		"uid-1": {UserID: "uid-1", Nickname: "Alice"},
+		"uid-9": {UserID: "uid-9", Nickname: "外人"},
+	}}
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+
+	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
+	if err != nil {
+		t.Fatalf("创建失败: %v", err)
+	}
+
+	_, err = uc.GetMemberProfile(context.Background(), "uid-1", c.ID, "uid-9")
+	if !errors.Is(err, ErrConversationNotFound) {
+		t.Fatalf("查会话外的人应被拒，实际 %v", err)
+	}
+}
+
+// TestConversation_GetMemberProfileInvalidArgument 参数缺失返错。
+func TestConversation_GetMemberProfileInvalidArgument(t *testing.T) {
+	uc, _ := newTestConvUsecase()
+
+	if _, err := uc.GetMemberProfile(context.Background(), "", 1, "uid-1"); !errors.Is(err, ErrConversationInvalidArgument) {
+		t.Fatalf("callerID 为空应返错，实际 %v", err)
+	}
+	if _, err := uc.GetMemberProfile(context.Background(), "uid-1", 0, "uid-1"); !errors.Is(err, ErrConversationInvalidArgument) {
+		t.Fatalf("conversationID 为 0 应返错，实际 %v", err)
+	}
+	if _, err := uc.GetMemberProfile(context.Background(), "uid-1", 1, ""); !errors.Is(err, ErrConversationInvalidArgument) {
+		t.Fatalf("userID 为空应返错，实际 %v", err)
+	}
+}

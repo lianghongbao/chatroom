@@ -29,6 +29,7 @@ const (
 	Conversation_TransferOwner_FullMethodName           = "/api.conversation.v1.Conversation/TransferOwner"
 	Conversation_DissolveConversation_FullMethodName    = "/api.conversation.v1.Conversation/DissolveConversation"
 	Conversation_ListMembers_FullMethodName             = "/api.conversation.v1.Conversation/ListMembers"
+	Conversation_GetMemberProfile_FullMethodName        = "/api.conversation.v1.Conversation/GetMemberProfile"
 	Conversation_CheckMembership_FullMethodName         = "/api.conversation.v1.Conversation/CheckMembership"
 	Conversation_UpdateUnread_FullMethodName            = "/api.conversation.v1.Conversation/UpdateUnread"
 	Conversation_UpdateUnreadBatch_FullMethodName       = "/api.conversation.v1.Conversation/UpdateUnreadBatch"
@@ -70,6 +71,14 @@ type ConversationClient interface {
 	DissolveConversation(ctx context.Context, in *DissolveConversationRequest, opts ...grpc.CallOption) (*DissolveConversationReply, error)
 	// ListMembers 列出会话成员。仅会话成员可见。
 	ListMembers(ctx context.Context, in *ListMembersRequest, opts ...grpc.CallOption) (*ListMembersReply, error)
+	// GetMemberProfile 查会话里某个成员的公开资料。
+	//
+	// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+	// 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+	// 同理也不暴露 email / phone。
+	//
+	// 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+	GetMemberProfile(ctx context.Context, in *GetMemberProfileRequest, opts ...grpc.CallOption) (*GetMemberProfileReply, error)
 	// CheckMembership 查某个 uid 是不是会话成员。
 	// 会话不存在和「不是成员」都返 is_member=false。
 	CheckMembership(ctx context.Context, in *CheckMembershipRequest, opts ...grpc.CallOption) (*CheckMembershipReply, error)
@@ -202,6 +211,16 @@ func (c *conversationClient) ListMembers(ctx context.Context, in *ListMembersReq
 	return out, nil
 }
 
+func (c *conversationClient) GetMemberProfile(ctx context.Context, in *GetMemberProfileRequest, opts ...grpc.CallOption) (*GetMemberProfileReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMemberProfileReply)
+	err := c.cc.Invoke(ctx, Conversation_GetMemberProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *conversationClient) CheckMembership(ctx context.Context, in *CheckMembershipRequest, opts ...grpc.CallOption) (*CheckMembershipReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckMembershipReply)
@@ -313,6 +332,14 @@ type ConversationServer interface {
 	DissolveConversation(context.Context, *DissolveConversationRequest) (*DissolveConversationReply, error)
 	// ListMembers 列出会话成员。仅会话成员可见。
 	ListMembers(context.Context, *ListMembersRequest) (*ListMembersReply, error)
+	// GetMemberProfile 查会话里某个成员的公开资料。
+	//
+	// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+	// 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+	// 同理也不暴露 email / phone。
+	//
+	// 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+	GetMemberProfile(context.Context, *GetMemberProfileRequest) (*GetMemberProfileReply, error)
 	// CheckMembership 查某个 uid 是不是会话成员。
 	// 会话不存在和「不是成员」都返 is_member=false。
 	CheckMembership(context.Context, *CheckMembershipRequest) (*CheckMembershipReply, error)
@@ -374,6 +401,9 @@ func (UnimplementedConversationServer) DissolveConversation(context.Context, *Di
 }
 func (UnimplementedConversationServer) ListMembers(context.Context, *ListMembersRequest) (*ListMembersReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMembers not implemented")
+}
+func (UnimplementedConversationServer) GetMemberProfile(context.Context, *GetMemberProfileRequest) (*GetMemberProfileReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMemberProfile not implemented")
 }
 func (UnimplementedConversationServer) CheckMembership(context.Context, *CheckMembershipRequest) (*CheckMembershipReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckMembership not implemented")
@@ -600,6 +630,24 @@ func _Conversation_ListMembers_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Conversation_GetMemberProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMemberProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServer).GetMemberProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Conversation_GetMemberProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServer).GetMemberProfile(ctx, req.(*GetMemberProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Conversation_CheckMembership_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CheckMembershipRequest)
 	if err := dec(in); err != nil {
@@ -790,6 +838,10 @@ var Conversation_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListMembers",
 			Handler:    _Conversation_ListMembers_Handler,
+		},
+		{
+			MethodName: "GetMemberProfile",
+			Handler:    _Conversation_GetMemberProfile_Handler,
 		},
 		{
 			MethodName: "CheckMembership",

@@ -93,6 +93,19 @@ service Conversation {
         };
     }
 
+    // GetMemberProfile 查会话里某个成员的公开资料。
+    //
+    // 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+    // 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+    // 同理也不暴露 email / phone。
+    //
+    // 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+    rpc GetMemberProfile (GetMemberProfileRequest) returns (GetMemberProfileReply) {
+        option (google.api.http) = {
+            get: "/api/conversation/members/profile"
+        };
+    }
+
     // ── 仅供服务间调用 ──
     // 走内部凭证 X-Internal-Token，不走用户 JWT。
 
@@ -329,6 +342,28 @@ message ListMembersReply {
     repeated string member_nicknames = 2;
     // 成员头像，顺序与 member_ids 对齐。语义同 member_nicknames。
     repeated string member_avatars = 3;
+}
+
+// GetMemberProfileRequest 查会话成员的公开资料。
+message GetMemberProfileRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 要查的成员 uid。必须是该会话的成员。
+    string user_id = 2;
+}
+
+// GetMemberProfileReply 成员的公开资料。
+message GetMemberProfileReply {
+    // 成员 uid。
+    string id = 1;
+    // 用户名。
+    string username = 2;
+    // 昵称。
+    string nickname = 3;
+    // 头像地址。
+    string avatar = 4;
+    // 加入时间，Unix 秒。
+    int64 created_at = 5;
 }
 
 // ── 服务间内部接口的 DTO ──
