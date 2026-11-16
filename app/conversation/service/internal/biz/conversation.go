@@ -573,6 +573,10 @@ func (uc *ConversationUsecase) TransferOwner(ctx context.Context, callerID strin
 		return nil, err
 	}
 	// 不用额外 TouchConversation —— repo 的 TransferOwner 会更新 conversations 行。
+	//
+	// 补成员资料 —— 返回的会话要跟列表/详情里的形状一致，
+	// 否则空的 member_nicknames / member_avatars 会被 protojson 省略成 undefined。
+	uc.fillProfiles(ctx, []*Conversation{updated})
 	return updated, nil
 }
 
@@ -748,6 +752,12 @@ func (uc *ConversationUsecase) UpdateConversation(ctx context.Context, callerID 
 	if err != nil {
 		return nil, err
 	}
+	// 补成员资料 —— 返回的会话要跟列表/详情里的形状一致。
+	//
+	// 不补的话 member_nicknames / member_avatars 是空的，protojson 会把空的
+	// repeated 字段整个省略掉，前端拿到的是 undefined 而不是 []。
+	// 前端按下标读 member_nicknames[index] 时就会炸 —— 整个聊天面板白屏。
+	uc.fillProfiles(ctx, []*Conversation{updated})
 	return updated, nil
 }
 

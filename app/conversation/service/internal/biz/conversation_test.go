@@ -1395,3 +1395,69 @@ func TestConversation_GetMemberProfileInvalidArgument(t *testing.T) {
 		t.Fatalf("userID 为空应返错，实际 %v", err)
 	}
 }
+
+// TestConversation_UpdateConversationFillsProfiles 改群名/群头像后返回的会话要带成员资料。
+//
+// 不带的话 protojson 会把空的 member_nicknames / member_avatars 整个省略，
+// 前端拿到 undefined 而不是 []，按下标读就抛 TypeError —— 整个聊天面板白屏。
+func TestConversation_UpdateConversationFillsProfiles(t *testing.T) {
+	repo := newFakeConvRepo()
+	fetcher := &fakeConvFetcher{profiles: map[string]*UserProfile{
+		"uid-1": {UserID: "uid-1", Nickname: "Alice", Avatar: "a.png"},
+		"uid-2": {UserID: "uid-2", Nickname: "Bob", Avatar: "b.png"},
+	}}
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
+
+	c, _, err := repo.Save(context.Background(), &Conversation{
+		Type:      ConversationTypeGroup,
+		Name:      "旧名",
+		OwnerID:   "uid-1",
+		MemberIDs: []string{"uid-1", "uid-2"},
+	})
+	if err != nil {
+		t.Fatalf("建群失败: %v", err)
+	}
+
+	updated, err := uc.UpdateConversation(context.Background(), "uid-1", c.ID, "新名", "")
+	if err != nil {
+		t.Fatalf("改名失败: %v", err)
+	}
+	if len(updated.MemberNicknames) != len(updated.MemberIDs) {
+		t.Fatalf("昵称数组长度 %d 与成员数 %d 不一致", len(updated.MemberNicknames), len(updated.MemberIDs))
+	}
+	if updated.MemberNicknames[0] != "Alice" || updated.MemberNicknames[1] != "Bob" {
+		t.Fatalf("昵称错位: %v", updated.MemberNicknames)
+	}
+	if len(updated.MemberAvatars) != len(updated.MemberIDs) {
+		t.Fatalf("头像数组长度 %d 与成员数 %d 不一致", len(updated.MemberAvatars), len(updated.MemberIDs))
+	}
+}
+
+// TestConversation_TransferOwnerFillsProfiles 转让群主后返回的会话也要带成员资料。
+// 理由同 TestConversation_UpdateConversationFillsProfiles。
+func TestConversation_TransferOwnerFillsProfiles(t *testing.T) {
+	repo := newFakeConvRepo()
+	fetcher := &fakeConvFetcher{profiles: map[string]*UserProfile{
+		"uid-1": {UserID: "uid-1", Nickname: "Alice", Avatar: "a.png"},
+		"uid-2": {UserID: "uid-2", Nickname: "Bob", Avatar: "b.png"},
+	}}
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
+
+	c, _, err := repo.Save(context.Background(), &Conversation{
+		Type:      ConversationTypeGroup,
+		Name:      "群",
+		OwnerID:   "uid-1",
+		MemberIDs: []string{"uid-1", "uid-2"},
+	})
+	if err != nil {
+		t.Fatalf("建群失败: %v", err)
+	}
+
+	updated, err := uc.TransferOwner(context.Background(), "uid-1", c.ID, "uid-2")
+	if err != nil {
+		t.Fatalf("转让失败: %v", err)
+	}
+	if len(updated.MemberNicknames) != len(updated.MemberIDs) {
+		t.Fatalf("昵称数组长度 %d 与成员数 %d 不一致", len(updated.MemberNicknames), len(updated.MemberIDs))
+	}
+}
