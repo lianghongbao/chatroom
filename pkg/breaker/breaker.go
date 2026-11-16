@@ -18,16 +18,11 @@ var ErrNotAllowed = errors.New("breaker: request rejected, circuit is open")
 const (
 	// DefaultFailureRatio 触发熔断的失败率阈值。
 	DefaultFailureRatio = 0.5
-	// DefaultRequest 窗口内至少要有多少请求才评估失败率。
-	DefaultRequest = 20
-	// DefaultWindow 滚动统计窗口。
-	DefaultWindow = 10 * time.Second
-	// DefaultBucket 窗口分桶数。桶越细，窗口边界越平滑。
-	DefaultBucket = 10
-	// DefaultOpenDuration 熔断打开后多久进半开状态试探。
+	DefaultRequest      = 20
+	DefaultWindow       = 10 * time.Second
+	DefaultBucket       = 10
 	DefaultOpenDuration = 30 * time.Second
-	// DefaultHalfOpenMax 半开状态下最多放几个试探请求。
-	DefaultHalfOpenMax = 3
+	DefaultHalfOpenMax  = 3
 )
 
 // Option 是熔断器参数。
@@ -133,14 +128,16 @@ type breaker struct {
 
 	counter *rollingCounter
 
-	openedAt time.Time
-	// halfOpenInFlight 半开状态下已放行的试探请求数。
+	openedAt         time.Time
 	halfOpenInFlight int64
-	// halfOpenFailed 半开状态下失败的试探请求数。
-	halfOpenFailed int64
+	halfOpenFailed   int64
+
+	// pendingLocalReject 标记：最近一次 Allow() 是否返回了本地拒绝。
+	// 用于让紧随其后的 MarkFailed() 识别"这次失败是本地拒绝，不是真实调用失败"。
+	// 由 b.mu 保护。
+	pendingLocalReject bool
 }
 
-// newBreaker 按参数造一个熔断器。o 是熔断参数。
 func newBreaker(o *options) *breaker {
 	return &breaker{
 		state:        stateClosed,
@@ -157,9 +154,13 @@ func (b *breaker) Allow() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// 每次 Allow 都先重置标记，保证语义是"最近一次 Allow 的结果"。
+	b.pendingLocalReject = false
+
 	switch b.state {
 	case stateOpen:
 		if time.Since(b.openedAt) < b.openDuration {
+			b.pendingLocalReject = true // ← 本地拒绝，打标记
 			return ErrNotAllowed
 		}
 		// 冷却期过了 → 半开，放一个试探请求看看下游恢复没有
@@ -169,6 +170,7 @@ func (b *breaker) Allow() error {
 		return nil
 	case stateHalfOpen:
 		if b.halfOpenInFlight >= b.halfOpenMax {
+			b.pendingLocalReject = true // ← 本地拒绝（名额满），打标记
 			return ErrNotAllowed
 		}
 		b.halfOpenInFlight++
@@ -182,6 +184,9 @@ func (b *breaker) Allow() error {
 func (b *breaker) MarkSuccess() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	// 防御性：清理标记，避免残留
+	b.pendingLocalReject = false
 
 	switch b.state {
 	case stateHalfOpen:
@@ -203,15 +208,21 @@ func (b *breaker) MarkFailed() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	// 核心修复：如果这次 MarkFailed 是本地拒绝触发的，直接丢弃，不做任何变更。
+	// 本地拒绝不代表下游状态，绝不能污染熔断判断。
+	if b.pendingLocalReject {
+		b.pendingLocalReject = false
+		return
+	}
+
 	switch b.state {
 	case stateHalfOpen:
 		// 试探请求又失败 → 重新熔断，冷却期重新开始
 		b.halfOpenFailed++
 		b.halfOpenInFlight--
-		if b.halfOpenFailed > 0 {
-			b.state = stateOpen
-			b.openedAt = time.Now()
-		}
+		// 探针真实失败 → 立刻重开，冷却期重置。
+		b.state = stateOpen
+		b.openedAt = time.Now()
 		return
 	case stateOpen:
 		return
