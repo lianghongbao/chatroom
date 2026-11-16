@@ -1,16 +1,14 @@
 // Package breaker 提供跨服务 gRPC 调用的熔断中间件。
 //
 // 按 operation 粒度统计 —— 一个端点挂了不影响同一个下游的其它端点。
-//
-// 状态机用 sony/gobreaker v2，不自己实现。它按 generation 号丢弃迟到的
-// 结果，按 age 号把结果写回请求发起时的那个桶，open 态直接返错不动计数。
+// 状态机用 sony/gobreaker v2，不自己实现。
 //
 // 语义：
 //
-//   - 样本不够不熔断（Requests 少于阈值时 ReadyToTrip 返回 false）。
+//   - 只有 5xx（500 / 503 / 504）算失败。
+//   - 样本不够不熔断。
 //   - 半开态放行 MaxRequests 个探针，连续成功 MaxRequests 次才关闭。
-//   - 设了 BucketPeriod 就是滚动窗口：Interval 切成 N 个桶，统计逐桶滑出，
-//     判定看的是「最近 Interval 这段时间」。BucketPeriod <= 0 是固定窗口。
+//   - 统计看最近 Interval 这段时间（滚动窗口）。
 package breaker
 
 import (
