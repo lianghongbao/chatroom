@@ -29,8 +29,13 @@ var ErrNotAllowed = kratoserrors.ServiceUnavailable("CIRCUITBREAKER", "circuit b
 // 默认参数。
 const (
 	// DefaultFailureRatio 触发熔断的失败率阈值。
+	//
+	// gobreaker 没有这个字段 —— 失败率判定是自己写的 ReadyToTrip。
+	// 想改阈值就传自己的 ReadyToTrip（见 readyToTrip）。
 	DefaultFailureRatio = 0.5
 	// DefaultRequest 统计周期内触发评估的最小请求数。
+	//
+	// 同上，是 readyToTrip 的参数。
 	DefaultRequest = 20
 	// DefaultInterval 统计周期长度。
 	DefaultInterval = 10 * time.Second

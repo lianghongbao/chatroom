@@ -356,6 +356,37 @@ func TestDeadlineExceededIsExcluded(t *testing.T) {
 	}
 }
 
+// 失败率判定是自己写的 ReadyToTrip，阈值和样本数按 readyToTrip 的参数走。
+func TestReadyToTripThreshold(t *testing.T) {
+	// 样本不够不熔断
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(20, 0.5, time.Minute)})
+	cb := g.Get("/svc/X")
+	for i := 0; i < 19; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+	if cb.State() != gobreaker.StateClosed {
+		t.Fatalf("19 次失败不该熔断（样本不足 20）, state=%v", cb.State())
+	}
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	if cb.State() != gobreaker.StateOpen {
+		t.Fatalf("20 次失败该熔断, state=%v", cb.State())
+	}
+}
+
+// 调用方传自己的 ReadyToTrip 就能改判定逻辑。
+func TestCallerSuppliedReadyToTrip(t *testing.T) {
+	st := testSettings(2, 0.9, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{st})
+	cb := g.Get("/svc/Y")
+
+	for i := 0; i < 2; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+	if cb.State() != gobreaker.StateOpen {
+		t.Fatalf("自定义阈值应生效, state=%v", cb.State())
+	}
+}
+
 // 显式传 Settings 时，BucketPeriod=0 就是固定窗口 —— 不能被当成「没填」
 // 而替换成默认值。
 func TestExplicitZeroBucketPeriodKeepsFixedWindow(t *testing.T) {
