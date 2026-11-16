@@ -20,7 +20,12 @@ AUTH_INTERNAL_SECRET ?= chatroom-dev-internal-secret-please-change-in-production
 
 # OTLP gRPC 接收端（Jaeger all-in-one）。留空 = 不开 trace。
 # 用 `make infra-up` 起，UI 在 http://127.0.0.1:16686 。
-OTEL_EXPORTER_OTLP_ENDPOINT ?= 127.0.0.1:4317
+#
+# **必须带 http:// 前缀** —— OTel SDK 的 envconfig 读这个变量时用 url.Parse，
+# 光写 "127.0.0.1:4317" 会被当相对路径解析，报
+# "parse url: first path segment in URL cannot contain colon"，
+# 端点静默失效（exporter 建了但连不上，trace 全丢）。
+OTEL_EXPORTER_OTLP_ENDPOINT ?= http://127.0.0.1:4317
 
 # 阿里云 OSS（头像存储）。
 #
@@ -35,8 +40,27 @@ OSS_ENDPOINT ?= oss-cn-guangzhou.aliyuncs.com
 OSS_BUCKET ?= chatroomoss
 OSS_REGION ?= cn-guangzhou
 OSS_ROLE_ARN ?= acs:ram::1471593004552671:role/chatroom-oss-sts-role
-OSS_ACCESS_KEY_ID ?= $(OSS_ACCESS_KEY_ID)
-OSS_ACCESS_KEY_SECRET ?= $(OSS_ACCESS_KEY_SECRET)
+# AK/SK 只从两处读，都不入库：
+#   1. shell 环境（export OSS_ACCESS_KEY_ID=...）
+#   2. 仓库根的 .env.local（.gitignore 已含，一行一个 KEY=VALUE）
+#
+# 用 shell 取值而不是 `?= $(同名变量)` —— 后者在变量未定义时递归引用自己，
+# make 直接报 "Recursive variable ... references itself"，服务起不来。
+#
+# 优先级：shell 环境 > .env.local > 空。
+# 两处都没设就留空：对象存储配置不完整只会关掉头像上传，不影响其他功能。
+#
+# 注意不能先 `?=` 掉 printenv 再在下面 `?=` 覆盖 —— 第一次赋值后变量已「定义」，
+# 第二个 ?= 不会生效。这里改成先算出最终值再赋值。
+LOCAL_ENV_FILE := $(dir $(lastword $(MAKEFILE_LIST)))../../.env.local
+OSS_ACCESS_KEY_ID ?= $(shell printenv OSS_ACCESS_KEY_ID)
+ifeq ($(strip $(OSS_ACCESS_KEY_ID)),)
+OSS_ACCESS_KEY_ID := $(shell sed -n 's/^OSS_ACCESS_KEY_ID=//p' $(LOCAL_ENV_FILE) 2>/dev/null | head -1)
+endif
+OSS_ACCESS_KEY_SECRET ?= $(shell printenv OSS_ACCESS_KEY_SECRET)
+ifeq ($(strip $(OSS_ACCESS_KEY_SECRET)),)
+OSS_ACCESS_KEY_SECRET := $(shell sed -n 's/^OSS_ACCESS_KEY_SECRET=//p' $(LOCAL_ENV_FILE) 2>/dev/null | head -1)
+endif
 # 客户端直传目标 —— 走 OSS 域名，不走 CDN：签名更干净，也不依赖 CDN 缓存刷新。
 OSS_UPLOAD_HOST ?= https://chatroomoss.oss-cn-guangzhou.aliyuncs.com
 # 对外公开访问前缀 —— 走 ESA 加速域名。桶是私有的，只有 CDN 能匿名读。

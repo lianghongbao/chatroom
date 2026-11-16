@@ -129,7 +129,7 @@ func (f *fakeConvRepo) RemoveMember(_ context.Context, conversationID uint64, us
 	return f.removeMemberTotal, nil
 }
 
-func (f *fakeConvRepo) UpdateName(_ context.Context, id uint64, name string) (*biz.Conversation, error) {
+func (f *fakeConvRepo) UpdateGroupInfo(_ context.Context, id uint64, name, avatar string) (*biz.Conversation, error) {
 	if f.updated != nil {
 		return f.updated, nil
 	}
@@ -212,7 +212,7 @@ func newService(repo *fakeConvRepo) *ConversationService {
 
 // newServiceWithProfiles 同 newService，但自带一份资料替身。
 func newServiceWithProfiles(repo *fakeConvRepo, profiles biz.ConversationProfileFetcher) *ConversationService {
-	uc := biz.NewConversationUsecase(repo, profiles, fakeConvExistence{}, nil, nil)
+	uc := biz.NewConversationUsecase(repo, profiles, fakeConvExistence{}, nil, biz.StorageOptions{}, nil)
 	return NewConversationService(uc)
 }
 

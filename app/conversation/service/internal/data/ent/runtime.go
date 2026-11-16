@@ -25,22 +25,28 @@ func init() {
 	conversation.DefaultName = conversationDescName.Default.(string)
 	// conversation.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	conversation.NameValidator = conversationDescName.Validators[0].(func(string) error)
+	// conversationDescAvatar is the schema descriptor for avatar field.
+	conversationDescAvatar := conversationFields[3].Descriptor()
+	// conversation.DefaultAvatar holds the default value on creation for the avatar field.
+	conversation.DefaultAvatar = conversationDescAvatar.Default.(string)
+	// conversation.AvatarValidator is a validator for the "avatar" field. It is called by the builders before save.
+	conversation.AvatarValidator = conversationDescAvatar.Validators[0].(func(string) error)
 	// conversationDescOwnerID is the schema descriptor for owner_id field.
-	conversationDescOwnerID := conversationFields[3].Descriptor()
+	conversationDescOwnerID := conversationFields[4].Descriptor()
 	// conversation.DefaultOwnerID holds the default value on creation for the owner_id field.
 	conversation.DefaultOwnerID = conversationDescOwnerID.Default.(string)
 	// conversation.OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
 	conversation.OwnerIDValidator = conversationDescOwnerID.Validators[0].(func(string) error)
 	// conversationDescPairKey is the schema descriptor for pair_key field.
-	conversationDescPairKey := conversationFields[4].Descriptor()
+	conversationDescPairKey := conversationFields[5].Descriptor()
 	// conversation.PairKeyValidator is a validator for the "pair_key" field. It is called by the builders before save.
 	conversation.PairKeyValidator = conversationDescPairKey.Validators[0].(func(string) error)
 	// conversationDescCreatedAt is the schema descriptor for created_at field.
-	conversationDescCreatedAt := conversationFields[5].Descriptor()
+	conversationDescCreatedAt := conversationFields[6].Descriptor()
 	// conversation.DefaultCreatedAt holds the default value on creation for the created_at field.
 	conversation.DefaultCreatedAt = conversationDescCreatedAt.Default.(func() time.Time)
 	// conversationDescUpdatedAt is the schema descriptor for updated_at field.
-	conversationDescUpdatedAt := conversationFields[6].Descriptor()
+	conversationDescUpdatedAt := conversationFields[7].Descriptor()
 	// conversation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	conversation.DefaultUpdatedAt = conversationDescUpdatedAt.Default.(func() time.Time)
 	// conversation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

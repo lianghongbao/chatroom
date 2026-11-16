@@ -13,6 +13,7 @@ var (
 		{Name: "id", Type: field.TypeUint64, Increment: true, Comment: "主键, 自增"},
 		{Name: "type", Type: field.TypeUint8, Comment: "会话类型 1=单聊 2=群聊", Default: 1},
 		{Name: "name", Type: field.TypeString, Size: 128, Comment: "群名, 单聊为空, ≤ 128 字符", Default: ""},
+		{Name: "avatar", Type: field.TypeString, Size: 512, Comment: "群头像地址, 单聊为空, ≤ 512 字符", Default: ""},
 		{Name: "owner_id", Type: field.TypeString, Size: 36, Comment: "群主 uid (UUIDv7 字符串), 单聊为空串", Default: ""},
 		{Name: "pair_key", Type: field.TypeString, Nullable: true, Size: 73, Comment: "单聊成员对键 'uid1,uid2', 群聊为 NULL"},
 		{Name: "created_at", Type: field.TypeTime, Comment: "创建时间"},
@@ -27,17 +28,17 @@ var (
 			{
 				Name:    "conversation_updated_at",
 				Unique:  false,
-				Columns: []*schema.Column{ConversationsColumns[6]},
+				Columns: []*schema.Column{ConversationsColumns[7]},
 			},
 			{
 				Name:    "conversation_owner_id",
 				Unique:  false,
-				Columns: []*schema.Column{ConversationsColumns[3]},
+				Columns: []*schema.Column{ConversationsColumns[4]},
 			},
 			{
 				Name:    "conversation_pair_key",
 				Unique:  true,
-				Columns: []*schema.Column{ConversationsColumns[4]},
+				Columns: []*schema.Column{ConversationsColumns[5]},
 			},
 		},
 	}

@@ -19,25 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Conversation_CreateConversation_FullMethodName      = "/api.conversation.v1.Conversation/CreateConversation"
-	Conversation_ListConversations_FullMethodName       = "/api.conversation.v1.Conversation/ListConversations"
-	Conversation_GetConversation_FullMethodName         = "/api.conversation.v1.Conversation/GetConversation"
-	Conversation_AddMembers_FullMethodName              = "/api.conversation.v1.Conversation/AddMembers"
-	Conversation_RemoveMember_FullMethodName            = "/api.conversation.v1.Conversation/RemoveMember"
-	Conversation_LeaveConversation_FullMethodName       = "/api.conversation.v1.Conversation/LeaveConversation"
-	Conversation_UpdateConversation_FullMethodName      = "/api.conversation.v1.Conversation/UpdateConversation"
-	Conversation_TransferOwner_FullMethodName           = "/api.conversation.v1.Conversation/TransferOwner"
-	Conversation_DissolveConversation_FullMethodName    = "/api.conversation.v1.Conversation/DissolveConversation"
-	Conversation_ListMembers_FullMethodName             = "/api.conversation.v1.Conversation/ListMembers"
-	Conversation_GetMemberProfile_FullMethodName        = "/api.conversation.v1.Conversation/GetMemberProfile"
-	Conversation_CheckMembership_FullMethodName         = "/api.conversation.v1.Conversation/CheckMembership"
-	Conversation_UpdateUnread_FullMethodName            = "/api.conversation.v1.Conversation/UpdateUnread"
-	Conversation_UpdateUnreadBatch_FullMethodName       = "/api.conversation.v1.Conversation/UpdateUnreadBatch"
-	Conversation_GetUnread_FullMethodName               = "/api.conversation.v1.Conversation/GetUnread"
-	Conversation_ClearUnread_FullMethodName             = "/api.conversation.v1.Conversation/ClearUnread"
-	Conversation_ListUnread_FullMethodName              = "/api.conversation.v1.Conversation/ListUnread"
-	Conversation_ListConversationMembers_FullMethodName = "/api.conversation.v1.Conversation/ListConversationMembers"
-	Conversation_ListUserConversations_FullMethodName   = "/api.conversation.v1.Conversation/ListUserConversations"
+	Conversation_CreateConversation_FullMethodName        = "/api.conversation.v1.Conversation/CreateConversation"
+	Conversation_ListConversations_FullMethodName         = "/api.conversation.v1.Conversation/ListConversations"
+	Conversation_GetConversation_FullMethodName           = "/api.conversation.v1.Conversation/GetConversation"
+	Conversation_AddMembers_FullMethodName                = "/api.conversation.v1.Conversation/AddMembers"
+	Conversation_RemoveMember_FullMethodName              = "/api.conversation.v1.Conversation/RemoveMember"
+	Conversation_LeaveConversation_FullMethodName         = "/api.conversation.v1.Conversation/LeaveConversation"
+	Conversation_UpdateConversation_FullMethodName        = "/api.conversation.v1.Conversation/UpdateConversation"
+	Conversation_GetGroupAvatarUploadToken_FullMethodName = "/api.conversation.v1.Conversation/GetGroupAvatarUploadToken"
+	Conversation_TransferOwner_FullMethodName             = "/api.conversation.v1.Conversation/TransferOwner"
+	Conversation_DissolveConversation_FullMethodName      = "/api.conversation.v1.Conversation/DissolveConversation"
+	Conversation_ListMembers_FullMethodName               = "/api.conversation.v1.Conversation/ListMembers"
+	Conversation_GetMemberProfile_FullMethodName          = "/api.conversation.v1.Conversation/GetMemberProfile"
+	Conversation_CheckMembership_FullMethodName           = "/api.conversation.v1.Conversation/CheckMembership"
+	Conversation_UpdateUnread_FullMethodName              = "/api.conversation.v1.Conversation/UpdateUnread"
+	Conversation_UpdateUnreadBatch_FullMethodName         = "/api.conversation.v1.Conversation/UpdateUnreadBatch"
+	Conversation_GetUnread_FullMethodName                 = "/api.conversation.v1.Conversation/GetUnread"
+	Conversation_ClearUnread_FullMethodName               = "/api.conversation.v1.Conversation/ClearUnread"
+	Conversation_ListUnread_FullMethodName                = "/api.conversation.v1.Conversation/ListUnread"
+	Conversation_ListConversationMembers_FullMethodName   = "/api.conversation.v1.Conversation/ListConversationMembers"
+	Conversation_ListUserConversations_FullMethodName     = "/api.conversation.v1.Conversation/ListUserConversations"
 )
 
 // ConversationClient is the client API for Conversation service.
@@ -61,8 +62,17 @@ type ConversationClient interface {
 	RemoveMember(ctx context.Context, in *RemoveMemberRequest, opts ...grpc.CallOption) (*RemoveMemberReply, error)
 	// LeaveConversation 主动退群。群主不能退（需先转让群主）。
 	LeaveConversation(ctx context.Context, in *LeaveConversationRequest, opts ...grpc.CallOption) (*LeaveConversationReply, error)
-	// UpdateConversation 改群名。仅群主可调用，单聊不支持。
+	// UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+	//
+	// name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
 	UpdateConversation(ctx context.Context, in *UpdateConversationRequest, opts ...grpc.CallOption) (*UpdateConversationReply, error)
+	// GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+	//
+	// 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+	// 客户端拿着临时凭证也写不进别的群目录。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+	GetGroupAvatarUploadToken(ctx context.Context, in *GetGroupAvatarUploadTokenRequest, opts ...grpc.CallOption) (*GetGroupAvatarUploadTokenReply, error)
 	// TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
 	// 转让后才能退群。
 	TransferOwner(ctx context.Context, in *TransferOwnerRequest, opts ...grpc.CallOption) (*TransferOwnerReply, error)
@@ -175,6 +185,16 @@ func (c *conversationClient) UpdateConversation(ctx context.Context, in *UpdateC
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateConversationReply)
 	err := c.cc.Invoke(ctx, Conversation_UpdateConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationClient) GetGroupAvatarUploadToken(ctx context.Context, in *GetGroupAvatarUploadTokenRequest, opts ...grpc.CallOption) (*GetGroupAvatarUploadTokenReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGroupAvatarUploadTokenReply)
+	err := c.cc.Invoke(ctx, Conversation_GetGroupAvatarUploadToken_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -322,8 +342,17 @@ type ConversationServer interface {
 	RemoveMember(context.Context, *RemoveMemberRequest) (*RemoveMemberReply, error)
 	// LeaveConversation 主动退群。群主不能退（需先转让群主）。
 	LeaveConversation(context.Context, *LeaveConversationRequest) (*LeaveConversationReply, error)
-	// UpdateConversation 改群名。仅群主可调用，单聊不支持。
+	// UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+	//
+	// name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
 	UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationReply, error)
+	// GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+	//
+	// 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+	// 客户端拿着临时凭证也写不进别的群目录。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+	GetGroupAvatarUploadToken(context.Context, *GetGroupAvatarUploadTokenRequest) (*GetGroupAvatarUploadTokenReply, error)
 	// TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
 	// 转让后才能退群。
 	TransferOwner(context.Context, *TransferOwnerRequest) (*TransferOwnerReply, error)
@@ -392,6 +421,9 @@ func (UnimplementedConversationServer) LeaveConversation(context.Context, *Leave
 }
 func (UnimplementedConversationServer) UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateConversation not implemented")
+}
+func (UnimplementedConversationServer) GetGroupAvatarUploadToken(context.Context, *GetGroupAvatarUploadTokenRequest) (*GetGroupAvatarUploadTokenReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGroupAvatarUploadToken not implemented")
 }
 func (UnimplementedConversationServer) TransferOwner(context.Context, *TransferOwnerRequest) (*TransferOwnerReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method TransferOwner not implemented")
@@ -572,6 +604,24 @@ func _Conversation_UpdateConversation_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ConversationServer).UpdateConversation(ctx, req.(*UpdateConversationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Conversation_GetGroupAvatarUploadToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGroupAvatarUploadTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServer).GetGroupAvatarUploadToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Conversation_GetGroupAvatarUploadToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServer).GetGroupAvatarUploadToken(ctx, req.(*GetGroupAvatarUploadTokenRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -826,6 +876,10 @@ var Conversation_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateConversation",
 			Handler:    _Conversation_UpdateConversation_Handler,
+		},
+		{
+			MethodName: "GetGroupAvatarUploadToken",
+			Handler:    _Conversation_GetGroupAvatarUploadToken_Handler,
 		},
 		{
 			MethodName: "TransferOwner",

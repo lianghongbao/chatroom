@@ -64,6 +64,20 @@ func (_u *ConversationUpdate) SetNillableName(v *string) *ConversationUpdate {
 	return _u
 }
 
+// SetAvatar sets the "avatar" field.
+func (_u *ConversationUpdate) SetAvatar(v string) *ConversationUpdate {
+	_u.mutation.SetAvatar(v)
+	return _u
+}
+
+// SetNillableAvatar sets the "avatar" field if the given value is not nil.
+func (_u *ConversationUpdate) SetNillableAvatar(v *string) *ConversationUpdate {
+	if v != nil {
+		_u.SetAvatar(*v)
+	}
+	return _u
+}
+
 // SetOwnerID sets the "owner_id" field.
 func (_u *ConversationUpdate) SetOwnerID(v string) *ConversationUpdate {
 	_u.mutation.SetOwnerID(v)
@@ -188,6 +202,11 @@ func (_u *ConversationUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Conversation.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Avatar(); ok {
+		if err := conversation.AvatarValidator(v); err != nil {
+			return &ValidationError{Name: "avatar", err: fmt.Errorf(`ent: validator failed for field "Conversation.avatar": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.OwnerID(); ok {
 		if err := conversation.OwnerIDValidator(v); err != nil {
 			return &ValidationError{Name: "owner_id", err: fmt.Errorf(`ent: validator failed for field "Conversation.owner_id": %w`, err)}
@@ -221,6 +240,9 @@ func (_u *ConversationUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(conversation.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Avatar(); ok {
+		_spec.SetField(conversation.FieldAvatar, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.OwnerID(); ok {
 		_spec.SetField(conversation.FieldOwnerID, field.TypeString, value)
@@ -330,6 +352,20 @@ func (_u *ConversationUpdateOne) SetName(v string) *ConversationUpdateOne {
 func (_u *ConversationUpdateOne) SetNillableName(v *string) *ConversationUpdateOne {
 	if v != nil {
 		_u.SetName(*v)
+	}
+	return _u
+}
+
+// SetAvatar sets the "avatar" field.
+func (_u *ConversationUpdateOne) SetAvatar(v string) *ConversationUpdateOne {
+	_u.mutation.SetAvatar(v)
+	return _u
+}
+
+// SetNillableAvatar sets the "avatar" field if the given value is not nil.
+func (_u *ConversationUpdateOne) SetNillableAvatar(v *string) *ConversationUpdateOne {
+	if v != nil {
+		_u.SetAvatar(*v)
 	}
 	return _u
 }
@@ -471,6 +507,11 @@ func (_u *ConversationUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Conversation.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Avatar(); ok {
+		if err := conversation.AvatarValidator(v); err != nil {
+			return &ValidationError{Name: "avatar", err: fmt.Errorf(`ent: validator failed for field "Conversation.avatar": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.OwnerID(); ok {
 		if err := conversation.OwnerIDValidator(v); err != nil {
 			return &ValidationError{Name: "owner_id", err: fmt.Errorf(`ent: validator failed for field "Conversation.owner_id": %w`, err)}
@@ -521,6 +562,9 @@ func (_u *ConversationUpdateOne) sqlSave(ctx context.Context) (_node *Conversati
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(conversation.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Avatar(); ok {
+		_spec.SetField(conversation.FieldAvatar, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.OwnerID(); ok {
 		_spec.SetField(conversation.FieldOwnerID, field.TypeString, value)

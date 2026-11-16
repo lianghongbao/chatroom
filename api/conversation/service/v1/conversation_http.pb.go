@@ -23,6 +23,7 @@ const OperationConversationClearUnread = "/api.conversation.v1.Conversation/Clea
 const OperationConversationCreateConversation = "/api.conversation.v1.Conversation/CreateConversation"
 const OperationConversationDissolveConversation = "/api.conversation.v1.Conversation/DissolveConversation"
 const OperationConversationGetConversation = "/api.conversation.v1.Conversation/GetConversation"
+const OperationConversationGetGroupAvatarUploadToken = "/api.conversation.v1.Conversation/GetGroupAvatarUploadToken"
 const OperationConversationGetMemberProfile = "/api.conversation.v1.Conversation/GetMemberProfile"
 const OperationConversationGetUnread = "/api.conversation.v1.Conversation/GetUnread"
 const OperationConversationLeaveConversation = "/api.conversation.v1.Conversation/LeaveConversation"
@@ -53,6 +54,13 @@ type ConversationHTTPServer interface {
 	DissolveConversation(context.Context, *DissolveConversationRequest) (*DissolveConversationReply, error)
 	// GetConversation GetConversation 会话详情。仅会话成员可见。
 	GetConversation(context.Context, *GetConversationRequest) (*GetConversationReply, error)
+	// GetGroupAvatarUploadToken GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+	//
+	// 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+	// 客户端拿着临时凭证也写不进别的群目录。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+	GetGroupAvatarUploadToken(context.Context, *GetGroupAvatarUploadTokenRequest) (*GetGroupAvatarUploadTokenReply, error)
 	// GetMemberProfile GetMemberProfile 查会话里某个成员的公开资料。
 	//
 	// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
@@ -83,7 +91,9 @@ type ConversationHTTPServer interface {
 	// TransferOwner TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
 	// 转让后才能退群。
 	TransferOwner(context.Context, *TransferOwnerRequest) (*TransferOwnerReply, error)
-	// UpdateConversation UpdateConversation 改群名。仅群主可调用，单聊不支持。
+	// UpdateConversation UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+	//
+	// name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
 	UpdateConversation(context.Context, *UpdateConversationRequest) (*UpdateConversationReply, error)
 	// UpdateUnread UpdateUnread 更新会话级未读数。
 	// delta 正增负减，归零后不再往下减。只影响 conversation_id + user_id 指定的那个成员。
@@ -102,6 +112,7 @@ func RegisterConversationHTTPServer(s *http.Server, srv ConversationHTTPServer) 
 	r.Handle("POST", "/api/conversation/members/remove", _Conversation_RemoveMember0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/leave", _Conversation_LeaveConversation0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/update", _Conversation_UpdateConversation0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/conversation/avatar/upload_token", _Conversation_GetGroupAvatarUploadToken0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/owner/transfer", _Conversation_TransferOwner0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/conversation/dissolve", _Conversation_DissolveConversation0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/conversation/members/list", _Conversation_ListMembers0_HTTP_Handler(srv))
@@ -245,6 +256,25 @@ func _Conversation_UpdateConversation0_HTTP_Handler(srv ConversationHTTPServer) 
 			return err
 		}
 		reply := out.(*UpdateConversationReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _Conversation_GetGroupAvatarUploadToken0_HTTP_Handler(srv ConversationHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetGroupAvatarUploadTokenRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationConversationGetGroupAvatarUploadToken)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetGroupAvatarUploadToken(ctx, req.(*GetGroupAvatarUploadTokenRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetGroupAvatarUploadTokenReply)
 		return ctx.Result(200, reply)
 	}
 }
@@ -493,6 +523,13 @@ type ConversationHTTPClient interface {
 	DissolveConversation(ctx context.Context, req *DissolveConversationRequest, opts ...http.CallOption) (rsp *DissolveConversationReply, err error)
 	// GetConversation GetConversation 会话详情。仅会话成员可见。
 	GetConversation(ctx context.Context, req *GetConversationRequest, opts ...http.CallOption) (rsp *GetConversationReply, err error)
+	// GetGroupAvatarUploadToken GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+	//
+	// 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+	// 客户端拿着临时凭证也写不进别的群目录。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+	GetGroupAvatarUploadToken(ctx context.Context, req *GetGroupAvatarUploadTokenRequest, opts ...http.CallOption) (rsp *GetGroupAvatarUploadTokenReply, err error)
 	// GetMemberProfile GetMemberProfile 查会话里某个成员的公开资料。
 	//
 	// 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
@@ -523,7 +560,9 @@ type ConversationHTTPClient interface {
 	// TransferOwner TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
 	// 转让后才能退群。
 	TransferOwner(ctx context.Context, req *TransferOwnerRequest, opts ...http.CallOption) (rsp *TransferOwnerReply, err error)
-	// UpdateConversation UpdateConversation 改群名。仅群主可调用，单聊不支持。
+	// UpdateConversation UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+	//
+	// name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
 	UpdateConversation(ctx context.Context, req *UpdateConversationRequest, opts ...http.CallOption) (rsp *UpdateConversationReply, err error)
 	// UpdateUnread UpdateUnread 更新会话级未读数。
 	// delta 正增负减，归零后不再往下减。只影响 conversation_id + user_id 指定的那个成员。
@@ -645,6 +684,29 @@ func (c *ConversationHTTPClientImpl) GetConversation(ctx context.Context, in *Ge
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetGroupAvatarUploadToken GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+//
+// 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+// 客户端拿着临时凭证也写不进别的群目录。
+//
+// 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+func (c *ConversationHTTPClientImpl) GetGroupAvatarUploadToken(ctx context.Context, in *GetGroupAvatarUploadTokenRequest, opts ...http.CallOption) (*GetGroupAvatarUploadTokenReply, error) {
+	var out GetGroupAvatarUploadTokenReply
+	pattern := "/api/conversation/avatar/upload_token"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationConversationGetGroupAvatarUploadToken),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -838,7 +900,9 @@ func (c *ConversationHTTPClientImpl) TransferOwner(ctx context.Context, in *Tran
 	return &out, nil
 }
 
-// UpdateConversation UpdateConversation 改群名。仅群主可调用，单聊不支持。
+// UpdateConversation UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+//
+// name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
 func (c *ConversationHTTPClientImpl) UpdateConversation(ctx context.Context, in *UpdateConversationRequest, opts ...http.CallOption) (*UpdateConversationReply, error) {
 	var out UpdateConversationReply
 	pattern := "/api/conversation/update"

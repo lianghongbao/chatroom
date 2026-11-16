@@ -2,7 +2,6 @@ package biz
 
 import (
 	"context"
-	"strings"
 
 	v1 "chatroom/api/user/service/v1"
 	"chatroom/app/user/service/internal/conf"
@@ -42,8 +41,6 @@ type StorageOptions struct {
 	AllowedExts []string
 	// MaxSize 头像最大字节数，0 表示不限。
 	MaxSize int64
-	// AllowedHosts 头像地址允许的 host。
-	AllowedHosts []string
 }
 
 // NewStorageOptions 把 OSS 客户端和配置段翻译成 StorageOptions。
@@ -54,48 +51,10 @@ func NewStorageOptions(client *oss.Client, s *conf.Storage) StorageOptions {
 		return StorageOptions{Client: client}
 	}
 	return StorageOptions{
-		Client:       client,
-		AllowedExts:  s.GetAvatarAllowedExts(),
-		MaxSize:      s.GetAvatarMaxSize(),
-		AllowedHosts: allowedHosts(client, s),
+		Client:      client,
+		AllowedExts: s.GetAvatarAllowedExts(),
+		MaxSize:     s.GetAvatarMaxSize(),
 	}
-}
-
-// allowedHosts 返回头像地址允许的 host 列表。
-// client OSS 客户端，为 nil 时返空
-// s storage 配置段
-func allowedHosts(client *oss.Client, s *conf.Storage) []string {
-	hosts := make([]string, 0, 2)
-	if client != nil {
-		hosts = appendHost(hosts, client.UploadHost())
-	}
-	hosts = appendHost(hosts, s.GetUrlPrefix())
-	return hosts
-}
-
-// appendHost 从 URL 里取出 host 并追加到列表。
-// list 已有 host 列表
-// raw URL 原文，允许没有 scheme
-func appendHost(list []string, raw string) []string {
-	if raw == "" {
-		return list
-	}
-	// 没有 scheme 就当成纯 host。
-	host := raw
-	if _, after, ok := strings.Cut(raw, "://"); ok {
-		host = after
-	}
-	// 去掉路径和端口。
-	if i := strings.IndexAny(host, "/?#"); i >= 0 {
-		host = host[:i]
-	}
-	if i := strings.Index(host, ":"); i >= 0 {
-		host = host[:i]
-	}
-	if host == "" {
-		return list
-	}
-	return append(list, strings.ToLower(host))
 }
 
 // GetUploadToken 签发头像直传凭证。
@@ -105,36 +64,14 @@ func appendHost(list []string, raw string) []string {
 //
 // 返回 PostObject 表单 —— 客户端把文件 POST 到 OSS，服务端不碰文件字节。
 func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*oss.PostUploadForm, error) {
-	if uc.oss == nil {
-		return nil, ErrStorageNotConfigured
-	}
 	if uid == "" {
 		return nil, ErrUserInvalidArgument
 	}
-	ext = oss.NormalizeExt(ext)
-	if err := oss.ValidateExt(ext, uc.avatarExts); err != nil {
-		return nil, ErrUploadExtNotAllowed
+	form, err := uc.avatarUploader(uid).IssueUploadForm(ctx, ext)
+	if err != nil {
+		return nil, mapUploadError(err)
 	}
-	// 大小上限必须有值 —— 没有上限就等于没开这个功能，
-	// 不该签出一个什么都能传的表单。
-	if uc.avatarMaxSize <= 0 {
-		return nil, ErrStorageNotConfigured
-	}
-
-	dir := avatarDir(uid)
-	// 没配 url_prefix 时签不出公开地址 —— 客户端拿到空的 public_url，
-	// 上传完不知道该把哪个地址存下来。与其发一个半成品凭证，不如早失败。
-	if uc.oss.Config().URLPrefix == "" {
-		return nil, ErrStorageNotConfigured
-	}
-	return uc.oss.GeneratePostUploadForm(ctx, oss.PostUploadOptions{
-		Dir:          dir,
-		Ext:          ext,
-		AllowedExts:  uc.avatarExts,
-		MinSize:      1,
-		MaxSize:      uc.avatarMaxSize,
-		ContentTypes: uc.avatarContentTypes(),
-	})
+	return form, nil
 }
 
 // ValidateAvatarURL 校验头像地址，并确认对象真的在 OSS 上。
@@ -149,51 +86,47 @@ func (uc *UserUsecase) GetUploadToken(ctx context.Context, uid, ext string) (*os
 //  2. 前缀必须是自己 uid 的目录 —— 不能引用别人的头像
 //  3. 对象必须真的存在，且大小和类型符合预期
 func (uc *UserUsecase) ValidateAvatarURL(ctx context.Context, uid, raw string) (string, error) {
-	if uc.oss == nil {
-		return "", ErrStorageNotConfigured
-	}
 	if uid == "" {
 		return "", ErrUserInvalidArgument
 	}
-
-	clean, err := uc.oss.ValidateURL(raw, oss.URLRules{
-		AllowedHosts:    uc.ossHosts,
-		AllowedPrefixes: []string{avatarDir(uid)},
-		AllowedExts:     uc.avatarExts,
-	})
+	clean, err := uc.avatarUploader(uid).ValidateURL(ctx, raw)
 	if err != nil {
-		return "", ErrUploadURLInvalid
-	}
-
-	// 对象必须存在 —— 否则库里会留下一个坏图。
-	if err := uc.oss.CheckObject(ctx, clean, uc.avatarMaxSize, uc.avatarContentTypes()); err != nil {
-		switch err {
-		case oss.ErrObjectNotFound:
-			return "", ErrUploadObjectNotFound
-		case oss.ErrObjectMismatch:
-			return "", ErrUploadObjectMismatch
-		default:
-			return "", err
-		}
+		return "", mapUploadError(err)
 	}
 	return clean, nil
 }
 
-// avatarContentTypes 返回头像允许的 MIME 类型。
+// avatarUploader 返回当前用户的头像上传器。
+// uid 当前用户 ID
 //
-// 后缀白名单挡的是文件名，content-type 挡的是真实内容 ——
-// 改后缀骗过去的文件在这里会被拦下。
-func (uc *UserUsecase) avatarContentTypes() []string {
-	if len(uc.avatarExts) == 0 {
-		return nil
+// 每个 uid 一个目录 —— 目录前缀按 uid 拼，客户端拿着临时凭证也只能写进
+// 自己的目录。
+func (uc *UserUsecase) avatarUploader(uid string) *oss.Uploader {
+	return oss.NewUploader(uc.oss, oss.UploadPolicy{
+		Dir:         avatarDir(uid),
+		AllowedExts: uc.avatarExts,
+		MaxSize:     uc.avatarMaxSize,
+		MinSize:     1,
+	}, nil)
+}
+
+// mapUploadError 把 pkg/oss 的框架级错误映射成用户域的 API 错误。
+// err 原始错误
+func mapUploadError(err error) error {
+	switch err {
+	case oss.ErrUploadNotConfigured:
+		return ErrStorageNotConfigured
+	case oss.ErrUploadExtNotAllowed:
+		return ErrUploadExtNotAllowed
+	case oss.ErrUploadObjectNotFound:
+		return ErrUploadObjectNotFound
+	case oss.ErrUploadObjectMismatch:
+		return ErrUploadObjectMismatch
+	case oss.ErrUploadURLInvalid:
+		return ErrUploadURLInvalid
+	default:
+		return err
 	}
-	types := make([]string, 0, len(uc.avatarExts))
-	for _, ext := range uc.avatarExts {
-		if mime := oss.MIMEByExt(ext); mime != "" {
-			types = append(types, mime)
-		}
-	}
-	return types
 }
 
 // avatarURLAllowed 判断头像地址是不是本系统签发的（不查 OSS）。
@@ -206,10 +139,6 @@ func (uc *UserUsecase) avatarURLAllowed(uid, raw string) bool {
 	if uc.oss == nil {
 		return false
 	}
-	clean, err := uc.oss.ValidateURL(raw, oss.URLRules{
-		AllowedHosts:    uc.ossHosts,
-		AllowedPrefixes: []string{avatarDir(uid)},
-		AllowedExts:     uc.avatarExts,
-	})
+	clean, err := uc.avatarUploader(uid).ValidateURLFormat(raw)
 	return err == nil && clean != ""
 }

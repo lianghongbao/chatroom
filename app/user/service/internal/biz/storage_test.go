@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"chatroom/app/user/service/internal/conf"
 	"chatroom/pkg/oss"
 )
 
@@ -83,38 +82,45 @@ func TestAvatarDir(t *testing.T) {
 }
 
 // TestAllowedHosts 从上传域名和公开前缀里提取 host。
+//
+// host 白名单的归一化（去 scheme / 路径 / 端口）现在在 pkg/oss 的
+// NewUploader 里做 —— 用户头像和群头像共用同一份。
 func TestAllowedHosts(t *testing.T) {
 	client := testOSSClient(t)
-	s := &conf.Storage{UrlPrefix: "https://cdn.example.com"}
-	hosts := allowedHosts(client, s)
-	if len(hosts) == 0 {
-		t.Fatal("应该提取出 host")
+	uploader := oss.NewUploader(client, oss.UploadPolicy{
+		Dir:         avatarDir("u1"),
+		AllowedExts: []string{"png"},
+		MaxSize:     1024,
+	}, nil)
+
+	// 上传域名和公开前缀的域名都要在白名单里，且是裸 host（不含 scheme）。
+	clean, err := uploader.ValidateURLFormat("https://test-bucket.oss-cn-hangzhou.aliyuncs.com/avatar/u1/a.png")
+	if err != nil {
+		t.Fatalf("上传域名应该通过校验，实际 %v", err)
 	}
-	found := false
-	for _, h := range hosts {
-		if h == "test-bucket.oss-cn-hangzhou.aliyuncs.com" {
-			found = true
-		}
+	if clean != "https://test-bucket.oss-cn-hangzhou.aliyuncs.com/avatar/u1/a.png" {
+		t.Fatalf("地址被改写了，实际 %q", clean)
 	}
-	if !found {
-		t.Fatalf("没提取到上传域名，实际 %v", hosts)
+	if _, err := uploader.ValidateURLFormat("https://cdn.example.com/avatar/u1/a.png"); err != nil {
+		t.Fatalf("公开前缀域名应该通过校验，实际 %v", err)
 	}
-	// 公开前缀的域名也要在白名单里。
-	found = false
-	for _, h := range hosts {
-		if h == "cdn.example.com" {
-			found = true
-		}
+	// 别的域名不行。
+	if _, err := uploader.ValidateURLFormat("https://evil.example.com/avatar/u1/a.png"); err == nil {
+		t.Fatal("别人的域名不该通过校验")
 	}
-	if !found {
-		t.Fatalf("没提取到公开前缀域名，实际 %v", hosts)
+	// 别人的目录也不行 —— 前缀锁死在 avatar/u1/。
+	if _, err := uploader.ValidateURLFormat("https://cdn.example.com/avatar/u2/a.png"); err == nil {
+		t.Fatal("别人的目录不该通过校验")
 	}
 }
 
 // TestAvatarContentTypes 后缀映射成 MIME 类型。
+//
+// 映射逻辑现在在 pkg/oss 的 Uploader 里（用户头像和群头像共用），
+// 这里从用户域的角度验一遍：换掉后缀白名单，行为跟着变。
 func TestAvatarContentTypes(t *testing.T) {
 	uc := newStorageUsecase(StorageOptions{AllowedExts: []string{"jpg", "png", "webp"}})
-	types := uc.avatarContentTypes()
+	types := oss.ContentTypesByExt(uc.avatarExts)
 	want := map[string]bool{"image/jpeg": false, "image/png": false, "image/webp": false}
 	for _, ct := range types {
 		if _, ok := want[ct]; ok {
@@ -128,7 +134,7 @@ func TestAvatarContentTypes(t *testing.T) {
 	}
 	// 没配白名单就没有类型限制。
 	uc2 := newStorageUsecase(StorageOptions{})
-	got := uc2.avatarContentTypes()
+	got := oss.ContentTypesByExt(uc2.avatarExts)
 	if got != nil {
 		t.Errorf("没配白名单时应该返 nil，实际 %v", got)
 	}
@@ -137,9 +143,8 @@ func TestAvatarContentTypes(t *testing.T) {
 // TestAvatarURLAllowed 校验 host / 前缀 / 后缀。
 func TestAvatarURLAllowed(t *testing.T) {
 	uc := newStorageUsecase(StorageOptions{
-		Client:       testOSSClient(t),
-		AllowedExts:  []string{"png"},
-		AllowedHosts: []string{"cdn.example.com"},
+		Client:      testOSSClient(t),
+		AllowedExts: []string{"png"},
 	})
 
 	ok := "https://cdn.example.com/avatar/u1/a.png"

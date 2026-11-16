@@ -37,6 +37,11 @@ func (Conversation) Fields() []ent.Field {
 		field.Uint8("type").Default(1).Comment("会话类型 1=单聊 2=群聊"),
 		// 群名。单聊为空（前端用对方昵称展示）。
 		field.String("name").Default("").MaxLen(128).Comment("群名, 单聊为空, ≤ 128 字符"),
+		// 群头像地址。单聊为空。
+		//
+		// 存的是公开访问地址（CDN 域名 + object key），不是 OSS 私有地址 ——
+		// 群列表直接把它塞给前端的 <img src>。
+		field.String("avatar").Default("").MaxLen(512).Comment("群头像地址, 单聊为空, ≤ 512 字符"),
 		// 群主 uid。单聊为 0。
 		// 群主 uid（UUIDv7 字符串）。单聊为空串。
 		field.String("owner_id").Default("").MaxLen(36).Comment("群主 uid (UUIDv7 字符串), 单聊为空串"),

@@ -60,10 +60,25 @@ service Conversation {
         };
     }
 
-    // UpdateConversation 改群名。仅群主可调用，单聊不支持。
+    // UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+    //
+    // name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
     rpc UpdateConversation (UpdateConversationRequest) returns (UpdateConversationReply) {
         option (google.api.http) = {
             post: "/api/conversation/update"
+            body: "*"
+        };
+    }
+
+    // GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+    //
+    // 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+    // 客户端拿着临时凭证也写不进别的群目录。
+    //
+    // 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+    rpc GetGroupAvatarUploadToken (GetGroupAvatarUploadTokenRequest) returns (GetGroupAvatarUploadTokenReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/avatar/upload_token"
             body: "*"
         };
     }
@@ -216,6 +231,11 @@ message ConversationInfo {
     int64 updated_at = 11;
     // 会话创建时间（Unix 秒）。
     int64 created_at = 12;
+    // 群头像地址。单聊为空串。
+    //
+    // 公开访问地址（CDN 域名 + object key），前端直接塞给 <img src>。
+    // 群聊没设头像时也是空串 —— 前端回退到群名首字母占位。
+    string avatar = 13;
 }
 
 // CreateConversationRequest 创建会话。
@@ -295,16 +315,56 @@ message LeaveConversationRequest {
 message LeaveConversationReply {
 }
 
-// UpdateConversationRequest 改群名。
+// UpdateConversationRequest 改群名 / 群头像。
 message UpdateConversationRequest {
     // 会话 ID。
     uint64 conversation_id = 1;
     // 新群名。≤ 128 字符，不能为空。
+    //
+    // 留空表示不改群名 —— 改头像时不想连带改名字就传空串。
     string name = 2;
+    // 新群头像地址。留空表示不改头像。
+    //
+    // 地址必须是用 GetGroupAvatarUploadToken 签发的凭证上传出来的，
+    // 服务端会校验 host / 目录前缀 / 后缀，以及对象是否真的存在。
+    string avatar = 3;
 }
 
 message UpdateConversationReply {
     ConversationInfo conversation = 1;
+}
+
+// GetGroupAvatarUploadTokenRequest 签发群头像直传凭证的请求。
+message GetGroupAvatarUploadTokenRequest {
+    // 会话 ID。必须是群聊，且调用者是群主。
+    uint64 conversation_id = 1;
+    // 文件后缀，不带点，如 "png"。必须在白名单内。
+    string ext = 2;
+}
+
+// GetGroupAvatarUploadTokenReply 群头像直传凭证 —— OSS PostObject 表单。
+message GetGroupAvatarUploadTokenReply {
+    // OSS 上传地址，客户端 POST 到这里。
+    //
+    // 例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+    // PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+    string host = 1;
+    // 表单字段。客户端原样塞进 FormData 提交。
+    //
+    // 包含 key / policy / x-oss-signature-version / x-oss-credential /
+    // x-oss-date / x-oss-security-token / x-oss-signature /
+    // success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+    //
+    // file 域不放这里 —— 文件本身由客户端从本地读。
+    map<string, string> fields = 2;
+    // object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+    string file_key = 3;
+    // 上传后可访问的地址。客户端上传完把它塞进 UpdateConversation 的 avatar。
+    string public_url = 4;
+    // 过期时间，Unix 秒。
+    int64 expire_at = 5;
+    // 允许的最大字节数，0 表示不限。
+    int64 max_size = 6;
 }
 
 // TransferOwnerRequest 转让群主。

@@ -22,6 +22,8 @@ type Conversation struct {
 	Type uint8 `json:"type,omitempty"`
 	// 群名, 单聊为空, ≤ 128 字符
 	Name string `json:"name,omitempty"`
+	// 群头像地址, 单聊为空, ≤ 512 字符
+	Avatar string `json:"avatar,omitempty"`
 	// 群主 uid (UUIDv7 字符串), 单聊为空串
 	OwnerID string `json:"owner_id,omitempty"`
 	// 单聊成员对键 'uid1,uid2', 群聊为 NULL
@@ -61,7 +63,7 @@ func (*Conversation) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case conversation.FieldID, conversation.FieldType:
 			values[i] = new(sql.NullInt64)
-		case conversation.FieldName, conversation.FieldOwnerID, conversation.FieldPairKey:
+		case conversation.FieldName, conversation.FieldAvatar, conversation.FieldOwnerID, conversation.FieldPairKey:
 			values[i] = new(sql.NullString)
 		case conversation.FieldCreatedAt, conversation.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -97,6 +99,12 @@ func (_m *Conversation) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				_m.Name = value.String
+			}
+		case conversation.FieldAvatar:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field avatar", values[i])
+			} else if value.Valid {
+				_m.Avatar = value.String
 			}
 		case conversation.FieldOwnerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -169,6 +177,9 @@ func (_m *Conversation) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
+	builder.WriteString("avatar=")
+	builder.WriteString(_m.Avatar)
 	builder.WriteString(", ")
 	builder.WriteString("owner_id=")
 	builder.WriteString(_m.OwnerID)

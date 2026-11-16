@@ -18,6 +18,8 @@ const (
 	FieldType = "type"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldAvatar holds the string denoting the avatar field in the database.
+	FieldAvatar = "avatar"
 	// FieldOwnerID holds the string denoting the owner_id field in the database.
 	FieldOwnerID = "owner_id"
 	// FieldPairKey holds the string denoting the pair_key field in the database.
@@ -44,6 +46,7 @@ var Columns = []string{
 	FieldID,
 	FieldType,
 	FieldName,
+	FieldAvatar,
 	FieldOwnerID,
 	FieldPairKey,
 	FieldCreatedAt,
@@ -67,6 +70,10 @@ var (
 	DefaultName string
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
+	// DefaultAvatar holds the default value on creation for the "avatar" field.
+	DefaultAvatar string
+	// AvatarValidator is a validator for the "avatar" field. It is called by the builders before save.
+	AvatarValidator func(string) error
 	// DefaultOwnerID holds the default value on creation for the "owner_id" field.
 	DefaultOwnerID string
 	// OwnerIDValidator is a validator for the "owner_id" field. It is called by the builders before save.
@@ -97,6 +104,11 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByAvatar orders the results by the avatar field.
+func ByAvatar(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAvatar, opts...).ToFunc()
 }
 
 // ByOwnerID orders the results by the owner_id field.

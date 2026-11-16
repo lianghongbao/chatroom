@@ -6,6 +6,7 @@ import (
 	pb "chatroom/api/conversation/service/v1"
 	"chatroom/app/conversation/service/internal/biz"
 	"chatroom/pkg/middleware"
+	"chatroom/pkg/oss"
 )
 
 // ConversationService 会话服务的传输层适配器。
@@ -172,11 +173,58 @@ func (s *ConversationService) UpdateConversation(ctx context.Context, req *pb.Up
 	if !ok {
 		return nil, biz.ErrConversationInvalidArgument
 	}
-	conv, err := s.uc.UpdateConversation(ctx, uid, req.GetConversationId(), req.GetName())
+	conv, err := s.uc.UpdateConversation(ctx, uid, req.GetConversationId(), req.GetName(), req.GetAvatar())
 	if err != nil {
 		return nil, err
 	}
 	return &pb.UpdateConversationReply{Conversation: convertConversation(conv)}, nil
+}
+
+// GetGroupAvatarUploadToken 签发群头像直传凭证。req 是签发请求，返回 PostObject 表单。
+//
+// 客户端拿到表单字段后直接 POST 文件到 OSS，服务端不碰文件字节。
+// 仅群主可调用 —— 群主校验在 biz 层。
+func (s *ConversationService) GetGroupAvatarUploadToken(ctx context.Context, req *pb.GetGroupAvatarUploadTokenRequest) (*pb.GetGroupAvatarUploadTokenReply, error) {
+	if req == nil || req.GetConversationId() == 0 {
+		return nil, biz.ErrConversationInvalidArgument
+	}
+	uid, ok := middleware.FromContext(ctx)
+	if !ok {
+		return nil, biz.ErrConversationInvalidArgument
+	}
+	token, err := s.uc.GetGroupAvatarUploadToken(ctx, uid, req.GetConversationId(), req.GetExt())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetGroupAvatarUploadTokenReply{
+		Host:      token.Host,
+		Fields:    postFormFields(token),
+		FileKey:   token.Key,
+		PublicUrl: token.PublicUrl,
+		ExpireAt:  token.ExpireAt,
+		MaxSize:   token.MaxSize,
+	}, nil
+}
+
+// postFormFields 把 PostObject 凭证转成客户端要提交的表单域。
+// token 签发出来的凭证
+//
+// key 放在 fields 里 —— 客户端自己指定 object key，
+// 服务端给的只是推荐值；policy 限定了前缀，客户端改不出自己的目录。
+func postFormFields(token *oss.PostUploadForm) map[string]string {
+	if token == nil {
+		return nil
+	}
+	return map[string]string{
+		"key":                     token.Key,
+		"policy":                  token.Policy,
+		"x-oss-signature-version": oss.SignatureVersion,
+		"x-oss-credential":        token.Credential,
+		"x-oss-date":              token.DateTime,
+		"x-oss-security-token":    token.SecurityToken,
+		"x-oss-signature":         token.Signature,
+		"success_action_status":   "200",
+	}
 }
 
 // TransferOwner 转让群主。
@@ -378,6 +426,7 @@ func convertConversation(c *biz.Conversation) *pb.ConversationInfo {
 		Id:          c.ID,
 		Type:        conversationTypeToDTO(c.Type),
 		Name:        c.Name,
+		Avatar:      c.Avatar,
 		OwnerId:     c.OwnerID,
 		MemberCount: c.MemberCount,
 		MemberIds:   c.MemberIDs,

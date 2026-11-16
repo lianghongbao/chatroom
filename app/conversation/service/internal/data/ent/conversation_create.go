@@ -49,6 +49,20 @@ func (_c *ConversationCreate) SetNillableName(v *string) *ConversationCreate {
 	return _c
 }
 
+// SetAvatar sets the "avatar" field.
+func (_c *ConversationCreate) SetAvatar(v string) *ConversationCreate {
+	_c.mutation.SetAvatar(v)
+	return _c
+}
+
+// SetNillableAvatar sets the "avatar" field if the given value is not nil.
+func (_c *ConversationCreate) SetNillableAvatar(v *string) *ConversationCreate {
+	if v != nil {
+		_c.SetAvatar(*v)
+	}
+	return _c
+}
+
 // SetOwnerID sets the "owner_id" field.
 func (_c *ConversationCreate) SetOwnerID(v string) *ConversationCreate {
 	_c.mutation.SetOwnerID(v)
@@ -169,6 +183,10 @@ func (_c *ConversationCreate) defaults() {
 		v := conversation.DefaultName
 		_c.mutation.SetName(v)
 	}
+	if _, ok := _c.mutation.Avatar(); !ok {
+		v := conversation.DefaultAvatar
+		_c.mutation.SetAvatar(v)
+	}
 	if _, ok := _c.mutation.OwnerID(); !ok {
 		v := conversation.DefaultOwnerID
 		_c.mutation.SetOwnerID(v)
@@ -194,6 +212,14 @@ func (_c *ConversationCreate) check() error {
 	if v, ok := _c.mutation.Name(); ok {
 		if err := conversation.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Conversation.name": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Avatar(); !ok {
+		return &ValidationError{Name: "avatar", err: errors.New(`ent: missing required field "Conversation.avatar"`)}
+	}
+	if v, ok := _c.mutation.Avatar(); ok {
+		if err := conversation.AvatarValidator(v); err != nil {
+			return &ValidationError{Name: "avatar", err: fmt.Errorf(`ent: validator failed for field "Conversation.avatar": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.OwnerID(); !ok {
@@ -254,6 +280,10 @@ func (_c *ConversationCreate) createSpec() (*Conversation, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(conversation.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := _c.mutation.Avatar(); ok {
+		_spec.SetField(conversation.FieldAvatar, field.TypeString, value)
+		_node.Avatar = value
 	}
 	if value, ok := _c.mutation.OwnerID(); ok {
 		_spec.SetField(conversation.FieldOwnerID, field.TypeString, value)

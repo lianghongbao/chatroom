@@ -247,8 +247,8 @@ func TestConversationRepo_RemoveMember(t *testing.T) {
 	_ = d
 }
 
-// TestConversationRepo_UpdateName 覆盖改群名。
-func TestConversationRepo_UpdateName(t *testing.T) {
+// TestConversationRepo_UpdateGroupInfo 覆盖改群名和群头像。
+func TestConversationRepo_UpdateGroupInfo(t *testing.T) {
 	d, repo := newTestConvRepo(t)
 	ctx := context.Background()
 
@@ -262,15 +262,27 @@ func TestConversationRepo_UpdateName(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	got, err := repo.UpdateName(ctx, saved.ID, "新名")
+	got, err := repo.UpdateGroupInfo(ctx, saved.ID, "新名", "")
 	if err != nil {
-		t.Fatalf("UpdateName: %v", err)
+		t.Fatalf("UpdateGroupInfo: %v", err)
 	}
 	if got.Name != "新名" {
 		t.Fatalf("name = %q, want 新名", got.Name)
 	}
 
-	if _, err := repo.UpdateName(ctx, 999999, "x"); !errors.Is(err, biz.ErrConversationNotFound) {
+	// 只改头像、名字留空 —— 名字要保持不变。
+	got, err = repo.UpdateGroupInfo(ctx, saved.ID, "", "https://cdn.example.com/group_avatar/1/a.jpg")
+	if err != nil {
+		t.Fatalf("UpdateGroupInfo avatar: %v", err)
+	}
+	if got.Name != "新名" {
+		t.Fatalf("name = %q, want 新名（未改名字时不能被清掉）", got.Name)
+	}
+	if got.Avatar != "https://cdn.example.com/group_avatar/1/a.jpg" {
+		t.Fatalf("avatar = %q", got.Avatar)
+	}
+
+	if _, err := repo.UpdateGroupInfo(ctx, 999999, "x", ""); !errors.Is(err, biz.ErrConversationNotFound) {
 		t.Fatalf("error = %v, want ErrConversationNotFound", err)
 	}
 	_ = d

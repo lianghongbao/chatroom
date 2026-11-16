@@ -13,6 +13,36 @@ message Bootstrap {
   Observability observability = 4;
 
   Registry registry = 5;
+
+  // 对象存储配置。群头像直传用。整段留空表示关闭群头像上传。
+  Storage storage = 6;
+}
+
+// 阿里云 OSS。群头像直传凭证的签发与校验都要用。
+//
+// 字段语义跟 user 服务的 storage 段一致 —— 两边共用 pkg/oss 的 Uploader，
+// 只是目录前缀不同（个人头像 avatar/<uid>/，群头像 group_avatar/<会话ID>/）。
+message Storage {
+  // 阿里云 OSS 服务端点，如 oss-cn-guangzhou.aliyuncs.com。
+  string endpoint = 1;
+  // 存储空间名。
+  string bucket = 2;
+  // 地域，如 cn-guangzhou。用于 V4 签名派生和拼 host。
+  string region = 3;
+  // STS 角色 ARN，如 acs:ram::123456789:role/chatroom-oss-sts-role。
+  string role_arn = 4;
+  // 长期 RAM AK。只用于调 STS AssumeRole，不出服务端。不进版本库。
+  string access_key_id = 5;
+  // 长期 RAM SK。只用于调 STS AssumeRole，不出服务端。不进版本库。
+  string access_key_secret = 6;
+  // 客户端直传目标。留空回退到 https://<bucket>.<endpoint>。
+  string upload_host = 7;
+  // 公开访问前缀（CDN 域名）。留空表示不做公开访问。
+  string url_prefix = 8;
+  // 群头像允许的后缀白名单。留空表示不允许任何后缀。
+  repeated string avatar_allowed_exts = 9;
+  // 群头像最大字节数。0 表示不限。
+  int64 avatar_max_size = 10;
 }
 
 message Registry {

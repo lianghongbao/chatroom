@@ -10,6 +10,31 @@ info:
          成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
     version: 0.0.1
 paths:
+    /api/conversation/avatar/upload_token:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+
+                 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+                 客户端拿着临时凭证也写不进别的群目录。
+
+                 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+            operationId: Conversation_GetGroupAvatarUploadToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.GetGroupAvatarUploadTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.GetGroupAvatarUploadTokenReply'
     /api/conversation/create:
         post:
             tags:
@@ -371,7 +396,10 @@ paths:
         post:
             tags:
                 - Conversation
-            description: UpdateConversation 改群名。仅群主可调用，单聊不支持。
+            description: |-
+                UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+
+                 name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
             operationId: Conversation_UpdateConversation
             requestBody:
                 content:
@@ -514,6 +542,13 @@ components:
                 createdAt:
                     type: string
                     description: 会话创建时间（Unix 秒）。
+                avatar:
+                    type: string
+                    description: |-
+                        群头像地址。单聊为空串。
+
+                         公开访问地址（CDN 域名 + object key），前端直接塞给 <img src>。
+                         群聊没设头像时也是空串 —— 前端回退到群名首字母占位。
             description: ConversationInfo 会话概要。
         api.conversation.v1.CreateConversationReply:
             type: object
@@ -554,6 +589,51 @@ components:
             properties:
                 conversation:
                     $ref: '#/components/schemas/api.conversation.v1.ConversationInfo'
+        api.conversation.v1.GetGroupAvatarUploadTokenReply:
+            type: object
+            properties:
+                host:
+                    type: string
+                    description: |-
+                        OSS 上传地址，客户端 POST 到这里。
+
+                         例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+                         PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: |-
+                        表单字段。客户端原样塞进 FormData 提交。
+
+                         包含 key / policy / x-oss-signature-version / x-oss-credential /
+                         x-oss-date / x-oss-security-token / x-oss-signature /
+                         success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+
+                         file 域不放这里 —— 文件本身由客户端从本地读。
+                fileKey:
+                    type: string
+                    description: object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+                publicUrl:
+                    type: string
+                    description: 上传后可访问的地址。客户端上传完把它塞进 UpdateConversation 的 avatar。
+                expireAt:
+                    type: string
+                    description: 过期时间，Unix 秒。
+                maxSize:
+                    type: string
+                    description: 允许的最大字节数，0 表示不限。
+            description: GetGroupAvatarUploadTokenReply 群头像直传凭证 —— OSS PostObject 表单。
+        api.conversation.v1.GetGroupAvatarUploadTokenRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。必须是群聊，且调用者是群主。
+                ext:
+                    type: string
+                    description: 文件后缀，不带点，如 "png"。必须在白名单内。
+            description: GetGroupAvatarUploadTokenRequest 签发群头像直传凭证的请求。
         api.conversation.v1.GetMemberProfileReply:
             type: object
             properties:
@@ -721,8 +801,18 @@ components:
                     description: 会话 ID。
                 name:
                     type: string
-                    description: 新群名。≤ 128 字符，不能为空。
-            description: UpdateConversationRequest 改群名。
+                    description: |-
+                        新群名。≤ 128 字符，不能为空。
+
+                         留空表示不改群名 —— 改头像时不想连带改名字就传空串。
+                avatar:
+                    type: string
+                    description: |-
+                        新群头像地址。留空表示不改头像。
+
+                         地址必须是用 GetGroupAvatarUploadToken 签发的凭证上传出来的，
+                         服务端会校验 host / 目录前缀 / 后缀，以及对象是否真的存在。
+            description: UpdateConversationRequest 改群名 / 群头像。
         api.conversation.v1.UpdateUnreadBatchReply:
             type: object
             properties:

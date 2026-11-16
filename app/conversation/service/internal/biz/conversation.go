@@ -9,6 +9,7 @@ import (
 	"time"
 
 	v1 "chatroom/api/conversation/service/v1"
+	"chatroom/pkg/oss"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 )
@@ -18,9 +19,13 @@ type Conversation struct {
 	ID          uint64
 	Type        ConversationType
 	Name        string
-	OwnerID     string
-	MemberIDs   []string // 成员 uid 列表，升序。单聊固定 2 人，群聊 >= 2 人
-	MemberCount uint32   // 成员数
+	// Avatar 群头像地址。单聊为空串。
+	//
+	// 存的是公开访问地址（CDN 域名 + object key），不是 OSS 私有地址。
+	Avatar       string
+	OwnerID      string
+	MemberIDs    []string // 成员 uid 列表，升序。单聊固定 2 人，群聊 >= 2 人
+	MemberCount  uint32   // 成员数
 	// MemberNicknames / MemberAvatars 成员资料，与 MemberIDs 等长且下标对齐。
 	// 某个成员资料没拉到时该位置为空字符串占位。
 	MemberNicknames []string
@@ -90,8 +95,9 @@ type ConversationRepo interface {
 	AddMembers(ctx context.Context, conversationID uint64, userIDs []string) (added int, total int, err error)
 	// RemoveMember 踢人，返回踢完后的成员总数。找不到成员返 ErrConversationNotFound。
 	RemoveMember(ctx context.Context, conversationID uint64, userID string) (total int, err error)
-	// UpdateName 改群名。找不到会话返 ErrConversationNotFound。
-	UpdateName(ctx context.Context, id uint64, name string) (*Conversation, error)
+	// UpdateGroupInfo 改群名 / 群头像。空串表示对应字段不改。
+	// 找不到会话返 ErrConversationNotFound。
+	UpdateGroupInfo(ctx context.Context, id uint64, name, avatar string) (*Conversation, error)
 	// TransferOwner 转让群主。新群主不在会里返 ErrConversationNotFound。
 	TransferOwner(ctx context.Context, conversationID uint64, newOwnerID string) (*Conversation, error)
 	// Dissolve 解散会话，连同全部成员记录一起删掉。找不到会话返 ErrConversationNotFound。
@@ -150,6 +156,12 @@ type ConversationUsecase struct {
 	existence UserExistenceChecker
 	publisher MemberInvalidationPublisher
 	logger    *slog.Logger
+	// oss 对象存储客户端，为 nil 时关闭群头像上传。
+	oss *oss.Client
+	// avatarExts 群头像允许的后缀白名单。
+	avatarExts []string
+	// avatarMaxSize 群头像最大字节数，0 表示不限。
+	avatarMaxSize int64
 }
 
 // NewConversationUsecase 构造 ConversationUsecase。
@@ -157,12 +169,22 @@ type ConversationUsecase struct {
 // profiles nil 时走降级
 // existence 为 nil 时跳过校验
 // publisher 为 nil 时不发成员变更通知
+// storage 对象存储能力，为零值时关闭群头像上传
 // logger 为 nil 时用 slog.Default。
-func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileFetcher, existence UserExistenceChecker, publisher MemberInvalidationPublisher, logger *slog.Logger) *ConversationUsecase {
+func NewConversationUsecase(repo ConversationRepo, profiles ConversationProfileFetcher, existence UserExistenceChecker, publisher MemberInvalidationPublisher, storage StorageOptions, logger *slog.Logger) *ConversationUsecase {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &ConversationUsecase{repo: repo, profiles: profiles, existence: existence, publisher: publisher, logger: logger}
+	return &ConversationUsecase{
+		repo:          repo,
+		profiles:      profiles,
+		existence:     existence,
+		publisher:     publisher,
+		logger:        logger,
+		oss:           storage.Client,
+		avatarExts:    storage.AllowedExts,
+		avatarMaxSize: storage.MaxSize,
+	}
 }
 
 // notifyMemberChange 通知网关「这个会话的成员变了」。conversationID 是会话 ID；失败只记日志。
@@ -675,11 +697,14 @@ func (uc *ConversationUsecase) GetMemberProfile(ctx context.Context, callerID st
 	return nil, ErrConversationNotFound
 }
 
-// UpdateConversation 改群名。仅群主可调用，单聊不支持。
+// UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
 // callerID 调用方 uid
 // conversationID 会话 ID
-// name 新群名
-func (uc *ConversationUsecase) UpdateConversation(ctx context.Context, callerID string, conversationID uint64, name string) (*Conversation, error) {
+// name 新群名。留空表示不改群名。
+// avatar 新群头像地址。留空表示不改头像。
+//
+// 两个都留空 = 无操作，返 INVALID_ARGUMENT。
+func (uc *ConversationUsecase) UpdateConversation(ctx context.Context, callerID string, conversationID uint64, name, avatar string) (*Conversation, error) {
 	if uc.repo == nil {
 		return nil, ErrConversationInvalidArgument
 	}
@@ -700,11 +725,26 @@ func (uc *ConversationUsecase) UpdateConversation(ctx context.Context, callerID 
 	}
 
 	name = strings.TrimSpace(name)
-	if name == "" || len(name) > MaxConversationNameLen {
+	avatar = strings.TrimSpace(avatar)
+	// 两个都留空 = 无操作 —— 返 INVALID_ARGUMENT 而不是静默成功，
+	// 否则调用方以为自己改上了。
+	if name == "" && avatar == "" {
 		return nil, ErrConversationInvalidArgument
 	}
+	if name != "" && len(name) > MaxConversationNameLen {
+		return nil, ErrConversationInvalidArgument
+	}
+	// 头像地址必须是用本服务签发的凭证上传出来的 ——
+	// host / 目录前缀 / 后缀白名单 + 对象真实存在。
+	if avatar != "" {
+		clean, err := uc.ValidateGroupAvatarURL(ctx, conversationID, avatar)
+		if err != nil {
+			return nil, err
+		}
+		avatar = clean
+	}
 
-	updated, err := uc.repo.UpdateName(ctx, conversationID, name)
+	updated, err := uc.repo.UpdateGroupInfo(ctx, conversationID, name, avatar)
 	if err != nil {
 		return nil, err
 	}

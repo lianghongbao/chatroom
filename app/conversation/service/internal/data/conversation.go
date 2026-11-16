@@ -117,6 +117,7 @@ func (r *conversationRepo) Save(ctx context.Context, c *biz.Conversation) (*biz.
 		ID:          convPO.ID,
 		Type:        biz.ConversationType(convPO.Type),
 		Name:        convPO.Name,
+		Avatar:      convPO.Avatar,
 		OwnerID:     convPO.OwnerID,
 		MemberIDs:   memberIDs,
 		MemberCount: uint32(len(memberIDs)),
@@ -550,13 +551,22 @@ func (r *conversationRepo) RemoveMember(ctx context.Context, conversationID uint
 	return total, nil
 }
 
-// UpdateName 改群名。
+// UpdateGroupInfo 改群名 / 群头像。
 // id 会话 ID
-// name 新群名
-func (r *conversationRepo) UpdateName(ctx context.Context, id uint64, name string) (*biz.Conversation, error) {
-	po, err := r.data.db.Conversation.UpdateOneID(id).
-		SetName(name).
-		Save(ctx)
+// name 新群名。空串表示不改群名。
+// avatar 新群头像地址。空串表示不改头像。
+//
+// 两个都空串时不做任何更新 —— biz 层已经挡掉了「无操作」，
+// 这里再挡一道是为了不让空更新把 updated_at 刷新掉。
+func (r *conversationRepo) UpdateGroupInfo(ctx context.Context, id uint64, name, avatar string) (*biz.Conversation, error) {
+	update := r.data.db.Conversation.UpdateOneID(id)
+	if name != "" {
+		update.SetName(name)
+	}
+	if avatar != "" {
+		update.SetAvatar(avatar)
+	}
+	po, err := update.Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, biz.ErrConversationNotFound
@@ -685,6 +695,7 @@ func (r *conversationRepo) toBizWithMembers(ctx context.Context, po *ent.Convers
 		ID:          po.ID,
 		Type:        biz.ConversationType(po.Type),
 		Name:        po.Name,
+		Avatar:      po.Avatar,
 		OwnerID:     po.OwnerID,
 		MemberIDs:   members,
 		MemberCount: uint32(len(members)),

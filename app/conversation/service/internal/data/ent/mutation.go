@@ -38,6 +38,7 @@ type ConversationMutation struct {
 	_type          *uint8
 	add_type       *int8
 	name           *string
+	avatar         *string
 	owner_id       *string
 	pair_key       *string
 	created_at     *time.Time
@@ -245,6 +246,42 @@ func (m *ConversationMutation) OldName(ctx context.Context) (v string, err error
 // ResetName resets all changes to the "name" field.
 func (m *ConversationMutation) ResetName() {
 	m.name = nil
+}
+
+// SetAvatar sets the "avatar" field.
+func (m *ConversationMutation) SetAvatar(s string) {
+	m.avatar = &s
+}
+
+// Avatar returns the value of the "avatar" field in the mutation.
+func (m *ConversationMutation) Avatar() (r string, exists bool) {
+	v := m.avatar
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAvatar returns the old "avatar" field's value of the Conversation entity.
+// If the Conversation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ConversationMutation) OldAvatar(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAvatar is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAvatar requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAvatar: %w", err)
+	}
+	return oldValue.Avatar, nil
+}
+
+// ResetAvatar resets all changes to the "avatar" field.
+func (m *ConversationMutation) ResetAvatar() {
+	m.avatar = nil
 }
 
 // SetOwnerID sets the "owner_id" field.
@@ -492,12 +529,15 @@ func (m *ConversationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ConversationMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
 	if m._type != nil {
 		fields = append(fields, conversation.FieldType)
 	}
 	if m.name != nil {
 		fields = append(fields, conversation.FieldName)
+	}
+	if m.avatar != nil {
+		fields = append(fields, conversation.FieldAvatar)
 	}
 	if m.owner_id != nil {
 		fields = append(fields, conversation.FieldOwnerID)
@@ -523,6 +563,8 @@ func (m *ConversationMutation) Field(name string) (ent.Value, bool) {
 		return m.GetType()
 	case conversation.FieldName:
 		return m.Name()
+	case conversation.FieldAvatar:
+		return m.Avatar()
 	case conversation.FieldOwnerID:
 		return m.OwnerID()
 	case conversation.FieldPairKey:
@@ -544,6 +586,8 @@ func (m *ConversationMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldType(ctx)
 	case conversation.FieldName:
 		return m.OldName(ctx)
+	case conversation.FieldAvatar:
+		return m.OldAvatar(ctx)
 	case conversation.FieldOwnerID:
 		return m.OldOwnerID(ctx)
 	case conversation.FieldPairKey:
@@ -574,6 +618,13 @@ func (m *ConversationMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case conversation.FieldAvatar:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAvatar(v)
 		return nil
 	case conversation.FieldOwnerID:
 		v, ok := value.(string)
@@ -681,6 +732,9 @@ func (m *ConversationMutation) ResetField(name string) error {
 		return nil
 	case conversation.FieldName:
 		m.ResetName()
+		return nil
+	case conversation.FieldAvatar:
+		m.ResetAvatar()
 		return nil
 	case conversation.FieldOwnerID:
 		m.ResetOwnerID()

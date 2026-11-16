@@ -613,6 +613,36 @@ IP 从 `RemoteAddr` 取。只有网关前面确实有 ingress、且客户端**�
   否则会留下一个永远没有昵称头像的幽灵成员。user 服务不可达时放行（降级为查库）。
 - **成员上限**由 `biz.MaxGroupMembers` 控制，biz 层和 repo 层各挡一次。
 
+## 群头像
+
+群头像跟个人头像是两套独立的东西，但共用 `pkg/oss` 的同一份上传抽象。
+
+| | 个人头像 | 群头像 |
+|---|---|---|
+| 签约服务 | user | conversation（自己签，不绕 user） |
+| object 前缀 | `avatar/<uid>/` | `group_avatar/<会话ID>/` |
+| 谁能改 | 本人 | 只有群主 |
+| 存储列 | `users.avatar` | `conversations.avatar` |
+
+流程跟个人头像一样，走 PostObject 直传 —— 图片字节不经过自己的服务器：
+
+1. 客户端调 `GetGroupAvatarUploadToken`（`POST /api/conversation/avatar/upload_token`）
+   拿凭证。签发前校验「是群聊 + 调用方是群主」。
+2. 客户端把 `fields` 原样塞进 FormData，文件放在**最后一个**域，POST 到 `host`。
+3. 客户端把返回的 `public_url` 塞进 `UpdateConversation` 的 `avatar`。
+
+服务端不碰文件字节，但要验三道关 —— 都在 `pkg/oss.Uploader.ValidateURL` 里：
+
+- **host / 目录前缀 / 后缀**要在白名单内。前缀锁死在 `group_avatar/<会话ID>/`，
+  客户端拿着临时凭证也写不进别的群目录。
+- **对象必须真的存在**，且大小和 MIME 类型符合 policy —— 只查格式的话，
+  别人传个外链就能把群头像指到任意地方。
+- **后缀白名单 fail closed**：没配白名单就是「不允许任何后缀」，不是「允许全部」。
+
+`UpdateConversation` 的 `name` 和 `avatar` 都留空 = 无操作，返
+`CONVERSATION_INVALID_ARGUMENT` —— 否则调用方以为自己改上了。留空表示「不改」，
+所以改头像时传空串当名字即可。
+
 ## 消息服务的规则
 
 - **历史消息用游标分页，不用 OFFSET**。游标是「上一页最后一条消息的 id」，

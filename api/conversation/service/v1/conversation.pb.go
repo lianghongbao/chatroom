@@ -101,7 +101,12 @@ type ConversationInfo struct {
 	// 会话最后活动时间（Unix 秒），成员变动或改名时更新。
 	UpdatedAt int64 `protobuf:"varint,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	// 会话创建时间（Unix 秒）。
-	CreatedAt     int64 `protobuf:"varint,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt int64 `protobuf:"varint,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// 群头像地址。单聊为空串。
+	//
+	// 公开访问地址（CDN 域名 + object key），前端直接塞给 <img src>。
+	// 群聊没设头像时也是空串 —— 前端回退到群名首字母占位。
+	Avatar        string `protobuf:"bytes,13,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -218,6 +223,13 @@ func (x *ConversationInfo) GetCreatedAt() int64 {
 		return x.CreatedAt
 	}
 	return 0
+}
+
+func (x *ConversationInfo) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
 }
 
 // CreateConversationRequest 创建会话。
@@ -826,13 +838,20 @@ func (*LeaveConversationReply) Descriptor() ([]byte, []int) {
 	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{12}
 }
 
-// UpdateConversationRequest 改群名。
+// UpdateConversationRequest 改群名 / 群头像。
 type UpdateConversationRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 会话 ID。
 	ConversationId uint64 `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
 	// 新群名。≤ 128 字符，不能为空。
-	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	//
+	// 留空表示不改群名 —— 改头像时不想连带改名字就传空串。
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 新群头像地址。留空表示不改头像。
+	//
+	// 地址必须是用 GetGroupAvatarUploadToken 签发的凭证上传出来的，
+	// 服务端会校验 host / 目录前缀 / 后缀，以及对象是否真的存在。
+	Avatar        string `protobuf:"bytes,3,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -881,6 +900,13 @@ func (x *UpdateConversationRequest) GetName() string {
 	return ""
 }
 
+func (x *UpdateConversationRequest) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
 type UpdateConversationReply struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Conversation  *ConversationInfo      `protobuf:"bytes,1,opt,name=conversation,proto3" json:"conversation,omitempty"`
@@ -925,6 +951,161 @@ func (x *UpdateConversationReply) GetConversation() *ConversationInfo {
 	return nil
 }
 
+// GetGroupAvatarUploadTokenRequest 签发群头像直传凭证的请求。
+type GetGroupAvatarUploadTokenRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 会话 ID。必须是群聊，且调用者是群主。
+	ConversationId uint64 `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	// 文件后缀，不带点，如 "png"。必须在白名单内。
+	Ext           string `protobuf:"bytes,2,opt,name=ext,proto3" json:"ext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGroupAvatarUploadTokenRequest) Reset() {
+	*x = GetGroupAvatarUploadTokenRequest{}
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGroupAvatarUploadTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGroupAvatarUploadTokenRequest) ProtoMessage() {}
+
+func (x *GetGroupAvatarUploadTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGroupAvatarUploadTokenRequest.ProtoReflect.Descriptor instead.
+func (*GetGroupAvatarUploadTokenRequest) Descriptor() ([]byte, []int) {
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetGroupAvatarUploadTokenRequest) GetConversationId() uint64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *GetGroupAvatarUploadTokenRequest) GetExt() string {
+	if x != nil {
+		return x.Ext
+	}
+	return ""
+}
+
+// GetGroupAvatarUploadTokenReply 群头像直传凭证 —— OSS PostObject 表单。
+type GetGroupAvatarUploadTokenReply struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// OSS 上传地址，客户端 POST 到这里。
+	//
+	// 例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+	// PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+	Host string `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	// 表单字段。客户端原样塞进 FormData 提交。
+	//
+	// 包含 key / policy / x-oss-signature-version / x-oss-credential /
+	// x-oss-date / x-oss-security-token / x-oss-signature /
+	// success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+	//
+	// file 域不放这里 —— 文件本身由客户端从本地读。
+	Fields map[string]string `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+	FileKey string `protobuf:"bytes,3,opt,name=file_key,json=fileKey,proto3" json:"file_key,omitempty"`
+	// 上传后可访问的地址。客户端上传完把它塞进 UpdateConversation 的 avatar。
+	PublicUrl string `protobuf:"bytes,4,opt,name=public_url,json=publicUrl,proto3" json:"public_url,omitempty"`
+	// 过期时间，Unix 秒。
+	ExpireAt int64 `protobuf:"varint,5,opt,name=expire_at,json=expireAt,proto3" json:"expire_at,omitempty"`
+	// 允许的最大字节数，0 表示不限。
+	MaxSize       int64 `protobuf:"varint,6,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGroupAvatarUploadTokenReply) Reset() {
+	*x = GetGroupAvatarUploadTokenReply{}
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGroupAvatarUploadTokenReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGroupAvatarUploadTokenReply) ProtoMessage() {}
+
+func (x *GetGroupAvatarUploadTokenReply) ProtoReflect() protoreflect.Message {
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGroupAvatarUploadTokenReply.ProtoReflect.Descriptor instead.
+func (*GetGroupAvatarUploadTokenReply) Descriptor() ([]byte, []int) {
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *GetGroupAvatarUploadTokenReply) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *GetGroupAvatarUploadTokenReply) GetFields() map[string]string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *GetGroupAvatarUploadTokenReply) GetFileKey() string {
+	if x != nil {
+		return x.FileKey
+	}
+	return ""
+}
+
+func (x *GetGroupAvatarUploadTokenReply) GetPublicUrl() string {
+	if x != nil {
+		return x.PublicUrl
+	}
+	return ""
+}
+
+func (x *GetGroupAvatarUploadTokenReply) GetExpireAt() int64 {
+	if x != nil {
+		return x.ExpireAt
+	}
+	return 0
+}
+
+func (x *GetGroupAvatarUploadTokenReply) GetMaxSize() int64 {
+	if x != nil {
+		return x.MaxSize
+	}
+	return 0
+}
+
 // TransferOwnerRequest 转让群主。
 type TransferOwnerRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -938,7 +1119,7 @@ type TransferOwnerRequest struct {
 
 func (x *TransferOwnerRequest) Reset() {
 	*x = TransferOwnerRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[15]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -950,7 +1131,7 @@ func (x *TransferOwnerRequest) String() string {
 func (*TransferOwnerRequest) ProtoMessage() {}
 
 func (x *TransferOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[15]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -963,7 +1144,7 @@ func (x *TransferOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferOwnerRequest.ProtoReflect.Descriptor instead.
 func (*TransferOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{15}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TransferOwnerRequest) GetConversationId() uint64 {
@@ -990,7 +1171,7 @@ type TransferOwnerReply struct {
 
 func (x *TransferOwnerReply) Reset() {
 	*x = TransferOwnerReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[16]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1002,7 +1183,7 @@ func (x *TransferOwnerReply) String() string {
 func (*TransferOwnerReply) ProtoMessage() {}
 
 func (x *TransferOwnerReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[16]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1015,7 +1196,7 @@ func (x *TransferOwnerReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferOwnerReply.ProtoReflect.Descriptor instead.
 func (*TransferOwnerReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{16}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TransferOwnerReply) GetConversation() *ConversationInfo {
@@ -1036,7 +1217,7 @@ type DissolveConversationRequest struct {
 
 func (x *DissolveConversationRequest) Reset() {
 	*x = DissolveConversationRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[17]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1048,7 +1229,7 @@ func (x *DissolveConversationRequest) String() string {
 func (*DissolveConversationRequest) ProtoMessage() {}
 
 func (x *DissolveConversationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[17]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1061,7 +1242,7 @@ func (x *DissolveConversationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DissolveConversationRequest.ProtoReflect.Descriptor instead.
 func (*DissolveConversationRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{17}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DissolveConversationRequest) GetConversationId() uint64 {
@@ -1079,7 +1260,7 @@ type DissolveConversationReply struct {
 
 func (x *DissolveConversationReply) Reset() {
 	*x = DissolveConversationReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[18]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1091,7 +1272,7 @@ func (x *DissolveConversationReply) String() string {
 func (*DissolveConversationReply) ProtoMessage() {}
 
 func (x *DissolveConversationReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[18]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1104,7 +1285,7 @@ func (x *DissolveConversationReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DissolveConversationReply.ProtoReflect.Descriptor instead.
 func (*DissolveConversationReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{18}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{20}
 }
 
 // ListMembersRequest 列会话成员。
@@ -1118,7 +1299,7 @@ type ListMembersRequest struct {
 
 func (x *ListMembersRequest) Reset() {
 	*x = ListMembersRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[19]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1130,7 +1311,7 @@ func (x *ListMembersRequest) String() string {
 func (*ListMembersRequest) ProtoMessage() {}
 
 func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[19]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1143,7 +1324,7 @@ func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListMembersRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{19}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListMembersRequest) GetConversationId() uint64 {
@@ -1167,7 +1348,7 @@ type ListMembersReply struct {
 
 func (x *ListMembersReply) Reset() {
 	*x = ListMembersReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[20]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1179,7 +1360,7 @@ func (x *ListMembersReply) String() string {
 func (*ListMembersReply) ProtoMessage() {}
 
 func (x *ListMembersReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[20]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1192,7 +1373,7 @@ func (x *ListMembersReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembersReply.ProtoReflect.Descriptor instead.
 func (*ListMembersReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{20}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListMembersReply) GetMemberIds() []string {
@@ -1229,7 +1410,7 @@ type GetMemberProfileRequest struct {
 
 func (x *GetMemberProfileRequest) Reset() {
 	*x = GetMemberProfileRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[21]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1241,7 +1422,7 @@ func (x *GetMemberProfileRequest) String() string {
 func (*GetMemberProfileRequest) ProtoMessage() {}
 
 func (x *GetMemberProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[21]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1254,7 +1435,7 @@ func (x *GetMemberProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMemberProfileRequest.ProtoReflect.Descriptor instead.
 func (*GetMemberProfileRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{21}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetMemberProfileRequest) GetConversationId() uint64 {
@@ -1290,7 +1471,7 @@ type GetMemberProfileReply struct {
 
 func (x *GetMemberProfileReply) Reset() {
 	*x = GetMemberProfileReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[22]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1302,7 +1483,7 @@ func (x *GetMemberProfileReply) String() string {
 func (*GetMemberProfileReply) ProtoMessage() {}
 
 func (x *GetMemberProfileReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[22]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1315,7 +1496,7 @@ func (x *GetMemberProfileReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMemberProfileReply.ProtoReflect.Descriptor instead.
 func (*GetMemberProfileReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{22}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetMemberProfileReply) GetId() string {
@@ -1366,7 +1547,7 @@ type CheckMembershipRequest struct {
 
 func (x *CheckMembershipRequest) Reset() {
 	*x = CheckMembershipRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[23]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1378,7 +1559,7 @@ func (x *CheckMembershipRequest) String() string {
 func (*CheckMembershipRequest) ProtoMessage() {}
 
 func (x *CheckMembershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[23]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1391,7 +1572,7 @@ func (x *CheckMembershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckMembershipRequest.ProtoReflect.Descriptor instead.
 func (*CheckMembershipRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{23}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CheckMembershipRequest) GetConversationId() uint64 {
@@ -1418,7 +1599,7 @@ type CheckMembershipReply struct {
 
 func (x *CheckMembershipReply) Reset() {
 	*x = CheckMembershipReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[24]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1430,7 +1611,7 @@ func (x *CheckMembershipReply) String() string {
 func (*CheckMembershipReply) ProtoMessage() {}
 
 func (x *CheckMembershipReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[24]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1443,7 +1624,7 @@ func (x *CheckMembershipReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckMembershipReply.ProtoReflect.Descriptor instead.
 func (*CheckMembershipReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{24}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CheckMembershipReply) GetIsMember() bool {
@@ -1468,7 +1649,7 @@ type UpdateUnreadRequest struct {
 
 func (x *UpdateUnreadRequest) Reset() {
 	*x = UpdateUnreadRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[25]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1480,7 +1661,7 @@ func (x *UpdateUnreadRequest) String() string {
 func (*UpdateUnreadRequest) ProtoMessage() {}
 
 func (x *UpdateUnreadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[25]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1493,7 +1674,7 @@ func (x *UpdateUnreadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUnreadRequest.ProtoReflect.Descriptor instead.
 func (*UpdateUnreadRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{25}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *UpdateUnreadRequest) GetConversationId() uint64 {
@@ -1536,7 +1717,7 @@ type UpdateUnreadBatchRequest struct {
 
 func (x *UpdateUnreadBatchRequest) Reset() {
 	*x = UpdateUnreadBatchRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[26]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1729,7 @@ func (x *UpdateUnreadBatchRequest) String() string {
 func (*UpdateUnreadBatchRequest) ProtoMessage() {}
 
 func (x *UpdateUnreadBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[26]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1742,7 @@ func (x *UpdateUnreadBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUnreadBatchRequest.ProtoReflect.Descriptor instead.
 func (*UpdateUnreadBatchRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{26}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *UpdateUnreadBatchRequest) GetConversationId() uint64 {
@@ -1595,7 +1776,7 @@ type UpdateUnreadBatchReply struct {
 
 func (x *UpdateUnreadBatchReply) Reset() {
 	*x = UpdateUnreadBatchReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[27]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1607,7 +1788,7 @@ func (x *UpdateUnreadBatchReply) String() string {
 func (*UpdateUnreadBatchReply) ProtoMessage() {}
 
 func (x *UpdateUnreadBatchReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[27]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1620,7 +1801,7 @@ func (x *UpdateUnreadBatchReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUnreadBatchReply.ProtoReflect.Descriptor instead.
 func (*UpdateUnreadBatchReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{27}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpdateUnreadBatchReply) GetUpdated() uint32 {
@@ -1640,7 +1821,7 @@ type UpdateUnreadReply struct {
 
 func (x *UpdateUnreadReply) Reset() {
 	*x = UpdateUnreadReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[28]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1652,7 +1833,7 @@ func (x *UpdateUnreadReply) String() string {
 func (*UpdateUnreadReply) ProtoMessage() {}
 
 func (x *UpdateUnreadReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[28]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1665,7 +1846,7 @@ func (x *UpdateUnreadReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUnreadReply.ProtoReflect.Descriptor instead.
 func (*UpdateUnreadReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{28}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UpdateUnreadReply) GetUnreadCount() uint32 {
@@ -1688,7 +1869,7 @@ type GetUnreadRequest struct {
 
 func (x *GetUnreadRequest) Reset() {
 	*x = GetUnreadRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[29]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1700,7 +1881,7 @@ func (x *GetUnreadRequest) String() string {
 func (*GetUnreadRequest) ProtoMessage() {}
 
 func (x *GetUnreadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[29]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1713,7 +1894,7 @@ func (x *GetUnreadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUnreadRequest.ProtoReflect.Descriptor instead.
 func (*GetUnreadRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{29}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetUnreadRequest) GetConversationId() uint64 {
@@ -1740,7 +1921,7 @@ type GetUnreadReply struct {
 
 func (x *GetUnreadReply) Reset() {
 	*x = GetUnreadReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[30]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1752,7 +1933,7 @@ func (x *GetUnreadReply) String() string {
 func (*GetUnreadReply) ProtoMessage() {}
 
 func (x *GetUnreadReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[30]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1765,7 +1946,7 @@ func (x *GetUnreadReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUnreadReply.ProtoReflect.Descriptor instead.
 func (*GetUnreadReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{30}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GetUnreadReply) GetUnreadCount() uint32 {
@@ -1788,7 +1969,7 @@ type ClearUnreadRequest struct {
 
 func (x *ClearUnreadRequest) Reset() {
 	*x = ClearUnreadRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[31]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1800,7 +1981,7 @@ func (x *ClearUnreadRequest) String() string {
 func (*ClearUnreadRequest) ProtoMessage() {}
 
 func (x *ClearUnreadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[31]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1813,7 +1994,7 @@ func (x *ClearUnreadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearUnreadRequest.ProtoReflect.Descriptor instead.
 func (*ClearUnreadRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{31}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ClearUnreadRequest) GetConversationId() uint64 {
@@ -1840,7 +2021,7 @@ type ClearUnreadReply struct {
 
 func (x *ClearUnreadReply) Reset() {
 	*x = ClearUnreadReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[32]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1852,7 +2033,7 @@ func (x *ClearUnreadReply) String() string {
 func (*ClearUnreadReply) ProtoMessage() {}
 
 func (x *ClearUnreadReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[32]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1865,7 +2046,7 @@ func (x *ClearUnreadReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearUnreadReply.ProtoReflect.Descriptor instead.
 func (*ClearUnreadReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{32}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ClearUnreadReply) GetUnreadCount() uint32 {
@@ -1886,7 +2067,7 @@ type ListUnreadRequest struct {
 
 func (x *ListUnreadRequest) Reset() {
 	*x = ListUnreadRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[33]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1898,7 +2079,7 @@ func (x *ListUnreadRequest) String() string {
 func (*ListUnreadRequest) ProtoMessage() {}
 
 func (x *ListUnreadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[33]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1911,7 +2092,7 @@ func (x *ListUnreadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUnreadRequest.ProtoReflect.Descriptor instead.
 func (*ListUnreadRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{33}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ListUnreadRequest) GetUserId() string {
@@ -1931,7 +2112,7 @@ type ListUnreadReply struct {
 
 func (x *ListUnreadReply) Reset() {
 	*x = ListUnreadReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[34]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1943,7 +2124,7 @@ func (x *ListUnreadReply) String() string {
 func (*ListUnreadReply) ProtoMessage() {}
 
 func (x *ListUnreadReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[34]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2137,7 @@ func (x *ListUnreadReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUnreadReply.ProtoReflect.Descriptor instead.
 func (*ListUnreadReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{34}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ListUnreadReply) GetPerConversation() map[uint64]uint32 {
@@ -1977,7 +2158,7 @@ type ListConversationMembersRequest struct {
 
 func (x *ListConversationMembersRequest) Reset() {
 	*x = ListConversationMembersRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[35]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1989,7 +2170,7 @@ func (x *ListConversationMembersRequest) String() string {
 func (*ListConversationMembersRequest) ProtoMessage() {}
 
 func (x *ListConversationMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[35]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2002,7 +2183,7 @@ func (x *ListConversationMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConversationMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListConversationMembersRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{35}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListConversationMembersRequest) GetConversationId() uint64 {
@@ -2022,7 +2203,7 @@ type ListConversationMembersReply struct {
 
 func (x *ListConversationMembersReply) Reset() {
 	*x = ListConversationMembersReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[36]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2034,7 +2215,7 @@ func (x *ListConversationMembersReply) String() string {
 func (*ListConversationMembersReply) ProtoMessage() {}
 
 func (x *ListConversationMembersReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[36]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2047,7 +2228,7 @@ func (x *ListConversationMembersReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConversationMembersReply.ProtoReflect.Descriptor instead.
 func (*ListConversationMembersReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{36}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListConversationMembersReply) GetMemberIds() []string {
@@ -2068,7 +2249,7 @@ type ListUserConversationsRequest struct {
 
 func (x *ListUserConversationsRequest) Reset() {
 	*x = ListUserConversationsRequest{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[37]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2080,7 +2261,7 @@ func (x *ListUserConversationsRequest) String() string {
 func (*ListUserConversationsRequest) ProtoMessage() {}
 
 func (x *ListUserConversationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[37]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2093,7 +2274,7 @@ func (x *ListUserConversationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserConversationsRequest.ProtoReflect.Descriptor instead.
 func (*ListUserConversationsRequest) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{37}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListUserConversationsRequest) GetUserId() string {
@@ -2113,7 +2294,7 @@ type ListUserConversationsReply struct {
 
 func (x *ListUserConversationsReply) Reset() {
 	*x = ListUserConversationsReply{}
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[38]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2125,7 +2306,7 @@ func (x *ListUserConversationsReply) String() string {
 func (*ListUserConversationsReply) ProtoMessage() {}
 
 func (x *ListUserConversationsReply) ProtoReflect() protoreflect.Message {
-	mi := &file_conversation_service_v1_conversation_proto_msgTypes[38]
+	mi := &file_conversation_service_v1_conversation_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2138,7 +2319,7 @@ func (x *ListUserConversationsReply) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserConversationsReply.ProtoReflect.Descriptor instead.
 func (*ListUserConversationsReply) Descriptor() ([]byte, []int) {
-	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{38}
+	return file_conversation_service_v1_conversation_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListUserConversationsReply) GetConversationIds() []uint64 {
@@ -2152,7 +2333,7 @@ var File_conversation_service_v1_conversation_proto protoreflect.FileDescriptor
 
 const file_conversation_service_v1_conversation_proto_rawDesc = "" +
 	"\n" +
-	"*conversation/service/v1/conversation.proto\x12\x13api.conversation.v1\x1a\x1cgoogle/api/annotations.proto\"\xa9\x03\n" +
+	"*conversation/service/v1/conversation.proto\x12\x13api.conversation.v1\x1a\x1cgoogle/api/annotations.proto\"\xc1\x03\n" +
 	"\x10ConversationInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x129\n" +
 	"\x04type\x18\x02 \x01(\x0e2%.api.conversation.v1.ConversationTypeR\x04type\x12\x12\n" +
@@ -2169,7 +2350,8 @@ const file_conversation_service_v1_conversation_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\v \x01(\x03R\tupdatedAt\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\f \x01(\x03R\tcreatedAt\"\x89\x01\n" +
+	"created_at\x18\f \x01(\x03R\tcreatedAt\x12\x16\n" +
+	"\x06avatar\x18\r \x01(\tR\x06avatar\"\x89\x01\n" +
 	"\x19CreateConversationRequest\x129\n" +
 	"\x04type\x18\x01 \x01(\x0e2%.api.conversation.v1.ConversationTypeR\x04type\x12\x1d\n" +
 	"\n" +
@@ -2204,12 +2386,27 @@ const file_conversation_service_v1_conversation_proto_rawDesc = "" +
 	"\fmember_count\x18\x01 \x01(\rR\vmemberCount\"C\n" +
 	"\x18LeaveConversationRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x04R\x0econversationId\"\x18\n" +
-	"\x16LeaveConversationReply\"X\n" +
+	"\x16LeaveConversationReply\"p\n" +
 	"\x19UpdateConversationRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x04R\x0econversationId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"d\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06avatar\x18\x03 \x01(\tR\x06avatar\"d\n" +
 	"\x17UpdateConversationReply\x12I\n" +
-	"\fconversation\x18\x01 \x01(\v2%.api.conversation.v1.ConversationInfoR\fconversation\"a\n" +
+	"\fconversation\x18\x01 \x01(\v2%.api.conversation.v1.ConversationInfoR\fconversation\"]\n" +
+	" GetGroupAvatarUploadTokenRequest\x12'\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x04R\x0econversationId\x12\x10\n" +
+	"\x03ext\x18\x02 \x01(\tR\x03ext\"\xba\x02\n" +
+	"\x1eGetGroupAvatarUploadTokenReply\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12W\n" +
+	"\x06fields\x18\x02 \x03(\v2?.api.conversation.v1.GetGroupAvatarUploadTokenReply.FieldsEntryR\x06fields\x12\x19\n" +
+	"\bfile_key\x18\x03 \x01(\tR\afileKey\x12\x1d\n" +
+	"\n" +
+	"public_url\x18\x04 \x01(\tR\tpublicUrl\x12\x1b\n" +
+	"\texpire_at\x18\x05 \x01(\x03R\bexpireAt\x12\x19\n" +
+	"\bmax_size\x18\x06 \x01(\x03R\amaxSize\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"a\n" +
 	"\x14TransferOwnerRequest\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x04R\x0econversationId\x12 \n" +
 	"\fnew_owner_id\x18\x02 \x01(\tR\n" +
@@ -2282,7 +2479,7 @@ const file_conversation_service_v1_conversation_proto_rawDesc = "" +
 	"\x10ConversationType\x12!\n" +
 	"\x1dCONVERSATION_TYPE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18CONVERSATION_TYPE_SINGLE\x10\x01\x12\x1b\n" +
-	"\x17CONVERSATION_TYPE_GROUP\x10\x022\xa3\x16\n" +
+	"\x17CONVERSATION_TYPE_GROUP\x10\x022\xdf\x17\n" +
 	"\fConversation\x12\x97\x01\n" +
 	"\x12CreateConversation\x12..api.conversation.v1.CreateConversationRequest\x1a,.api.conversation.v1.CreateConversationReply\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/conversation/create\x12\x8f\x01\n" +
 	"\x11ListConversations\x12-.api.conversation.v1.ListConversationsRequest\x1a+.api.conversation.v1.ListConversationsReply\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/conversation/list\x12\x88\x01\n" +
@@ -2291,7 +2488,8 @@ const file_conversation_service_v1_conversation_proto_rawDesc = "" +
 	"AddMembers\x12&.api.conversation.v1.AddMembersRequest\x1a$.api.conversation.v1.AddMembersReply\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/api/conversation/members/add\x12\x8d\x01\n" +
 	"\fRemoveMember\x12(.api.conversation.v1.RemoveMemberRequest\x1a&.api.conversation.v1.RemoveMemberReply\"+\x82\xd3\xe4\x93\x02%:\x01*\" /api/conversation/members/remove\x12\x93\x01\n" +
 	"\x11LeaveConversation\x12-.api.conversation.v1.LeaveConversationRequest\x1a+.api.conversation.v1.LeaveConversationReply\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api/conversation/leave\x12\x97\x01\n" +
-	"\x12UpdateConversation\x12..api.conversation.v1.UpdateConversationRequest\x1a,.api.conversation.v1.UpdateConversationReply\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/conversation/update\x12\x90\x01\n" +
+	"\x12UpdateConversation\x12..api.conversation.v1.UpdateConversationRequest\x1a,.api.conversation.v1.UpdateConversationReply\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/conversation/update\x12\xb9\x01\n" +
+	"\x19GetGroupAvatarUploadToken\x125.api.conversation.v1.GetGroupAvatarUploadTokenRequest\x1a3.api.conversation.v1.GetGroupAvatarUploadTokenReply\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/api/conversation/avatar/upload_token\x12\x90\x01\n" +
 	"\rTransferOwner\x12).api.conversation.v1.TransferOwnerRequest\x1a'.api.conversation.v1.TransferOwnerReply\"+\x82\xd3\xe4\x93\x02%:\x01*\" /api/conversation/owner/transfer\x12\x9f\x01\n" +
 	"\x14DissolveConversation\x120.api.conversation.v1.DissolveConversationRequest\x1a..api.conversation.v1.DissolveConversationReply\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api/conversation/dissolve\x12\x85\x01\n" +
 	"\vListMembers\x12'.api.conversation.v1.ListMembersRequest\x1a%.api.conversation.v1.ListMembersReply\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/conversation/members/list\x12\x97\x01\n" +
@@ -2320,49 +2518,52 @@ func file_conversation_service_v1_conversation_proto_rawDescGZIP() []byte {
 }
 
 var file_conversation_service_v1_conversation_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_conversation_service_v1_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_conversation_service_v1_conversation_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
 var file_conversation_service_v1_conversation_proto_goTypes = []any{
-	(ConversationType)(0),                  // 0: api.conversation.v1.ConversationType
-	(*ConversationInfo)(nil),               // 1: api.conversation.v1.ConversationInfo
-	(*CreateConversationRequest)(nil),      // 2: api.conversation.v1.CreateConversationRequest
-	(*CreateConversationReply)(nil),        // 3: api.conversation.v1.CreateConversationReply
-	(*ListConversationsRequest)(nil),       // 4: api.conversation.v1.ListConversationsRequest
-	(*ListConversationsReply)(nil),         // 5: api.conversation.v1.ListConversationsReply
-	(*GetConversationRequest)(nil),         // 6: api.conversation.v1.GetConversationRequest
-	(*GetConversationReply)(nil),           // 7: api.conversation.v1.GetConversationReply
-	(*AddMembersRequest)(nil),              // 8: api.conversation.v1.AddMembersRequest
-	(*AddMembersReply)(nil),                // 9: api.conversation.v1.AddMembersReply
-	(*RemoveMemberRequest)(nil),            // 10: api.conversation.v1.RemoveMemberRequest
-	(*RemoveMemberReply)(nil),              // 11: api.conversation.v1.RemoveMemberReply
-	(*LeaveConversationRequest)(nil),       // 12: api.conversation.v1.LeaveConversationRequest
-	(*LeaveConversationReply)(nil),         // 13: api.conversation.v1.LeaveConversationReply
-	(*UpdateConversationRequest)(nil),      // 14: api.conversation.v1.UpdateConversationRequest
-	(*UpdateConversationReply)(nil),        // 15: api.conversation.v1.UpdateConversationReply
-	(*TransferOwnerRequest)(nil),           // 16: api.conversation.v1.TransferOwnerRequest
-	(*TransferOwnerReply)(nil),             // 17: api.conversation.v1.TransferOwnerReply
-	(*DissolveConversationRequest)(nil),    // 18: api.conversation.v1.DissolveConversationRequest
-	(*DissolveConversationReply)(nil),      // 19: api.conversation.v1.DissolveConversationReply
-	(*ListMembersRequest)(nil),             // 20: api.conversation.v1.ListMembersRequest
-	(*ListMembersReply)(nil),               // 21: api.conversation.v1.ListMembersReply
-	(*GetMemberProfileRequest)(nil),        // 22: api.conversation.v1.GetMemberProfileRequest
-	(*GetMemberProfileReply)(nil),          // 23: api.conversation.v1.GetMemberProfileReply
-	(*CheckMembershipRequest)(nil),         // 24: api.conversation.v1.CheckMembershipRequest
-	(*CheckMembershipReply)(nil),           // 25: api.conversation.v1.CheckMembershipReply
-	(*UpdateUnreadRequest)(nil),            // 26: api.conversation.v1.UpdateUnreadRequest
-	(*UpdateUnreadBatchRequest)(nil),       // 27: api.conversation.v1.UpdateUnreadBatchRequest
-	(*UpdateUnreadBatchReply)(nil),         // 28: api.conversation.v1.UpdateUnreadBatchReply
-	(*UpdateUnreadReply)(nil),              // 29: api.conversation.v1.UpdateUnreadReply
-	(*GetUnreadRequest)(nil),               // 30: api.conversation.v1.GetUnreadRequest
-	(*GetUnreadReply)(nil),                 // 31: api.conversation.v1.GetUnreadReply
-	(*ClearUnreadRequest)(nil),             // 32: api.conversation.v1.ClearUnreadRequest
-	(*ClearUnreadReply)(nil),               // 33: api.conversation.v1.ClearUnreadReply
-	(*ListUnreadRequest)(nil),              // 34: api.conversation.v1.ListUnreadRequest
-	(*ListUnreadReply)(nil),                // 35: api.conversation.v1.ListUnreadReply
-	(*ListConversationMembersRequest)(nil), // 36: api.conversation.v1.ListConversationMembersRequest
-	(*ListConversationMembersReply)(nil),   // 37: api.conversation.v1.ListConversationMembersReply
-	(*ListUserConversationsRequest)(nil),   // 38: api.conversation.v1.ListUserConversationsRequest
-	(*ListUserConversationsReply)(nil),     // 39: api.conversation.v1.ListUserConversationsReply
-	nil,                                    // 40: api.conversation.v1.ListUnreadReply.PerConversationEntry
+	(ConversationType)(0),                    // 0: api.conversation.v1.ConversationType
+	(*ConversationInfo)(nil),                 // 1: api.conversation.v1.ConversationInfo
+	(*CreateConversationRequest)(nil),        // 2: api.conversation.v1.CreateConversationRequest
+	(*CreateConversationReply)(nil),          // 3: api.conversation.v1.CreateConversationReply
+	(*ListConversationsRequest)(nil),         // 4: api.conversation.v1.ListConversationsRequest
+	(*ListConversationsReply)(nil),           // 5: api.conversation.v1.ListConversationsReply
+	(*GetConversationRequest)(nil),           // 6: api.conversation.v1.GetConversationRequest
+	(*GetConversationReply)(nil),             // 7: api.conversation.v1.GetConversationReply
+	(*AddMembersRequest)(nil),                // 8: api.conversation.v1.AddMembersRequest
+	(*AddMembersReply)(nil),                  // 9: api.conversation.v1.AddMembersReply
+	(*RemoveMemberRequest)(nil),              // 10: api.conversation.v1.RemoveMemberRequest
+	(*RemoveMemberReply)(nil),                // 11: api.conversation.v1.RemoveMemberReply
+	(*LeaveConversationRequest)(nil),         // 12: api.conversation.v1.LeaveConversationRequest
+	(*LeaveConversationReply)(nil),           // 13: api.conversation.v1.LeaveConversationReply
+	(*UpdateConversationRequest)(nil),        // 14: api.conversation.v1.UpdateConversationRequest
+	(*UpdateConversationReply)(nil),          // 15: api.conversation.v1.UpdateConversationReply
+	(*GetGroupAvatarUploadTokenRequest)(nil), // 16: api.conversation.v1.GetGroupAvatarUploadTokenRequest
+	(*GetGroupAvatarUploadTokenReply)(nil),   // 17: api.conversation.v1.GetGroupAvatarUploadTokenReply
+	(*TransferOwnerRequest)(nil),             // 18: api.conversation.v1.TransferOwnerRequest
+	(*TransferOwnerReply)(nil),               // 19: api.conversation.v1.TransferOwnerReply
+	(*DissolveConversationRequest)(nil),      // 20: api.conversation.v1.DissolveConversationRequest
+	(*DissolveConversationReply)(nil),        // 21: api.conversation.v1.DissolveConversationReply
+	(*ListMembersRequest)(nil),               // 22: api.conversation.v1.ListMembersRequest
+	(*ListMembersReply)(nil),                 // 23: api.conversation.v1.ListMembersReply
+	(*GetMemberProfileRequest)(nil),          // 24: api.conversation.v1.GetMemberProfileRequest
+	(*GetMemberProfileReply)(nil),            // 25: api.conversation.v1.GetMemberProfileReply
+	(*CheckMembershipRequest)(nil),           // 26: api.conversation.v1.CheckMembershipRequest
+	(*CheckMembershipReply)(nil),             // 27: api.conversation.v1.CheckMembershipReply
+	(*UpdateUnreadRequest)(nil),              // 28: api.conversation.v1.UpdateUnreadRequest
+	(*UpdateUnreadBatchRequest)(nil),         // 29: api.conversation.v1.UpdateUnreadBatchRequest
+	(*UpdateUnreadBatchReply)(nil),           // 30: api.conversation.v1.UpdateUnreadBatchReply
+	(*UpdateUnreadReply)(nil),                // 31: api.conversation.v1.UpdateUnreadReply
+	(*GetUnreadRequest)(nil),                 // 32: api.conversation.v1.GetUnreadRequest
+	(*GetUnreadReply)(nil),                   // 33: api.conversation.v1.GetUnreadReply
+	(*ClearUnreadRequest)(nil),               // 34: api.conversation.v1.ClearUnreadRequest
+	(*ClearUnreadReply)(nil),                 // 35: api.conversation.v1.ClearUnreadReply
+	(*ListUnreadRequest)(nil),                // 36: api.conversation.v1.ListUnreadRequest
+	(*ListUnreadReply)(nil),                  // 37: api.conversation.v1.ListUnreadReply
+	(*ListConversationMembersRequest)(nil),   // 38: api.conversation.v1.ListConversationMembersRequest
+	(*ListConversationMembersReply)(nil),     // 39: api.conversation.v1.ListConversationMembersReply
+	(*ListUserConversationsRequest)(nil),     // 40: api.conversation.v1.ListUserConversationsRequest
+	(*ListUserConversationsReply)(nil),       // 41: api.conversation.v1.ListUserConversationsReply
+	nil,                                      // 42: api.conversation.v1.GetGroupAvatarUploadTokenReply.FieldsEntry
+	nil,                                      // 43: api.conversation.v1.ListUnreadReply.PerConversationEntry
 }
 var file_conversation_service_v1_conversation_proto_depIdxs = []int32{
 	0,  // 0: api.conversation.v1.ConversationInfo.type:type_name -> api.conversation.v1.ConversationType
@@ -2371,51 +2572,54 @@ var file_conversation_service_v1_conversation_proto_depIdxs = []int32{
 	1,  // 3: api.conversation.v1.ListConversationsReply.conversations:type_name -> api.conversation.v1.ConversationInfo
 	1,  // 4: api.conversation.v1.GetConversationReply.conversation:type_name -> api.conversation.v1.ConversationInfo
 	1,  // 5: api.conversation.v1.UpdateConversationReply.conversation:type_name -> api.conversation.v1.ConversationInfo
-	1,  // 6: api.conversation.v1.TransferOwnerReply.conversation:type_name -> api.conversation.v1.ConversationInfo
-	40, // 7: api.conversation.v1.ListUnreadReply.per_conversation:type_name -> api.conversation.v1.ListUnreadReply.PerConversationEntry
-	2,  // 8: api.conversation.v1.Conversation.CreateConversation:input_type -> api.conversation.v1.CreateConversationRequest
-	4,  // 9: api.conversation.v1.Conversation.ListConversations:input_type -> api.conversation.v1.ListConversationsRequest
-	6,  // 10: api.conversation.v1.Conversation.GetConversation:input_type -> api.conversation.v1.GetConversationRequest
-	8,  // 11: api.conversation.v1.Conversation.AddMembers:input_type -> api.conversation.v1.AddMembersRequest
-	10, // 12: api.conversation.v1.Conversation.RemoveMember:input_type -> api.conversation.v1.RemoveMemberRequest
-	12, // 13: api.conversation.v1.Conversation.LeaveConversation:input_type -> api.conversation.v1.LeaveConversationRequest
-	14, // 14: api.conversation.v1.Conversation.UpdateConversation:input_type -> api.conversation.v1.UpdateConversationRequest
-	16, // 15: api.conversation.v1.Conversation.TransferOwner:input_type -> api.conversation.v1.TransferOwnerRequest
-	18, // 16: api.conversation.v1.Conversation.DissolveConversation:input_type -> api.conversation.v1.DissolveConversationRequest
-	20, // 17: api.conversation.v1.Conversation.ListMembers:input_type -> api.conversation.v1.ListMembersRequest
-	22, // 18: api.conversation.v1.Conversation.GetMemberProfile:input_type -> api.conversation.v1.GetMemberProfileRequest
-	24, // 19: api.conversation.v1.Conversation.CheckMembership:input_type -> api.conversation.v1.CheckMembershipRequest
-	26, // 20: api.conversation.v1.Conversation.UpdateUnread:input_type -> api.conversation.v1.UpdateUnreadRequest
-	27, // 21: api.conversation.v1.Conversation.UpdateUnreadBatch:input_type -> api.conversation.v1.UpdateUnreadBatchRequest
-	30, // 22: api.conversation.v1.Conversation.GetUnread:input_type -> api.conversation.v1.GetUnreadRequest
-	32, // 23: api.conversation.v1.Conversation.ClearUnread:input_type -> api.conversation.v1.ClearUnreadRequest
-	34, // 24: api.conversation.v1.Conversation.ListUnread:input_type -> api.conversation.v1.ListUnreadRequest
-	36, // 25: api.conversation.v1.Conversation.ListConversationMembers:input_type -> api.conversation.v1.ListConversationMembersRequest
-	38, // 26: api.conversation.v1.Conversation.ListUserConversations:input_type -> api.conversation.v1.ListUserConversationsRequest
-	3,  // 27: api.conversation.v1.Conversation.CreateConversation:output_type -> api.conversation.v1.CreateConversationReply
-	5,  // 28: api.conversation.v1.Conversation.ListConversations:output_type -> api.conversation.v1.ListConversationsReply
-	7,  // 29: api.conversation.v1.Conversation.GetConversation:output_type -> api.conversation.v1.GetConversationReply
-	9,  // 30: api.conversation.v1.Conversation.AddMembers:output_type -> api.conversation.v1.AddMembersReply
-	11, // 31: api.conversation.v1.Conversation.RemoveMember:output_type -> api.conversation.v1.RemoveMemberReply
-	13, // 32: api.conversation.v1.Conversation.LeaveConversation:output_type -> api.conversation.v1.LeaveConversationReply
-	15, // 33: api.conversation.v1.Conversation.UpdateConversation:output_type -> api.conversation.v1.UpdateConversationReply
-	17, // 34: api.conversation.v1.Conversation.TransferOwner:output_type -> api.conversation.v1.TransferOwnerReply
-	19, // 35: api.conversation.v1.Conversation.DissolveConversation:output_type -> api.conversation.v1.DissolveConversationReply
-	21, // 36: api.conversation.v1.Conversation.ListMembers:output_type -> api.conversation.v1.ListMembersReply
-	23, // 37: api.conversation.v1.Conversation.GetMemberProfile:output_type -> api.conversation.v1.GetMemberProfileReply
-	25, // 38: api.conversation.v1.Conversation.CheckMembership:output_type -> api.conversation.v1.CheckMembershipReply
-	29, // 39: api.conversation.v1.Conversation.UpdateUnread:output_type -> api.conversation.v1.UpdateUnreadReply
-	28, // 40: api.conversation.v1.Conversation.UpdateUnreadBatch:output_type -> api.conversation.v1.UpdateUnreadBatchReply
-	31, // 41: api.conversation.v1.Conversation.GetUnread:output_type -> api.conversation.v1.GetUnreadReply
-	33, // 42: api.conversation.v1.Conversation.ClearUnread:output_type -> api.conversation.v1.ClearUnreadReply
-	35, // 43: api.conversation.v1.Conversation.ListUnread:output_type -> api.conversation.v1.ListUnreadReply
-	37, // 44: api.conversation.v1.Conversation.ListConversationMembers:output_type -> api.conversation.v1.ListConversationMembersReply
-	39, // 45: api.conversation.v1.Conversation.ListUserConversations:output_type -> api.conversation.v1.ListUserConversationsReply
-	27, // [27:46] is the sub-list for method output_type
-	8,  // [8:27] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	42, // 6: api.conversation.v1.GetGroupAvatarUploadTokenReply.fields:type_name -> api.conversation.v1.GetGroupAvatarUploadTokenReply.FieldsEntry
+	1,  // 7: api.conversation.v1.TransferOwnerReply.conversation:type_name -> api.conversation.v1.ConversationInfo
+	43, // 8: api.conversation.v1.ListUnreadReply.per_conversation:type_name -> api.conversation.v1.ListUnreadReply.PerConversationEntry
+	2,  // 9: api.conversation.v1.Conversation.CreateConversation:input_type -> api.conversation.v1.CreateConversationRequest
+	4,  // 10: api.conversation.v1.Conversation.ListConversations:input_type -> api.conversation.v1.ListConversationsRequest
+	6,  // 11: api.conversation.v1.Conversation.GetConversation:input_type -> api.conversation.v1.GetConversationRequest
+	8,  // 12: api.conversation.v1.Conversation.AddMembers:input_type -> api.conversation.v1.AddMembersRequest
+	10, // 13: api.conversation.v1.Conversation.RemoveMember:input_type -> api.conversation.v1.RemoveMemberRequest
+	12, // 14: api.conversation.v1.Conversation.LeaveConversation:input_type -> api.conversation.v1.LeaveConversationRequest
+	14, // 15: api.conversation.v1.Conversation.UpdateConversation:input_type -> api.conversation.v1.UpdateConversationRequest
+	16, // 16: api.conversation.v1.Conversation.GetGroupAvatarUploadToken:input_type -> api.conversation.v1.GetGroupAvatarUploadTokenRequest
+	18, // 17: api.conversation.v1.Conversation.TransferOwner:input_type -> api.conversation.v1.TransferOwnerRequest
+	20, // 18: api.conversation.v1.Conversation.DissolveConversation:input_type -> api.conversation.v1.DissolveConversationRequest
+	22, // 19: api.conversation.v1.Conversation.ListMembers:input_type -> api.conversation.v1.ListMembersRequest
+	24, // 20: api.conversation.v1.Conversation.GetMemberProfile:input_type -> api.conversation.v1.GetMemberProfileRequest
+	26, // 21: api.conversation.v1.Conversation.CheckMembership:input_type -> api.conversation.v1.CheckMembershipRequest
+	28, // 22: api.conversation.v1.Conversation.UpdateUnread:input_type -> api.conversation.v1.UpdateUnreadRequest
+	29, // 23: api.conversation.v1.Conversation.UpdateUnreadBatch:input_type -> api.conversation.v1.UpdateUnreadBatchRequest
+	32, // 24: api.conversation.v1.Conversation.GetUnread:input_type -> api.conversation.v1.GetUnreadRequest
+	34, // 25: api.conversation.v1.Conversation.ClearUnread:input_type -> api.conversation.v1.ClearUnreadRequest
+	36, // 26: api.conversation.v1.Conversation.ListUnread:input_type -> api.conversation.v1.ListUnreadRequest
+	38, // 27: api.conversation.v1.Conversation.ListConversationMembers:input_type -> api.conversation.v1.ListConversationMembersRequest
+	40, // 28: api.conversation.v1.Conversation.ListUserConversations:input_type -> api.conversation.v1.ListUserConversationsRequest
+	3,  // 29: api.conversation.v1.Conversation.CreateConversation:output_type -> api.conversation.v1.CreateConversationReply
+	5,  // 30: api.conversation.v1.Conversation.ListConversations:output_type -> api.conversation.v1.ListConversationsReply
+	7,  // 31: api.conversation.v1.Conversation.GetConversation:output_type -> api.conversation.v1.GetConversationReply
+	9,  // 32: api.conversation.v1.Conversation.AddMembers:output_type -> api.conversation.v1.AddMembersReply
+	11, // 33: api.conversation.v1.Conversation.RemoveMember:output_type -> api.conversation.v1.RemoveMemberReply
+	13, // 34: api.conversation.v1.Conversation.LeaveConversation:output_type -> api.conversation.v1.LeaveConversationReply
+	15, // 35: api.conversation.v1.Conversation.UpdateConversation:output_type -> api.conversation.v1.UpdateConversationReply
+	17, // 36: api.conversation.v1.Conversation.GetGroupAvatarUploadToken:output_type -> api.conversation.v1.GetGroupAvatarUploadTokenReply
+	19, // 37: api.conversation.v1.Conversation.TransferOwner:output_type -> api.conversation.v1.TransferOwnerReply
+	21, // 38: api.conversation.v1.Conversation.DissolveConversation:output_type -> api.conversation.v1.DissolveConversationReply
+	23, // 39: api.conversation.v1.Conversation.ListMembers:output_type -> api.conversation.v1.ListMembersReply
+	25, // 40: api.conversation.v1.Conversation.GetMemberProfile:output_type -> api.conversation.v1.GetMemberProfileReply
+	27, // 41: api.conversation.v1.Conversation.CheckMembership:output_type -> api.conversation.v1.CheckMembershipReply
+	31, // 42: api.conversation.v1.Conversation.UpdateUnread:output_type -> api.conversation.v1.UpdateUnreadReply
+	30, // 43: api.conversation.v1.Conversation.UpdateUnreadBatch:output_type -> api.conversation.v1.UpdateUnreadBatchReply
+	33, // 44: api.conversation.v1.Conversation.GetUnread:output_type -> api.conversation.v1.GetUnreadReply
+	35, // 45: api.conversation.v1.Conversation.ClearUnread:output_type -> api.conversation.v1.ClearUnreadReply
+	37, // 46: api.conversation.v1.Conversation.ListUnread:output_type -> api.conversation.v1.ListUnreadReply
+	39, // 47: api.conversation.v1.Conversation.ListConversationMembers:output_type -> api.conversation.v1.ListConversationMembersReply
+	41, // 48: api.conversation.v1.Conversation.ListUserConversations:output_type -> api.conversation.v1.ListUserConversationsReply
+	29, // [29:49] is the sub-list for method output_type
+	9,  // [9:29] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_conversation_service_v1_conversation_proto_init() }
@@ -2429,7 +2633,7 @@ func file_conversation_service_v1_conversation_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_conversation_service_v1_conversation_proto_rawDesc), len(file_conversation_service_v1_conversation_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   40,
+			NumMessages:   43,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

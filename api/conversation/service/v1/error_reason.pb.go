@@ -52,6 +52,17 @@ const (
 	ErrorReason_CONVERSATION_USER_NOT_FOUND ErrorReason = 10
 	// 未读数更新冲突：并发更新同一成员的未读数，重试若干次仍未成功。
 	ErrorReason_CONVERSATION_UNREAD_CONFLICT ErrorReason = 11
+	// 群头像相关
+	// 对象存储没配 —— 签发直传凭证时返回。
+	ErrorReason_CONVERSATION_STORAGE_NOT_CONFIGURED ErrorReason = 12
+	// 群头像文件后缀不在白名单内。
+	ErrorReason_CONVERSATION_UPLOAD_EXT_NOT_ALLOWED ErrorReason = 13
+	// 群头像地址不是本系统签发的（host / 目录前缀 / 后缀对不上）。
+	ErrorReason_CONVERSATION_UPLOAD_URL_INVALID ErrorReason = 14
+	// OSS 上没有这个对象 —— 客户端还没传完就提交了地址。
+	ErrorReason_CONVERSATION_UPLOAD_OBJECT_NOT_FOUND ErrorReason = 15
+	// 对象大小或类型跟上传策略不符。
+	ErrorReason_CONVERSATION_UPLOAD_OBJECT_MISMATCH ErrorReason = 16
 )
 
 // Enum value maps for ErrorReason.
@@ -69,20 +80,30 @@ var (
 		9:  "CONVERSATION_NOT_GROUP",
 		10: "CONVERSATION_USER_NOT_FOUND",
 		11: "CONVERSATION_UNREAD_CONFLICT",
+		12: "CONVERSATION_STORAGE_NOT_CONFIGURED",
+		13: "CONVERSATION_UPLOAD_EXT_NOT_ALLOWED",
+		14: "CONVERSATION_UPLOAD_URL_INVALID",
+		15: "CONVERSATION_UPLOAD_OBJECT_NOT_FOUND",
+		16: "CONVERSATION_UPLOAD_OBJECT_MISMATCH",
 	}
 	ErrorReason_value = map[string]int32{
-		"CONVERSATION_UNSPECIFIED":        0,
-		"CONVERSATION_NOT_FOUND":          1,
-		"CONVERSATION_INVALID_ARGUMENT":   2,
-		"CONVERSATION_NOT_MEMBER":         3,
-		"CONVERSATION_ALREADY_MEMBER":     4,
-		"CONVERSATION_OWNER_CANNOT_LEAVE": 5,
-		"CONVERSATION_NOT_OWNER":          6,
-		"CONVERSATION_MEMBER_LIMIT":       7,
-		"CONVERSATION_EMPTY":              8,
-		"CONVERSATION_NOT_GROUP":          9,
-		"CONVERSATION_USER_NOT_FOUND":     10,
-		"CONVERSATION_UNREAD_CONFLICT":    11,
+		"CONVERSATION_UNSPECIFIED":             0,
+		"CONVERSATION_NOT_FOUND":               1,
+		"CONVERSATION_INVALID_ARGUMENT":        2,
+		"CONVERSATION_NOT_MEMBER":              3,
+		"CONVERSATION_ALREADY_MEMBER":          4,
+		"CONVERSATION_OWNER_CANNOT_LEAVE":      5,
+		"CONVERSATION_NOT_OWNER":               6,
+		"CONVERSATION_MEMBER_LIMIT":            7,
+		"CONVERSATION_EMPTY":                   8,
+		"CONVERSATION_NOT_GROUP":               9,
+		"CONVERSATION_USER_NOT_FOUND":          10,
+		"CONVERSATION_UNREAD_CONFLICT":         11,
+		"CONVERSATION_STORAGE_NOT_CONFIGURED":  12,
+		"CONVERSATION_UPLOAD_EXT_NOT_ALLOWED":  13,
+		"CONVERSATION_UPLOAD_URL_INVALID":      14,
+		"CONVERSATION_UPLOAD_OBJECT_NOT_FOUND": 15,
+		"CONVERSATION_UPLOAD_OBJECT_MISMATCH":  16,
 	}
 )
 
@@ -117,7 +138,7 @@ var File_conversation_service_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_conversation_service_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"*conversation/service/v1/error_reason.proto\x12\x13api.conversation.v1*\xff\x02\n" +
+	"*conversation/service/v1/error_reason.proto\x12\x13api.conversation.v1*\xc9\x04\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18CONVERSATION_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16CONVERSATION_NOT_FOUND\x10\x01\x12!\n" +
@@ -131,7 +152,12 @@ const file_conversation_service_v1_error_reason_proto_rawDesc = "" +
 	"\x16CONVERSATION_NOT_GROUP\x10\t\x12\x1f\n" +
 	"\x1bCONVERSATION_USER_NOT_FOUND\x10\n" +
 	"\x12 \n" +
-	"\x1cCONVERSATION_UNREAD_CONFLICT\x10\vBT\n" +
+	"\x1cCONVERSATION_UNREAD_CONFLICT\x10\v\x12'\n" +
+	"#CONVERSATION_STORAGE_NOT_CONFIGURED\x10\f\x12'\n" +
+	"#CONVERSATION_UPLOAD_EXT_NOT_ALLOWED\x10\r\x12#\n" +
+	"\x1fCONVERSATION_UPLOAD_URL_INVALID\x10\x0e\x12(\n" +
+	"$CONVERSATION_UPLOAD_OBJECT_NOT_FOUND\x10\x0f\x12'\n" +
+	"#CONVERSATION_UPLOAD_OBJECT_MISMATCH\x10\x10BT\n" +
 	"\x13api.conversation.v1P\x01Z'chatroom/api/conversation/service/v1;v1\xa2\x02\x11APIConversationV1b\x06proto3"
 
 var (

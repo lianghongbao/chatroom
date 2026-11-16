@@ -33,7 +33,7 @@ func newGroupWithMembers(t *testing.T, owner string, members []string) (*Convers
 	if err != nil {
 		t.Fatalf("造群失败: %v", err)
 	}
-	return NewConversationUsecase(repo, nil, nil, nil, nil), repo, conv.ID
+	return NewConversationUsecase(repo, nil, nil, nil, StorageOptions{}, nil), repo, conv.ID
 }
 
 // TestAddMembers_NotifiesInvalidation 加成员后必须通知网关失效缓存 ——
@@ -41,7 +41,7 @@ func newGroupWithMembers(t *testing.T, owner string, members []string) (*Convers
 func TestAddMembers_NotifiesInvalidation(t *testing.T) {
 	repo := newFakeConvRepo()
 	pub := &fakeMemberPublisher{}
-	uc := NewConversationUsecase(repo, nil, nil, pub, nil)
+	uc := NewConversationUsecase(repo, nil, nil, pub, StorageOptions{}, nil)
 
 	conv, _, err := repo.Save(context.Background(), &Conversation{
 		Type:      ConversationTypeGroup,
@@ -69,7 +69,7 @@ func TestAddMembers_NotifiesInvalidation(t *testing.T) {
 func TestRemoveMember_NotifiesInvalidation(t *testing.T) {
 	repo := newFakeConvRepo()
 	pub := &fakeMemberPublisher{}
-	uc := NewConversationUsecase(repo, nil, nil, pub, nil)
+	uc := NewConversationUsecase(repo, nil, nil, pub, StorageOptions{}, nil)
 
 	conv, _, err := repo.Save(context.Background(), &Conversation{
 		Type:      ConversationTypeGroup,
@@ -96,7 +96,7 @@ func TestRemoveMember_NotifiesInvalidation(t *testing.T) {
 func TestLeaveConversation_NotifiesInvalidation(t *testing.T) {
 	repo := newFakeConvRepo()
 	pub := &fakeMemberPublisher{}
-	uc := NewConversationUsecase(repo, nil, nil, pub, nil)
+	uc := NewConversationUsecase(repo, nil, nil, pub, StorageOptions{}, nil)
 
 	conv, _, err := repo.Save(context.Background(), &Conversation{
 		Type:      ConversationTypeGroup,
@@ -121,7 +121,7 @@ func TestLeaveConversation_NotifiesInvalidation(t *testing.T) {
 func TestDissolveConversation_NotifiesInvalidation(t *testing.T) {
 	repo := newFakeConvRepo()
 	pub := &fakeMemberPublisher{}
-	uc := NewConversationUsecase(repo, nil, nil, pub, nil)
+	uc := NewConversationUsecase(repo, nil, nil, pub, StorageOptions{}, nil)
 
 	conv, _, err := repo.Save(context.Background(), &Conversation{
 		Type:      ConversationTypeGroup,
@@ -149,7 +149,7 @@ func TestDissolveConversation_NotifiesInvalidation(t *testing.T) {
 func TestTransferOwner_DoesNotNotify(t *testing.T) {
 	repo := newFakeConvRepo()
 	pub := &fakeMemberPublisher{}
-	uc := NewConversationUsecase(repo, nil, nil, pub, nil)
+	uc := NewConversationUsecase(repo, nil, nil, pub, StorageOptions{}, nil)
 
 	conv, _, err := repo.Save(context.Background(), &Conversation{
 		Type:      ConversationTypeGroup,
@@ -174,7 +174,7 @@ func TestTransferOwner_DoesNotNotify(t *testing.T) {
 func TestNotifyMemberChange_PublishFailureDoesNotFailOperation(t *testing.T) {
 	repo := newFakeConvRepo()
 	pub := &fakeMemberPublisher{err: errors.New("redis down")}
-	uc := NewConversationUsecase(repo, nil, nil, pub, nil)
+	uc := NewConversationUsecase(repo, nil, nil, pub, StorageOptions{}, nil)
 
 	conv, _, err := repo.Save(context.Background(), &Conversation{
 		Type:      ConversationTypeGroup,

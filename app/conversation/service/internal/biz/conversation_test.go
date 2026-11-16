@@ -193,12 +193,17 @@ func (r *fakeConvRepo) RemoveMember(_ context.Context, conversationID uint64, us
 	return int(c.MemberCount), nil
 }
 
-func (r *fakeConvRepo) UpdateName(_ context.Context, id uint64, name string) (*Conversation, error) {
+func (r *fakeConvRepo) UpdateGroupInfo(_ context.Context, id uint64, name, avatar string) (*Conversation, error) {
 	c, ok := r.byID[id]
 	if !ok {
 		return nil, ErrConversationNotFound
 	}
-	c.Name = name
+	if name != "" {
+		c.Name = name
+	}
+	if avatar != "" {
+		c.Avatar = avatar
+	}
 	return copyConv(c), nil
 }
 
@@ -364,7 +369,7 @@ func (f *fakeExistenceChecker) CheckUsersExist(_ context.Context, ids []string) 
 
 func newTestConvUsecase() (*ConversationUsecase, *fakeConvRepo) {
 	repo := newFakeConvRepo()
-	return NewConversationUsecase(repo, nil, nil, nil, nil), repo
+	return NewConversationUsecase(repo, nil, nil, nil, StorageOptions{}, nil), repo
 }
 
 func TestConversation_CreateSingleChatReusesExisting(t *testing.T) {
@@ -402,7 +407,7 @@ func TestConversation_CreateSingleChatReuseFillsProfiles(t *testing.T) {
 		"uid-1": {UserID: "uid-1", Nickname: "Alice", Avatar: "a.png"},
 		"uid-2": {UserID: "uid-2", Nickname: "Bob", Avatar: "b.png"},
 	}}
-	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
 
 	if _, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeSingle, ""); err != nil {
 		t.Fatalf("第一次创建失败: %v", err)
@@ -609,25 +614,25 @@ func TestConversation_UpdateNameOwnerOnly(t *testing.T) {
 	}
 
 	// 非群主改名 → NOT_OWNER。
-	_, err = uc.UpdateConversation(context.Background(), "uid-2", c.ID, "新名")
+	_, err = uc.UpdateConversation(context.Background(), "uid-2", c.ID, "新名", "")
 	if !errors.Is(err, ErrConversationNotOwner) {
 		t.Fatalf("非群主改名应得到 NOT_OWNER，实际 %v", err)
 	}
 
 	// 空名 → INVALID_ARGUMENT。
-	_, err = uc.UpdateConversation(context.Background(), "uid-1", c.ID, "   ")
+	_, err = uc.UpdateConversation(context.Background(), "uid-1", c.ID, "   ", "")
 	if !errors.Is(err, ErrConversationInvalidArgument) {
 		t.Fatalf("空名应被拒，实际 %v", err)
 	}
 
 	// 超长名 → INVALID_ARGUMENT。
-	_, err = uc.UpdateConversation(context.Background(), "uid-1", c.ID, string(make([]byte, MaxConversationNameLen+1)))
+	_, err = uc.UpdateConversation(context.Background(), "uid-1", c.ID, string(make([]byte, MaxConversationNameLen+1)), "")
 	if !errors.Is(err, ErrConversationInvalidArgument) {
 		t.Fatalf("超长名应被拒，实际 %v", err)
 	}
 
 	// 群主改名 → 成功。
-	updated, err := uc.UpdateConversation(context.Background(), "uid-1", c.ID, "新名")
+	updated, err := uc.UpdateConversation(context.Background(), "uid-1", c.ID, "新名", "")
 	if err != nil {
 		t.Fatalf("群主改名失败: %v", err)
 	}
@@ -643,7 +648,7 @@ func TestConversation_UpdateNameRejectsSingleChat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建失败: %v", err)
 	}
-	_, err = uc.UpdateConversation(context.Background(), "uid-1", c.ID, "新名")
+	_, err = uc.UpdateConversation(context.Background(), "uid-1", c.ID, "新名", "")
 	if !errors.Is(err, ErrConversationNotGroup) {
 		t.Fatalf("单聊改名应被拒，实际 %v", err)
 	}
@@ -772,7 +777,7 @@ func TestConversation_FillProfilesAttachesNicknames(t *testing.T) {
 		"uid-1": {UserID: "uid-1", Nickname: "Alice", Avatar: "a.png"},
 		"uid-2": {UserID: "uid-2", Nickname: "Bob", Avatar: "b.png"},
 	}}
-	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
 
 	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
 	if err != nil {
@@ -829,7 +834,7 @@ func TestConversation_CreateReturnsPersistedTimestamps(t *testing.T) {
 func TestConversation_FillProfilesDegradesOnFetcherError(t *testing.T) {
 	repo := newFakeConvRepo()
 	fetcher := &fakeConvFetcher{err: errors.New("user service down")}
-	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
 
 	if _, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群"); err != nil {
 		t.Fatalf("创建失败: %v", err)
@@ -1051,7 +1056,7 @@ func TestConversation_ListMembers(t *testing.T) {
 		"uid-1": {UserID: "uid-1", Nickname: "Alice", Avatar: "a.png"},
 		"uid-2": {UserID: "uid-2", Nickname: "Bob", Avatar: "b.png"},
 	}}
-	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
 
 	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
 	if err != nil {
@@ -1090,7 +1095,7 @@ func TestConversation_ListMembersRejectsNonMember(t *testing.T) {
 func TestConversation_AddMembersRejectsUnknownUser(t *testing.T) {
 	repo := newFakeConvRepo()
 	existence := &fakeExistenceChecker{existing: map[string]struct{}{"uid-1": {}, "uid-2": {}}}
-	uc := NewConversationUsecase(repo, nil, existence, nil, nil)
+	uc := NewConversationUsecase(repo, nil, existence, nil, StorageOptions{}, nil)
 
 	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
 	if err != nil {
@@ -1107,7 +1112,7 @@ func TestConversation_AddMembersRejectsUnknownUser(t *testing.T) {
 func TestConversation_AddMembersAllowsWhenCheckerDown(t *testing.T) {
 	repo := newFakeConvRepo()
 	existence := &fakeExistenceChecker{err: errors.New("user service down")}
-	uc := NewConversationUsecase(repo, nil, existence, nil, nil)
+	uc := NewConversationUsecase(repo, nil, existence, nil, StorageOptions{}, nil)
 
 	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
 	if err != nil {
@@ -1173,13 +1178,13 @@ func TestConversation_UpdateNameNonOwnerGetsNotOwner(t *testing.T) {
 	}
 
 	// 名字合法，但调用方不是群主。
-	_, err = uc.UpdateConversation(context.Background(), "uid-2", c.ID, "新名")
+	_, err = uc.UpdateConversation(context.Background(), "uid-2", c.ID, "新名", "")
 	if !errors.Is(err, ErrConversationNotOwner) {
 		t.Fatalf("非群主改名应得 NOT_OWNER，实际 %v", err)
 	}
 
 	// 名字非法，且调用方不是群主 —— 仍应是 NOT_OWNER。
-	_, err = uc.UpdateConversation(context.Background(), "uid-2", c.ID, "")
+	_, err = uc.UpdateConversation(context.Background(), "uid-2", c.ID, "", "")
 	if !errors.Is(err, ErrConversationNotOwner) {
 		t.Fatalf("非群主改名应得 NOT_OWNER，实际 %v", err)
 	}
@@ -1319,7 +1324,7 @@ func TestConversation_GetMemberProfile(t *testing.T) {
 		"uid-1": {UserID: "uid-1", Username: "alice", Nickname: "Alice", Avatar: "a.png"},
 		"uid-2": {UserID: "uid-2", Username: "bob", Nickname: "Bob", Avatar: "b.png"},
 	}}
-	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
 
 	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
 	if err != nil {
@@ -1363,7 +1368,7 @@ func TestConversation_GetMemberProfileRejectsNonMemberTarget(t *testing.T) {
 		"uid-1": {UserID: "uid-1", Nickname: "Alice"},
 		"uid-9": {UserID: "uid-9", Nickname: "外人"},
 	}}
-	uc := NewConversationUsecase(repo, fetcher, nil, nil, nil)
+	uc := NewConversationUsecase(repo, fetcher, nil, nil, StorageOptions{}, nil)
 
 	c, _, err := uc.CreateConversation(context.Background(), "uid-1", []string{"uid-2"}, ConversationTypeGroup, "群")
 	if err != nil {

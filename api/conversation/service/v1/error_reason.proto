@@ -38,4 +38,16 @@ enum ErrorReason {
   CONVERSATION_USER_NOT_FOUND = 10;
   // 未读数更新冲突：并发更新同一成员的未读数，重试若干次仍未成功。
   CONVERSATION_UNREAD_CONFLICT = 11;
+
+  // 群头像相关
+  // 对象存储没配 —— 签发直传凭证时返回。
+  CONVERSATION_STORAGE_NOT_CONFIGURED = 12;
+  // 群头像文件后缀不在白名单内。
+  CONVERSATION_UPLOAD_EXT_NOT_ALLOWED = 13;
+  // 群头像地址不是本系统签发的（host / 目录前缀 / 后缀对不上）。
+  CONVERSATION_UPLOAD_URL_INVALID = 14;
+  // OSS 上没有这个对象 —— 客户端还没传完就提交了地址。
+  CONVERSATION_UPLOAD_OBJECT_NOT_FOUND = 15;
+  // 对象大小或类型跟上传策略不符。
+  CONVERSATION_UPLOAD_OBJECT_MISMATCH = 16;
 }

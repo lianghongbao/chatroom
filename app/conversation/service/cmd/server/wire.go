@@ -14,6 +14,7 @@ import (
 	obs "chatroom/app/conversation/service/internal/observability"
 	"chatroom/app/conversation/service/internal/server"
 	"chatroom/app/conversation/service/internal/service"
+	"chatroom/app/conversation/service/internal/storage"
 	"chatroom/pkg/middleware"
 	"chatroom/pkg/nacos"
 	pkgobs "chatroom/pkg/observability"
@@ -39,13 +40,17 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options。
 		conf.NacosOptions,
 		// 把 *conf.Bootstrap 的子字段暴露为独立 provider。
-		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability"),
+		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability", "Storage"),
 		// 观测能力：conf.Observability → observability.Config → *observability.Provider。
 		// Provider 构造时即注册 otel 全局 provider，server 依赖 *Provider，
 		// 依赖关系保证了它先于 server 建好。
 		obs.NewConfig,
 		pkgobs.NewPromRegistry,
 		pkgobs.New,
+		// 对象存储：没配就返回 nil client，群头像上传能力自动关闭，
+		// 不影响服务的其他功能。
+		storage.NewClient,
+		biz.NewStorageOptions,
 		// server 中间件需要 middleware.TokenChecker（查 access token 黑名单）。
 		wire.Bind(new(middleware.TokenChecker), new(*middleware.BlacklistChecker)),
 		// 把 data.RemoteUserClient 折成 biz.ConversationProfileFetcher。

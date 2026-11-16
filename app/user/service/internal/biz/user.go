@@ -272,7 +272,6 @@ type UserUsecase struct {
 	tokenFn       func(uid string) (string, error) // auth 配置有效时才赋值，避免冷启动签发空密钥 token
 	logger        *slog.Logger
 	oss           *oss.Client // 对象存储客户端，为 nil 时关闭上传
-	ossHosts      []string    // 头像地址允许的 host
 	avatarExts    []string    // 头像允许的后缀白名单
 	avatarMaxSize int64       // 头像最大字节数，0 表示不限
 }
@@ -295,7 +294,6 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Loc
 		uc.tokenFn = uc.signToken
 	}
 	uc.oss = storage.Client
-	uc.ossHosts = storage.AllowedHosts
 	uc.avatarExts = storage.AllowedExts
 	uc.avatarMaxSize = storage.MaxSize
 	return uc
