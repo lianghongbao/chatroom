@@ -1,29 +1,16 @@
 // Package breaker 提供跨服务 gRPC 调用的熔断中间件。
 //
-// 按 operation 粒度统计（Kratos 内部按 gRPC method 分组）—— 一个端点挂了
-// 不影响同一个下游的其它端点。
+// 按 operation 粒度统计 —— 一个端点挂了不影响同一个下游的其它端点。
 //
-// 状态机用 sony/gobreaker v2，不自己实现：
+// 状态机用 sony/gobreaker v2，不自己实现。它按 generation 号丢弃迟到的
+// 结果，按 age 号把结果写回请求发起时的那个桶，open 态直接返错不动计数。
 //
-//   - **generation 号**解决「迟到的结果污染新一代计数」。每次状态切换
-//     generation++，旧请求的结果回来时对不上号，天然被丢弃。自研实现里
-//     只能靠 breaker 上的单个 bool 标记来猜「这个结果属于哪一代请求」——
-//     并发下必然串。
-//   - **open 态直接返错**，不动计数。本地拒绝不代表下游状态，绝不能污染
-//     熔断判断。
-//   - **age 号**解决「结果落到哪个统计桶」。v2 的滚动窗口把 Interval 切成
-//     若干 BucketPeriod 长的桶，每个请求带着自己发起时的桶号回来，
-//     结果写回它自己的桶，不会写错地方。
+// 语义：
 //
-// 语义说明（跟 gobreaker 原生语义一致，不是 SRE 滚动窗口）：
-//
-//   - closed 态每 **Interval** 个周期清空一次计数。判定用的是「上一个周期」
-//     的统计，不是「回看 N 秒」。
-//   - 样本不够不熔断：Requests 少于阈值时 ReadyToTrip 返回 false。
+//   - 样本不够不熔断（Requests 少于阈值时 ReadyToTrip 返回 false）。
 //   - 半开态放行 MaxRequests 个探针，连续成功 MaxRequests 次才关闭。
-//
-// 设了 BucketPeriod 就是 v2 的滚动窗口策略：Interval 被切成 N 个桶，
-// 统计随时间逐桶滑出，判定看的是「最近 Interval 这段时间」。
+//   - 设了 BucketPeriod 就是滚动窗口：Interval 切成 N 个桶，统计逐桶滑出，
+//     判定看的是「最近 Interval 这段时间」。BucketPeriod <= 0 是固定窗口。
 package breaker
 
 import (
@@ -38,10 +25,7 @@ import (
 	"github.com/sony/gobreaker/v2"
 )
 
-// ErrNotAllowed 熔断打开，请求被拒。
-//
-// 保留这个名字是为了跟之前的实现对齐 —— 调用方按 errors.Is 判它。
-// 中间件会把 gobreaker 的 ErrOpenState / ErrTooManyRequests 翻译成它。
+// ErrNotAllowed 熔断打开，请求被拒。调用方按 errors.Is 判它。
 var ErrNotAllowed = kratoserrors.ServiceUnavailable("CIRCUITBREAKER", "circuit breaker is open")
 
 // 默认参数。
@@ -93,11 +77,9 @@ func WithInterval(d time.Duration) Option {
 
 // WithBucketPeriod 设置滚动窗口的桶宽。d 是桶宽。
 //
-// 设了它就走 v2 的滚动窗口策略：Interval 被切成 Interval/BucketPeriod 个桶，
-// 统计随时间逐桶滑出，判定看的是「最近 Interval 这段时间」而不是
-// 「上一个 Interval 整段」。
+// d <= 0 表示固定窗口（整个 Interval 就是一个桶）。
 //
-// d <= 0 表示退回固定窗口（整个 Interval 就是一个桶）。
+// d 必须整除 Interval —— v2 会把 Interval 向上取整到桶宽的整数倍。
 func WithBucketPeriod(d time.Duration) Option {
 	return func(o *options) { o.bucketPeriod = d }
 }
@@ -122,9 +104,8 @@ func WithMaxRequests(n int64) Option {
 //
 // 不用 Kratos 的 circuitbreaker.Client()：它的 CircuitBreaker 接口是
 // Allow() / MarkSuccess() / MarkFailed() 三段式，中间隔着一次真实 RPC 调用，
-// 并发下无法把「这次结果」和「这次请求」对应起来 —— 而这正是熔断器最需要
-// 准确的信息。这里直接用 gobreaker 的 Execute() 把整次调用包住，
-// 请求与结果的对应关系由 gobreaker 内部按 generation 管理。
+// 并发下无法把「这次结果」和「这次请求」对应起来。这里用 gobreaker 的
+// Execute() 把整次调用包住，对应关系由它内部按 generation 管理。
 func Client(opts ...Option) middleware.Middleware {
 	o := &options{
 		failureRatio: DefaultFailureRatio,
@@ -156,7 +137,7 @@ func Client(opts ...Option) middleware.Middleware {
 		o.maxRequests = DefaultMaxRequests
 	}
 
-	// 每个 operation 一个熔断器 —— 一个端点挂了不影响同下游的其它端点。
+	// 每个 operation 一个熔断器。
 	group := newBreakerGroup(o)
 
 	return func(handler middleware.Handler) middleware.Handler {
@@ -168,8 +149,7 @@ func Client(opts ...Option) middleware.Middleware {
 				return handler(ctx, req)
 			})
 			if err != nil {
-				// 熔断拒掉的请求翻译成 503 —— 调用方看到的是「下游不可用」，
-				// 而不是 gobreaker 的内部错误串。
+				// 熔断拒掉的请求翻译成 503 —— 调用方看到的是「下游不可用」。
 				if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
 					return nil, ErrNotAllowed
 				}
@@ -220,9 +200,6 @@ func (g *breakerGroup) Get(key string) *gobreaker.CircuitBreaker[any] {
 // minRequests 是周期内触发评估的最小请求数；ratio 是失败率阈值。
 //
 // 样本不够时返回 false —— 流量低的时候三五次失败说明不了问题。
-// 这跟 Kratos 内置的 SRE 熔断器不一样：内置的窗口只有 3s，且要求窗口内至少
-// 20 个请求才评估，5 QPS 的服务窗口内才 15 个请求，永远达不到 20 ——
-// 熔断器等于没有。
 func readyToTrip(minRequests uint32, ratio float64) func(counts gobreaker.Counts) bool {
 	return func(counts gobreaker.Counts) bool {
 		if counts.Requests < minRequests {
@@ -246,8 +223,7 @@ func isSuccessful(err error) bool {
 	if err == nil {
 		return true
 	}
-	// 必须用 errors.IsInternalServer 这类判定，不能看 HTTP 状态码 ——
-	// gRPC 错误是 status.Error，没有 HTTP 状态码。
+	// gRPC 错误是 status.Error，没有 HTTP 状态码，只能按错误类型判定。
 	if kratoserrors.IsInternalServer(err) || kratoserrors.IsServiceUnavailable(err) || kratoserrors.IsGatewayTimeout(err) {
 		return false
 	}

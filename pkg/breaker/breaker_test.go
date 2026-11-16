@@ -145,8 +145,7 @@ func TestBreakerReopensAfterFailedProbe(t *testing.T) {
 	}
 }
 
-// 熔断打开期间的本地拒绝不该污染计数 ——
-// 本地拒绝不代表下游状态。这是自研实现里最容易出错的地方。
+// 熔断打开期间的本地拒绝不该污染计数 —— 本地拒绝不代表下游状态。
 func TestLocalRejectsDoNotPolluteCounts(t *testing.T) {
 	g := newTestGroup(2, 0.5, time.Minute)
 	cb := g.Get("/svc/X")
@@ -181,10 +180,6 @@ func TestLocalRejectsDoNotPolluteCounts(t *testing.T) {
 }
 
 // 并发下本地拒绝仍然不污染计数。
-//
-// 自研实现里用 breaker 上的单个 bool 标记「这次拒绝是本地的」——
-// 多 goroutine 交错时标记会被别的 goroutine 清掉，真实失败被丢弃、
-// 本地拒绝被当成真实失败。gobreaker 在 open 态直接返错不动计数，没这个洞。
 func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
 	g := newBreakerGroup(&options{
 		failureRatio: 0.99, // 几乎不熔断，隔离出计数问题
@@ -222,10 +217,7 @@ func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
 	}
 }
 
-// 迟到的结果不该污染新一代的计数。
-//
-// 半开态下放探针，探针还没回来时状态已经切了一代 ——
-// 旧探针的结果回来时对不上 generation，gobreaker 直接丢弃。
+// 迟到的结果不该污染新一代的计数 —— 对不上 generation 就丢弃。
 func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 	g := newTestGroup(2, 0.5, 50*time.Millisecond)
 	cb := g.Get("/svc/X")
@@ -235,9 +227,7 @@ func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 	}
 	time.Sleep(80 * time.Millisecond)
 
-	// 半开态：放一个探针，但探针「卡住」不返回。
-	// 用 Execute 的同步语义做不到真卡住 —— 改用底层计数验证：
-	// 切一代后，计数必须清零。
+	// 半开态放探针，成功后切回 closed —— 计数应该是新一代的（干净的）
 	if cb.State() != gobreaker.StateHalfOpen {
 		t.Fatalf("应进半开, state=%v", cb.State())
 	}
@@ -245,16 +235,12 @@ func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 	if cb.State() != gobreaker.StateClosed {
 		t.Fatalf("试探成功后应关闭, state=%v", cb.State())
 	}
-	// 切回 closed 的一代，计数应该是新一代的（干净的）
 	if cb.Counts().TotalFailures != 0 {
 		t.Errorf("新一代的计数应清零, got %+v", cb.Counts())
 	}
 }
 
-// 统计周期到了之后计数清空 —— gobreaker 的原生语义。
-//
-// 固定窗口模式（bucketPeriod=0）下，Interval 就是整个窗口，
-// 过期后计数清零重算。
+// 统计周期到了之后计数清空 —— 固定窗口（bucketPeriod=0）下清零重算。
 func TestIntervalClearsCounts(t *testing.T) {
 	g := newBreakerGroup(&options{
 		failureRatio: 0.5,
@@ -273,7 +259,7 @@ func TestIntervalClearsCounts(t *testing.T) {
 		t.Fatalf("应记了 5 次, got %+v", cb.Counts())
 	}
 
-	// 等过周期，再来一个请求触发惰性清空。
+	// 等过周期，再来一个请求触发惰性清空
 	time.Sleep(150 * time.Millisecond)
 	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 
@@ -283,9 +269,6 @@ func TestIntervalClearsCounts(t *testing.T) {
 }
 
 // 桶宽必须整除周期 —— v2 会把 Interval 向上取整到 BucketPeriod 的整数倍。
-//
-// interval=100ms、bucketPeriod=1s → 实际窗口被撑成 1s。
-// 这条把「桶宽怎么选」钉死，免得有人配出一个比预期长得多的窗口。
 func TestBucketPeriodRoundsIntervalUp(t *testing.T) {
 	g := newBreakerGroup(&options{
 		failureRatio: 0.5,
@@ -452,16 +435,12 @@ func TestClientMiddlewareRejectionIs503(t *testing.T) {
 	if se.Reason != "CIRCUITBREAKER" {
 		t.Errorf("reason 应是 CIRCUITBREAKER, got %q", se.Reason)
 	}
-	// 必须是 gobreaker 的内部错误被翻译掉了
 	if errors.Is(err, gobreaker.ErrOpenState) {
 		t.Error("gobreaker 的内部错误不该透传给调用方")
 	}
 }
 
 // 完整生命周期：熔断打开 → 拒绝 → 冷却期过 → 探针 → 恢复。
-//
-// 这是最贴近真实使用场景的一条 —— 熔断器最难的不是「会不会打开」，
-// 而是「打开之后能不能自己恢复」。
 func TestBreakerOpenThenRecover(t *testing.T) {
 	mw := Client(
 		WithRequest(3),
@@ -598,8 +577,7 @@ func TestClientMiddlewareIsolatesOperations(t *testing.T) {
 	otherCtx := transport.NewClientContext(context.Background(), &fakeTransport{operation: "/svc/Good"})
 
 	for i := 0; i < 5; i++ {
-		// 前两次真打下游，之后被熔断拒掉 —— 返回值本身不关心，
-		// 关心的是「真的打了几次」。
+		// 前两次真打下游，之后被熔断拒掉
 		_, _ = chain(badCtx, nil)
 	}
 
