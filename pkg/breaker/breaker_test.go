@@ -24,21 +24,20 @@ func (f *fakeTransport) Operation() string               { return f.operation }
 func (f *fakeTransport) RequestHeader() transport.Header { return nil }
 func (f *fakeTransport) ReplyHeader() transport.Header   { return nil }
 
-// newTestGroup 造一个测试用的熔断器组。
-func newTestGroup(minRequests int64, ratio float64, timeout time.Duration) *breakerGroup {
-	return newBreakerGroup(&options{
-		failureRatio: ratio,
-		request:      uint32(minRequests),
-		interval:     10 * time.Second,
-		bucketPeriod: time.Second,
-		timeout:      timeout,
-		maxRequests:  1,
-	})
+// testSettings 造一份测试用的熔断参数。
+func testSettings(minRequests uint32, ratio float64, timeout time.Duration) gobreaker.Settings {
+	return gobreaker.Settings{
+		MaxRequests:  1,
+		Interval:     10 * time.Second,
+		BucketPeriod: time.Second,
+		Timeout:      timeout,
+		ReadyToTrip:  readyToTrip(minRequests, ratio),
+	}
 }
 
 // 失败率超阈值且样本够 → 熔断打开。
 func TestBreakerOpensAfterFailureRatio(t *testing.T) {
-	g := newTestGroup(4, 0.5, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(4, 0.5, time.Minute)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 4; i++ {
@@ -55,7 +54,7 @@ func TestBreakerOpensAfterFailureRatio(t *testing.T) {
 
 // 样本不够时不该熔断 —— 流量低的时候三五次失败说明不了问题。
 func TestBreakerStaysClosedBelowMinRequests(t *testing.T) {
-	g := newTestGroup(4, 0.5, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(4, 0.5, time.Minute)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 3; i++ {
@@ -69,7 +68,7 @@ func TestBreakerStaysClosedBelowMinRequests(t *testing.T) {
 
 // 成功率够高就不该熔断 —— 偶发失败不算下游挂了。
 func TestBreakerStaysClosedWithGoodSuccessRatio(t *testing.T) {
-	g := newTestGroup(4, 0.5, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(4, 0.5, time.Minute)})
 	cb := g.Get("/svc/X")
 
 	// 10 次里只失败 1 次（失败率 10%），远低于 50% 的阈值
@@ -88,7 +87,7 @@ func TestBreakerStaysClosedWithGoodSuccessRatio(t *testing.T) {
 
 // 冷却期过了要进半开。
 func TestBreakerHalfOpensAfterCooldown(t *testing.T) {
-	g := newTestGroup(2, 0.5, 50*time.Millisecond)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(2, 0.5, 50*time.Millisecond)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
@@ -107,7 +106,7 @@ func TestBreakerHalfOpensAfterCooldown(t *testing.T) {
 
 // 半开的试探成功 → 恢复关闭。
 func TestBreakerClosesAfterSuccessfulProbe(t *testing.T) {
-	g := newTestGroup(2, 0.5, 50*time.Millisecond)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(2, 0.5, 50*time.Millisecond)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
@@ -127,7 +126,7 @@ func TestBreakerClosesAfterSuccessfulProbe(t *testing.T) {
 
 // 半开的试探又失败 → 重新熔断，冷却期重新开始。
 func TestBreakerReopensAfterFailedProbe(t *testing.T) {
-	g := newTestGroup(2, 0.5, 50*time.Millisecond)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(2, 0.5, 50*time.Millisecond)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
@@ -147,7 +146,7 @@ func TestBreakerReopensAfterFailedProbe(t *testing.T) {
 
 // 熔断打开期间的本地拒绝不该污染计数 —— 本地拒绝不代表下游状态。
 func TestLocalRejectsDoNotPolluteCounts(t *testing.T) {
-	g := newTestGroup(2, 0.5, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(2, 0.5, time.Minute)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
@@ -181,14 +180,9 @@ func TestLocalRejectsDoNotPolluteCounts(t *testing.T) {
 
 // 并发下本地拒绝仍然不污染计数。
 func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
-	g := newBreakerGroup(&options{
-		failureRatio: 0.99, // 几乎不熔断，隔离出计数问题
-		request:      1000,
-		interval:     time.Hour,
-		bucketPeriod: time.Second,
-		timeout:      time.Hour,
-		maxRequests:  1,
-	})
+	st := testSettings(1000, 0.99, time.Hour)
+	st.Interval = time.Hour
+	g := newBreakerGroup([]gobreaker.Settings{st})
 	cb := g.Get("/svc/X")
 
 	// 先让它熔断
@@ -219,7 +213,7 @@ func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
 
 // 迟到的结果不该污染新一代的计数 —— 对不上 generation 就丢弃。
 func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
-	g := newTestGroup(2, 0.5, 50*time.Millisecond)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(2, 0.5, 50*time.Millisecond)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
@@ -242,14 +236,10 @@ func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 
 // 统计周期到了之后计数清空 —— 固定窗口（bucketPeriod=0）下清零重算。
 func TestIntervalClearsCounts(t *testing.T) {
-	g := newBreakerGroup(&options{
-		failureRatio: 0.5,
-		request:      100, // 样本要求高，避免熔断干扰观察
-		interval:     100 * time.Millisecond,
-		bucketPeriod: 0, // 固定窗口
-		timeout:      time.Minute,
-		maxRequests:  1,
-	})
+	st := testSettings(100, 0.5, time.Minute)
+	st.Interval = 100 * time.Millisecond
+	st.BucketPeriod = 0 // 固定窗口
+	g := newBreakerGroup([]gobreaker.Settings{st})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 5; i++ {
@@ -270,14 +260,10 @@ func TestIntervalClearsCounts(t *testing.T) {
 
 // 桶宽必须整除周期 —— v2 会把 Interval 向上取整到 BucketPeriod 的整数倍。
 func TestBucketPeriodRoundsIntervalUp(t *testing.T) {
-	g := newBreakerGroup(&options{
-		failureRatio: 0.5,
-		request:      100,
-		interval:     100 * time.Millisecond,
-		bucketPeriod: time.Second,
-		timeout:      time.Minute,
-		maxRequests:  1,
-	})
+	st := testSettings(100, 0.5, time.Minute)
+	st.Interval = 100 * time.Millisecond
+	st.BucketPeriod = time.Second
+	g := newBreakerGroup([]gobreaker.Settings{st})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 5; i++ {
@@ -302,14 +288,10 @@ func TestBucketPeriodRoundsIntervalUp(t *testing.T) {
 // v2 的滚动窗口：桶宽小于周期时，统计随时间逐桶滑出，
 // 而不是整段清零重算。窗口里残留的旧请求会被自然挤出去。
 func TestRollingWindowSlidesOutOldBuckets(t *testing.T) {
-	g := newBreakerGroup(&options{
-		failureRatio: 0.5,
-		request:      100, // 样本要求高，避免熔断干扰观察
-		interval:     200 * time.Millisecond,
-		bucketPeriod: 50 * time.Millisecond,
-		timeout:      time.Minute,
-		maxRequests:  1,
-	})
+	st := testSettings(100, 0.5, time.Minute)
+	st.Interval = 200 * time.Millisecond
+	st.BucketPeriod = 50 * time.Millisecond
+	g := newBreakerGroup([]gobreaker.Settings{st})
 	cb := g.Get("/svc/X")
 
 	// 先攒 4 次失败
@@ -333,7 +315,7 @@ func TestRollingWindowSlidesOutOldBuckets(t *testing.T) {
 // 排除项：调用方自己取消的请求不该进统计 ——
 // 它跟下游健不健康没关系，算成失败会把好端点误判成挂了。
 func TestExcludedErrorsDoNotAffectCounts(t *testing.T) {
-	g := newTestGroup(4, 0.5, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(4, 0.5, time.Minute)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 20; i++ {
@@ -358,7 +340,7 @@ func TestExcludedErrorsDoNotAffectCounts(t *testing.T) {
 
 // 超时取消同样排除在外。
 func TestDeadlineExceededIsExcluded(t *testing.T) {
-	g := newTestGroup(4, 0.5, time.Minute)
+	g := newBreakerGroup([]gobreaker.Settings{testSettings(4, 0.5, time.Minute)})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 10; i++ {
@@ -374,13 +356,46 @@ func TestDeadlineExceededIsExcluded(t *testing.T) {
 	}
 }
 
+// 显式传 Settings 时，BucketPeriod=0 就是固定窗口 —— 不能被当成「没填」
+// 而替换成默认值。
+func TestExplicitZeroBucketPeriodKeepsFixedWindow(t *testing.T) {
+	st := testSettings(100, 0.5, time.Minute)
+	st.Interval = 100 * time.Millisecond
+	st.BucketPeriod = 0
+	g := newBreakerGroup([]gobreaker.Settings{st})
+	cb := g.Get("/svc/X")
+
+	for i := 0; i < 5; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+
+	// 固定窗口下 Interval 过了就清空
+	time.Sleep(150 * time.Millisecond)
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	if got := cb.Counts().Requests; got != 1 {
+		t.Errorf("固定窗口应清空重算, got %+v", cb.Counts())
+	}
+}
+
+// 没传 Settings 时用默认的滚动窗口。
+func TestDefaultSettingsUseRollingWindow(t *testing.T) {
+	g := newBreakerGroup(nil)
+	cb := g.Get("/svc/X")
+
+	for i := 0; i < 5; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+	if cb.Counts().Requests != 5 {
+		t.Fatalf("应记了 5 次, got %+v", cb.Counts())
+	}
+	if cb.State() != gobreaker.StateClosed {
+		t.Errorf("样本不够时不该熔断, state=%v", cb.State())
+	}
+}
+
 // 中间件层面：连续 5xx 之后，被熔断的请求应直接被拒（不再打下游）。
 func TestClientMiddlewareRejectsWhenOpen(t *testing.T) {
-	mw := Client(
-		WithRequest(4),
-		WithInterval(10*time.Second),
-		WithTimeout(time.Minute),
-	)
+	mw := Client(testSettings(4, 0.5, time.Minute))
 
 	var calls int64
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -412,7 +427,7 @@ func TestClientMiddlewareRejectsWhenOpen(t *testing.T) {
 // 熔断拒掉的请求要翻译成 503 —— 调用方看到的是「下游不可用」，
 // 不是 gobreaker 的内部错误串。
 func TestClientMiddlewareRejectionIs503(t *testing.T) {
-	mw := Client(WithRequest(2), WithInterval(10*time.Second), WithTimeout(time.Minute))
+	mw := Client(testSettings(2, 0.5, time.Minute))
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, kratoserrors.ServiceUnavailable("DOWNSTREAM", "下游挂了")
@@ -442,12 +457,10 @@ func TestClientMiddlewareRejectionIs503(t *testing.T) {
 
 // 完整生命周期：熔断打开 → 拒绝 → 冷却期过 → 探针 → 恢复。
 func TestBreakerOpenThenRecover(t *testing.T) {
-	mw := Client(
-		WithRequest(3),
-		WithInterval(time.Hour), // 周期设长，避免清空干扰
-		WithBucketPeriod(0),     // 固定窗口，避免滚动干扰
-		WithTimeout(100*time.Millisecond),
-	)
+	st := testSettings(3, 0.5, 100*time.Millisecond)
+	st.Interval = time.Hour // 周期设长，避免清空干扰
+	st.BucketPeriod = 0     // 固定窗口，避免滚动干扰
+	mw := Client(st)
 
 	var calls int
 	downstreamUp := false
@@ -517,7 +530,7 @@ func TestBreakerOpenThenRecover(t *testing.T) {
 
 // 业务错误（404）不是下游不健康，不该计入熔断统计。
 func TestClientMiddlewareIgnoresBusinessErrors(t *testing.T) {
-	mw := Client(WithRequest(2), WithInterval(10*time.Second), WithTimeout(time.Minute))
+	mw := Client(testSettings(2, 0.5, time.Minute))
 
 	var calls int64
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -540,7 +553,7 @@ func TestClientMiddlewareIgnoresBusinessErrors(t *testing.T) {
 
 // 调用方取消的请求不该触发熔断。
 func TestClientMiddlewareIgnoresCanceledRequests(t *testing.T) {
-	mw := Client(WithRequest(2), WithInterval(10*time.Second), WithTimeout(time.Minute))
+	mw := Client(testSettings(2, 0.5, time.Minute))
 
 	var calls int64
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -560,7 +573,7 @@ func TestClientMiddlewareIgnoresCanceledRequests(t *testing.T) {
 
 // 不同 operation 各自一个熔断器 —— 一个端点挂了不影响同一个下游的其它端点。
 func TestClientMiddlewareIsolatesOperations(t *testing.T) {
-	mw := Client(WithRequest(2), WithInterval(10*time.Second), WithTimeout(time.Minute))
+	mw := Client(testSettings(2, 0.5, time.Minute))
 
 	var mu sync.Mutex
 	calls := map[string]int{}
@@ -600,11 +613,7 @@ func TestClientMiddlewareIsolatesOperations(t *testing.T) {
 
 // 并发下熔断器不能出乱子 —— 计数不能为负、状态不能跳变。
 func TestClientMiddlewareConcurrent(t *testing.T) {
-	mw := Client(
-		WithRequest(20),
-		WithInterval(10*time.Second),
-		WithTimeout(50*time.Millisecond),
-	)
+	mw := Client(testSettings(20, 0.5, 50*time.Millisecond))
 
 	var calls int64
 	handler := func(ctx context.Context, req any) (any, error) {

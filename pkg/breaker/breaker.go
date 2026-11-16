@@ -1,7 +1,7 @@
 // Package breaker 提供跨服务 gRPC 调用的熔断中间件。
 //
 // 按 operation 粒度统计 —— 一个端点挂了不影响同一个下游的其它端点。
-// 状态机用 sony/gobreaker v2，不自己实现。
+// 状态机用 sony/gobreaker v2。
 //
 // 语义：
 //
@@ -32,9 +32,11 @@ const (
 	DefaultFailureRatio = 0.5
 	// DefaultRequest 统计周期内触发评估的最小请求数。
 	DefaultRequest = 20
-	// DefaultInterval 统计周期。周期结束后清空计数。
+	// DefaultInterval 统计周期长度。
 	DefaultInterval = 10 * time.Second
 	// DefaultBucketPeriod 滚动窗口的桶宽。滚动窗口就是靠它切出来的。
+	//
+	// 只在没传 Settings 时生效 —— 传了 Settings 就以调用方的为准。
 	DefaultBucketPeriod = time.Second
 	// DefaultTimeout 熔断打开后多久进半开状态试探。
 	DefaultTimeout = 30 * time.Second
@@ -42,101 +44,14 @@ const (
 	DefaultMaxRequests = 1
 )
 
-// Option 是熔断器参数。
-type Option func(*options)
-
-type options struct {
-	failureRatio float64
-	request      uint32
-	interval     time.Duration
-	bucketPeriod time.Duration
-	timeout      time.Duration
-	maxRequests  uint32
-}
-
-// WithFailureRatio 设置失败率阈值。ratio 取值 (0,1)，越接近 1 越晚熔断。
-func WithFailureRatio(ratio float64) Option {
-	return func(o *options) { o.failureRatio = ratio }
-}
-
-// WithRequest 设置周期内触发评估的最小请求数。n 是最小请求数。
-func WithRequest(n int64) Option {
-	return func(o *options) {
-		if n > 0 {
-			o.request = uint32(n)
-		}
-	}
-}
-
-// WithInterval 设置统计周期。周期结束后清空计数。
-func WithInterval(d time.Duration) Option {
-	return func(o *options) { o.interval = d }
-}
-
-// WithBucketPeriod 设置滚动窗口的桶宽。d 是桶宽。
+// Client 返回 gRPC 客户端熔断中间件。
 //
-// d <= 0 表示固定窗口（整个 Interval 就是一个桶）。
+// 放在客户端中间件链的最内层。st 是熔断参数，留空用默认值。
 //
-// d 必须整除 Interval —— v2 会把 Interval 向上取整到桶宽的整数倍。
-func WithBucketPeriod(d time.Duration) Option {
-	return func(o *options) { o.bucketPeriod = d }
-}
-
-// WithTimeout 设置熔断打开后的冷却时长。d 是冷却时长。
-func WithTimeout(d time.Duration) Option {
-	return func(o *options) { o.timeout = d }
-}
-
-// WithMaxRequests 设置半开状态下允许的试探请求数，同时也是关闭所需的连续成功数。
-func WithMaxRequests(n int64) Option {
-	return func(o *options) {
-		if n > 0 {
-			o.maxRequests = uint32(n)
-		}
-	}
-}
-
-// Client 返回 gRPC 客户端熔断中间件。opts 是熔断参数。
-//
-// 放在客户端中间件链的最内层；只有 5xx 类错误算失败。
-//
-// 不用 Kratos 的 circuitbreaker.Client()：它的 CircuitBreaker 接口是
-// Allow() / MarkSuccess() / MarkFailed() 三段式，中间隔着一次真实 RPC 调用，
-// 并发下无法把「这次结果」和「这次请求」对应起来。这里用 gobreaker 的
-// Execute() 把整次调用包住，对应关系由它内部按 generation 管理。
-func Client(opts ...Option) middleware.Middleware {
-	o := &options{
-		failureRatio: DefaultFailureRatio,
-		request:      DefaultRequest,
-		interval:     DefaultInterval,
-		bucketPeriod: DefaultBucketPeriod,
-		timeout:      DefaultTimeout,
-		maxRequests:  DefaultMaxRequests,
-	}
-	for _, opt := range opts {
-		opt(o)
-	}
-	if o.failureRatio <= 0 || o.failureRatio >= 1 {
-		o.failureRatio = DefaultFailureRatio
-	}
-	if o.request < 1 {
-		o.request = DefaultRequest
-	}
-	if o.interval <= 0 {
-		o.interval = DefaultInterval
-	}
-	if o.bucketPeriod < 0 {
-		o.bucketPeriod = 0
-	}
-	if o.timeout <= 0 {
-		o.timeout = DefaultTimeout
-	}
-	if o.maxRequests < 1 {
-		o.maxRequests = DefaultMaxRequests
-	}
-
-	// 每个 operation 一个熔断器。
-	group := newBreakerGroup(o)
+// 按 operation 粒度各有一个熔断器 —— 一个端点挂了不影响同一个下游的
+// 其它端点。
+func Client(st ...gobreaker.Settings) middleware.Middleware {
+	group := newBreakerGroup(st)
 
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req any) (any, error) {
@@ -160,14 +75,45 @@ func Client(opts ...Option) middleware.Middleware {
 
 // breakerGroup 按 operation 懒加载熔断器。
 type breakerGroup struct {
-	o *options
+	settings gobreaker.Settings
 
 	mu       sync.Mutex
 	breakers map[string]*gobreaker.CircuitBreaker[any]
 }
 
-func newBreakerGroup(o *options) *breakerGroup {
-	return &breakerGroup{o: o, breakers: make(map[string]*gobreaker.CircuitBreaker[any])}
+func newBreakerGroup(st []gobreaker.Settings) *breakerGroup {
+	// 没传 Settings 就用默认那份；传了就以调用方的为准。
+	settings := gobreaker.Settings{
+		MaxRequests:  DefaultMaxRequests,
+		Interval:     DefaultInterval,
+		BucketPeriod: DefaultBucketPeriod,
+		Timeout:      DefaultTimeout,
+		ReadyToTrip:  readyToTrip(DefaultRequest, DefaultFailureRatio),
+	}
+	if len(st) > 0 {
+		settings = st[0]
+	}
+
+	// 缺省的字段走默认值。BucketPeriod 不补 —— gobreaker 把 <= 0 当作
+	// 固定窗口，调用方想要固定窗口时传的就是 0。
+	if settings.MaxRequests == 0 {
+		settings.MaxRequests = DefaultMaxRequests
+	}
+	if settings.Interval <= 0 {
+		settings.Interval = DefaultInterval
+	}
+	if settings.Timeout <= 0 {
+		settings.Timeout = DefaultTimeout
+	}
+	if settings.ReadyToTrip == nil {
+		settings.ReadyToTrip = readyToTrip(DefaultRequest, DefaultFailureRatio)
+	}
+	// IsSuccessful / IsExcluded 是这个包对外的约定，不让调用方改 ——
+	// 只有 5xx 算失败、取消的请求排除在外。
+	settings.IsSuccessful = isSuccessful
+	settings.IsExcluded = isExcluded
+
+	return &breakerGroup{settings: settings, breakers: make(map[string]*gobreaker.CircuitBreaker[any])}
 }
 
 // Get 取某个 operation 的熔断器，没有就造一个。key 是 operation 名。
@@ -177,18 +123,9 @@ func (g *breakerGroup) Get(key string) *gobreaker.CircuitBreaker[any] {
 	if cb, ok := g.breakers[key]; ok {
 		return cb
 	}
-	cb := gobreaker.NewCircuitBreaker[any](gobreaker.Settings{
-		Name:         key,
-		MaxRequests:  g.o.maxRequests,
-		Interval:     g.o.interval,
-		BucketPeriod: g.o.bucketPeriod,
-		Timeout:      g.o.timeout,
-		ReadyToTrip:  readyToTrip(g.o.request, g.o.failureRatio),
-		IsSuccessful: func(err error) bool {
-			return isSuccessful(err)
-		},
-		IsExcluded: isExcluded,
-	})
+	settings := g.settings
+	settings.Name = key
+	cb := gobreaker.NewCircuitBreaker[any](settings)
 	g.breakers[key] = cb
 	return cb
 }
