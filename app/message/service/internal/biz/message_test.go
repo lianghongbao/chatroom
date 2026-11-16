@@ -252,7 +252,7 @@ func newTestMessageUsecase() (*MessageUsecase, *fakeMessageRepo, *fakeMembership
 	membership := newFakeMembershipChecker()
 	publisher := &fakePublisher{}
 	unread := newFakeUnreadCounter()
-	uc := NewMessageUsecase(repo, membership, publisher, unread, nil, nil)
+	uc := NewMessageUsecase(repo, membership, publisher, unread, nil, StorageOptions{}, nil)
 	return uc, repo, membership, publisher, unread
 }
 
@@ -263,7 +263,7 @@ func newTestMessageUsecaseWithLister() (*MessageUsecase, *fakeMembershipChecker,
 	publisher := &fakePublisher{}
 	unread := newFakeUnreadCounter()
 	lister := newFakeMemberLister()
-	uc := NewMessageUsecase(repo, membership, publisher, unread, lister, nil)
+	uc := NewMessageUsecase(repo, membership, publisher, unread, lister, StorageOptions{}, nil)
 	return uc, membership, unread, lister
 }
 
@@ -720,7 +720,7 @@ func TestMessage_UnreadNotFoundKeepsOriginalError(t *testing.T) {
 // 谁都能往别人的会话发消息、读别人的聊天记录。
 func TestMessage_NilMembershipFailsClosed(t *testing.T) {
 	repo := newFakeMessageRepo()
-	uc := NewMessageUsecase(repo, nil, &fakePublisher{}, newFakeUnreadCounter(), nil, nil)
+	uc := NewMessageUsecase(repo, nil, &fakePublisher{}, newFakeUnreadCounter(), nil, StorageOptions{}, nil)
 
 	// 发消息要拒。
 	if _, err := uc.SendMessage(context.Background(), "uid-42", 7, MessageTypeText, "hi"); err == nil {

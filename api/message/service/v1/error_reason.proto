@@ -26,4 +26,16 @@ enum ErrorReason {
   // 会话服务不可达 —— 没法确认成员身份。
   // 这是「拒绝」而非「降级放行」：身份没确认就放行等于让任何人都能往别人的会话里发消息。
   MESSAGE_CONVERSATION_UNAVAILABLE = 5;
+
+  // 聊天图片相关
+  // 对象存储没配 —— 签发直传凭证时返回。
+  MESSAGE_STORAGE_NOT_CONFIGURED = 6;
+  // 聊天图片文件后缀不在白名单内。
+  MESSAGE_UPLOAD_EXT_NOT_ALLOWED = 7;
+  // 聊天图片地址不是本系统签发的（host / 目录前缀 / 后缀对不上）。
+  MESSAGE_UPLOAD_URL_INVALID = 8;
+  // OSS 上没有这个对象 —— 客户端还没传完就提交了地址。
+  MESSAGE_UPLOAD_OBJECT_NOT_FOUND = 9;
+  // 对象大小或类型跟上传策略不符。
+  MESSAGE_UPLOAD_OBJECT_MISMATCH = 10;
 }

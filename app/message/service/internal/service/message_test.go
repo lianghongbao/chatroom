@@ -170,7 +170,7 @@ func newService(repo *fakeMessageRepo) *MessageService {
 
 // newServiceWith 同 newService，但自带各协作者替身。t 是测试用例。
 func newServiceWith(repo *fakeMessageRepo, membership biz.ConversationMembershipChecker, publisher biz.MessagePublisher, unread biz.UnreadCounter, lister biz.ConversationMemberLister) *MessageService {
-	uc := biz.NewMessageUsecase(repo, membership, publisher, unread, lister, nil)
+	uc := biz.NewMessageUsecase(repo, membership, publisher, unread, lister, biz.StorageOptions{}, nil)
 	return NewMessageService(uc)
 }
 
@@ -260,19 +260,39 @@ func TestServiceMessage_Send_ImageTypeMaps(t *testing.T) {
 	s := newService(repo)
 	ctx := convAuthedCtx(t, "uid-1")
 
-	reply, err := s.SendMessage(ctx, &pb.SendMessageRequest{
+	// 图片消息的 content 要过对象存储校验 —— 没配存储时直接拒，
+	// 消息压根不落库。类型映射的正确性由 biz 层的用例覆盖。
+	_, err := s.SendMessage(ctx, &pb.SendMessageRequest{
 		ConversationId: 7,
 		Type:           pb.MessageType_MESSAGE_TYPE_IMAGE,
 		Content:        "http://img",
 	})
+	if !errors.Is(err, biz.ErrStorageNotConfigured) {
+		t.Fatalf("error = %v, want %v", err, biz.ErrStorageNotConfigured)
+	}
+	if repo.createCalls.typ != 0 {
+		t.Errorf("biz type = %v, 图片校验没过就不该落库", repo.createCalls.typ)
+	}
+}
+
+func TestServiceMessage_Send_EmojiTypeMaps(t *testing.T) {
+	repo := &fakeMessageRepo{created: &biz.Message{ID: 1, Type: biz.MessageTypeEmoji}}
+	s := newService(repo)
+	ctx := convAuthedCtx(t, "uid-1")
+
+	reply, err := s.SendMessage(ctx, &pb.SendMessageRequest{
+		ConversationId: 7,
+		Type:           pb.MessageType_MESSAGE_TYPE_EMOJI,
+		Content:        "😀",
+	})
 	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
-	if repo.createCalls.typ != biz.MessageTypeImage {
-		t.Errorf("biz type = %v, want MessageTypeImage", repo.createCalls.typ)
+	if repo.createCalls.typ != biz.MessageTypeEmoji {
+		t.Errorf("biz type = %v, want MessageTypeEmoji", repo.createCalls.typ)
 	}
-	if reply.GetMessage().GetType() != pb.MessageType_MESSAGE_TYPE_IMAGE {
-		t.Errorf("reply type = %v, want IMAGE", reply.GetMessage().GetType())
+	if reply.GetMessage().GetType() != pb.MessageType_MESSAGE_TYPE_EMOJI {
+		t.Errorf("reply type = %v, want EMOJI", reply.GetMessage().GetType())
 	}
 }
 

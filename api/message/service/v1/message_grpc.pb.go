@@ -19,11 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Message_SendMessage_FullMethodName       = "/api.message.v1.Message/SendMessage"
-	Message_ListMessages_FullMethodName      = "/api.message.v1.Message/ListMessages"
-	Message_ListMessagesSince_FullMethodName = "/api.message.v1.Message/ListMessagesSince"
-	Message_MarkRead_FullMethodName          = "/api.message.v1.Message/MarkRead"
-	Message_GetUnreadCount_FullMethodName    = "/api.message.v1.Message/GetUnreadCount"
+	Message_SendMessage_FullMethodName         = "/api.message.v1.Message/SendMessage"
+	Message_ListMessages_FullMethodName        = "/api.message.v1.Message/ListMessages"
+	Message_ListMessagesSince_FullMethodName   = "/api.message.v1.Message/ListMessagesSince"
+	Message_MarkRead_FullMethodName            = "/api.message.v1.Message/MarkRead"
+	Message_GetImageUploadToken_FullMethodName = "/api.message.v1.Message/GetImageUploadToken"
+	Message_GetUnreadCount_FullMethodName      = "/api.message.v1.Message/GetUnreadCount"
 )
 
 // MessageClient is the client API for Message service.
@@ -46,6 +47,21 @@ type MessageClient interface {
 	ListMessagesSince(ctx context.Context, in *ListMessagesSinceRequest, opts ...grpc.CallOption) (*ListMessagesSinceReply, error)
 	// MarkRead 清零某个会话的未读数。只清调用方自己的。
 	MarkRead(ctx context.Context, in *MarkReadRequest, opts ...grpc.CallOption) (*MarkReadReply, error)
+	// GetImageUploadToken 签发聊天图片的直传凭证。
+	//
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+	// SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。
+	GetImageUploadToken(ctx context.Context, in *GetImageUploadTokenRequest, opts ...grpc.CallOption) (*GetImageUploadTokenReply, error)
 	// GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
 	GetUnreadCount(ctx context.Context, in *GetUnreadCountRequest, opts ...grpc.CallOption) (*GetUnreadCountReply, error)
 }
@@ -98,6 +114,16 @@ func (c *messageClient) MarkRead(ctx context.Context, in *MarkReadRequest, opts 
 	return out, nil
 }
 
+func (c *messageClient) GetImageUploadToken(ctx context.Context, in *GetImageUploadTokenRequest, opts ...grpc.CallOption) (*GetImageUploadTokenReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetImageUploadTokenReply)
+	err := c.cc.Invoke(ctx, Message_GetImageUploadToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *messageClient) GetUnreadCount(ctx context.Context, in *GetUnreadCountRequest, opts ...grpc.CallOption) (*GetUnreadCountReply, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetUnreadCountReply)
@@ -128,6 +154,21 @@ type MessageServer interface {
 	ListMessagesSince(context.Context, *ListMessagesSinceRequest) (*ListMessagesSinceReply, error)
 	// MarkRead 清零某个会话的未读数。只清调用方自己的。
 	MarkRead(context.Context, *MarkReadRequest) (*MarkReadReply, error)
+	// GetImageUploadToken 签发聊天图片的直传凭证。
+	//
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+	// SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。
+	GetImageUploadToken(context.Context, *GetImageUploadTokenRequest) (*GetImageUploadTokenReply, error)
 	// GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
 	GetUnreadCount(context.Context, *GetUnreadCountRequest) (*GetUnreadCountReply, error)
 	mustEmbedUnimplementedMessageServer()
@@ -151,6 +192,9 @@ func (UnimplementedMessageServer) ListMessagesSince(context.Context, *ListMessag
 }
 func (UnimplementedMessageServer) MarkRead(context.Context, *MarkReadRequest) (*MarkReadReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method MarkRead not implemented")
+}
+func (UnimplementedMessageServer) GetImageUploadToken(context.Context, *GetImageUploadTokenRequest) (*GetImageUploadTokenReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetImageUploadToken not implemented")
 }
 func (UnimplementedMessageServer) GetUnreadCount(context.Context, *GetUnreadCountRequest) (*GetUnreadCountReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUnreadCount not implemented")
@@ -248,6 +292,24 @@ func _Message_MarkRead_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Message_GetImageUploadToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetImageUploadTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessageServer).GetImageUploadToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Message_GetImageUploadToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessageServer).GetImageUploadToken(ctx, req.(*GetImageUploadTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Message_GetUnreadCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetUnreadCountRequest)
 	if err := dec(in); err != nil {
@@ -288,6 +350,10 @@ var Message_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MarkRead",
 			Handler:    _Message_MarkRead_Handler,
+		},
+		{
+			MethodName: "GetImageUploadToken",
+			Handler:    _Message_GetImageUploadToken_Handler,
 		},
 		{
 			MethodName: "GetUnreadCount",

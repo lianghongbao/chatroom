@@ -40,17 +40,33 @@ const (
 	// 会话服务不可达 —— 没法确认成员身份。
 	// 这是「拒绝」而非「降级放行」：身份没确认就放行等于让任何人都能往别人的会话里发消息。
 	ErrorReason_MESSAGE_CONVERSATION_UNAVAILABLE ErrorReason = 5
+	// 聊天图片相关
+	// 对象存储没配 —— 签发直传凭证时返回。
+	ErrorReason_MESSAGE_STORAGE_NOT_CONFIGURED ErrorReason = 6
+	// 聊天图片文件后缀不在白名单内。
+	ErrorReason_MESSAGE_UPLOAD_EXT_NOT_ALLOWED ErrorReason = 7
+	// 聊天图片地址不是本系统签发的（host / 目录前缀 / 后缀对不上）。
+	ErrorReason_MESSAGE_UPLOAD_URL_INVALID ErrorReason = 8
+	// OSS 上没有这个对象 —— 客户端还没传完就提交了地址。
+	ErrorReason_MESSAGE_UPLOAD_OBJECT_NOT_FOUND ErrorReason = 9
+	// 对象大小或类型跟上传策略不符。
+	ErrorReason_MESSAGE_UPLOAD_OBJECT_MISMATCH ErrorReason = 10
 )
 
 // Enum value maps for ErrorReason.
 var (
 	ErrorReason_name = map[int32]string{
-		0: "MESSAGE_UNSPECIFIED",
-		1: "MESSAGE_NOT_FOUND",
-		2: "MESSAGE_INVALID_ARGUMENT",
-		3: "MESSAGE_NOT_MEMBER",
-		4: "MESSAGE_CONTENT_TOO_LONG",
-		5: "MESSAGE_CONVERSATION_UNAVAILABLE",
+		0:  "MESSAGE_UNSPECIFIED",
+		1:  "MESSAGE_NOT_FOUND",
+		2:  "MESSAGE_INVALID_ARGUMENT",
+		3:  "MESSAGE_NOT_MEMBER",
+		4:  "MESSAGE_CONTENT_TOO_LONG",
+		5:  "MESSAGE_CONVERSATION_UNAVAILABLE",
+		6:  "MESSAGE_STORAGE_NOT_CONFIGURED",
+		7:  "MESSAGE_UPLOAD_EXT_NOT_ALLOWED",
+		8:  "MESSAGE_UPLOAD_URL_INVALID",
+		9:  "MESSAGE_UPLOAD_OBJECT_NOT_FOUND",
+		10: "MESSAGE_UPLOAD_OBJECT_MISMATCH",
 	}
 	ErrorReason_value = map[string]int32{
 		"MESSAGE_UNSPECIFIED":              0,
@@ -59,6 +75,11 @@ var (
 		"MESSAGE_NOT_MEMBER":               3,
 		"MESSAGE_CONTENT_TOO_LONG":         4,
 		"MESSAGE_CONVERSATION_UNAVAILABLE": 5,
+		"MESSAGE_STORAGE_NOT_CONFIGURED":   6,
+		"MESSAGE_UPLOAD_EXT_NOT_ALLOWED":   7,
+		"MESSAGE_UPLOAD_URL_INVALID":       8,
+		"MESSAGE_UPLOAD_OBJECT_NOT_FOUND":  9,
+		"MESSAGE_UPLOAD_OBJECT_MISMATCH":   10,
 	}
 )
 
@@ -93,14 +114,20 @@ var File_message_service_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_message_service_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"%message/service/v1/error_reason.proto\x12\x0eapi.message.v1*\xb7\x01\n" +
+	"%message/service/v1/error_reason.proto\x12\x0eapi.message.v1*\xe8\x02\n" +
 	"\vErrorReason\x12\x17\n" +
 	"\x13MESSAGE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11MESSAGE_NOT_FOUND\x10\x01\x12\x1c\n" +
 	"\x18MESSAGE_INVALID_ARGUMENT\x10\x02\x12\x16\n" +
 	"\x12MESSAGE_NOT_MEMBER\x10\x03\x12\x1c\n" +
 	"\x18MESSAGE_CONTENT_TOO_LONG\x10\x04\x12$\n" +
-	" MESSAGE_CONVERSATION_UNAVAILABLE\x10\x05BE\n" +
+	" MESSAGE_CONVERSATION_UNAVAILABLE\x10\x05\x12\"\n" +
+	"\x1eMESSAGE_STORAGE_NOT_CONFIGURED\x10\x06\x12\"\n" +
+	"\x1eMESSAGE_UPLOAD_EXT_NOT_ALLOWED\x10\a\x12\x1e\n" +
+	"\x1aMESSAGE_UPLOAD_URL_INVALID\x10\b\x12#\n" +
+	"\x1fMESSAGE_UPLOAD_OBJECT_NOT_FOUND\x10\t\x12\"\n" +
+	"\x1eMESSAGE_UPLOAD_OBJECT_MISMATCH\x10\n" +
+	"BE\n" +
 	"\x0eapi.message.v1P\x01Z\"chatroom/api/message/service/v1;v1\xa2\x02\fAPIMessageV1b\x06proto3"
 
 var (

@@ -10,6 +10,39 @@ info:
          网关无状态，靠 Pub/Sub 支持多实例水平扩展。
     version: 0.0.1
 paths:
+    /api/message/image/upload_token:
+        post:
+            tags:
+                - Message
+            description: |-
+                GetImageUploadToken 签发聊天图片的直传凭证。
+
+                 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+                 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+
+                 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+                 SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+
+                 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+                 content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+                 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+
+                 key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+                 自己的目录。
+            operationId: Message_GetImageUploadToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.message.v1.GetImageUploadTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.message.v1.GetImageUploadTokenReply'
     /api/message/list:
         get:
             tags:
@@ -138,6 +171,54 @@ paths:
                                 $ref: '#/components/schemas/api.message.v1.GetUnreadCountReply'
 components:
     schemas:
+        api.message.v1.GetImageUploadTokenReply:
+            type: object
+            properties:
+                host:
+                    type: string
+                    description: |-
+                        OSS 上传地址，客户端 POST 到这里。
+
+                         例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+                         PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: |-
+                        表单字段。客户端原样塞进 FormData 提交。
+
+                         包含 key / policy / x-oss-signature-version / x-oss-credential /
+                         x-oss-date / x-oss-security-token / x-oss-signature /
+                         success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+
+                         file 域不放这里 —— 文件本身由客户端从本地读。
+                fileKey:
+                    type: string
+                    description: object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+                publicUrl:
+                    type: string
+                    description: 上传后可访问的地址。客户端上传完把它塞进 SendMessage 的 content（type=IMAGE）。
+                expireAt:
+                    type: string
+                    description: 过期时间，Unix 秒。
+                maxSize:
+                    type: string
+                    description: |-
+                        允许的最大字节数，0 表示不限。
+
+                         **服务端强制** —— policy 的 content-length-range 里带着这个值，
+                         超限的请求 OSS 直接拒（EntityTooLarge），文件不会落盘。
+                         这个字段是给客户端的提示，让它能在上传前就拦下超限文件，
+                         省一次注定失败的直传。
+            description: GetImageUploadTokenReply 直传凭证 —— OSS PostObject 表单。
+        api.message.v1.GetImageUploadTokenRequest:
+            type: object
+            properties:
+                ext:
+                    type: string
+                    description: 文件后缀，不带点，如 "png"。必须在白名单内。
+            description: GetImageUploadTokenRequest 签发聊天图片直传凭证。
         api.message.v1.GetUnreadCountReply:
             type: object
             properties:
@@ -212,7 +293,7 @@ components:
                     format: enum
                 content:
                     type: string
-                    description: 消息内容。文本消息是原文，图片消息是图片 URL。
+                    description: 消息内容。文本消息是原文，图片消息是图片 URL，表情消息是表情字符。
                 createdAt:
                     type: string
                     description: 发送时间（Unix 秒）。
@@ -237,7 +318,11 @@ components:
                     format: enum
                 content:
                     type: string
-                    description: 消息内容。文本消息是原文，图片消息是图片 URL。≤ 4000 字符。
+                    description: |-
+                        消息内容。文本消息是原文，图片消息是图片 URL，表情消息是表情字符。≤ 4000 字符。
+
+                         图片消息的 content 必须是 GetImageUploadToken 签发的凭证上传出来的地址 ——
+                         服务端会校验地址合法性和对象存在性，外链会被拒。
             description: SendMessageRequest 发消息。
 tags:
     - name: Message

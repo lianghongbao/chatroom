@@ -30,6 +30,8 @@ type Bootstrap struct {
 	// 可观测性配置。空 endpoint 表示不启动对应能力。
 	Observability *Observability `protobuf:"bytes,4,opt,name=observability,proto3" json:"observability,omitempty"`
 	Registry      *Registry      `protobuf:"bytes,5,opt,name=registry,proto3" json:"registry,omitempty"`
+	// 阿里云 OSS。聊天图片直传凭证的签发与校验都要用。
+	Storage       *Storage `protobuf:"bytes,6,opt,name=storage,proto3" json:"storage,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -99,6 +101,144 @@ func (x *Bootstrap) GetRegistry() *Registry {
 	return nil
 }
 
+func (x *Bootstrap) GetStorage() *Storage {
+	if x != nil {
+		return x.Storage
+	}
+	return nil
+}
+
+// 阿里云 OSS。聊天图片直传凭证的签发与校验都要用。
+//
+// 字段语义跟 user / conversation 服务的 storage 段一致 —— 三边共用
+// pkg/oss 的 Uploader，只是目录前缀不同（个人头像 avatar/<uid>/，
+// 群头像 group_avatar/<会话ID>/，聊天图片 chat_image/<uid>/）。
+type Storage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 阿里云 OSS 服务端点，如 oss-cn-guangzhou.aliyuncs.com。
+	Endpoint string `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	// 存储空间名。
+	Bucket string `protobuf:"bytes,2,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	// 地域，如 cn-guangzhou。用于 V4 签名派生和拼 host。
+	Region string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
+	// STS 角色 ARN，如 acs:ram::123456789:role/chatroom-oss-sts-role。
+	RoleArn string `protobuf:"bytes,4,opt,name=role_arn,json=roleArn,proto3" json:"role_arn,omitempty"`
+	// 长期 RAM AK。只用于调 STS AssumeRole，不出服务端。不进版本库。
+	AccessKeyId string `protobuf:"bytes,5,opt,name=access_key_id,json=accessKeyId,proto3" json:"access_key_id,omitempty"`
+	// 长期 RAM SK。只用于调 STS AssumeRole，不出服务端。不进版本库。
+	AccessKeySecret string `protobuf:"bytes,6,opt,name=access_key_secret,json=accessKeySecret,proto3" json:"access_key_secret,omitempty"`
+	// 客户端直传目标。留空回退到 https://<bucket>.<endpoint>。
+	UploadHost string `protobuf:"bytes,7,opt,name=upload_host,json=uploadHost,proto3" json:"upload_host,omitempty"`
+	// 公开访问前缀（CDN 域名）。留空表示不做公开访问。
+	UrlPrefix string `protobuf:"bytes,8,opt,name=url_prefix,json=urlPrefix,proto3" json:"url_prefix,omitempty"`
+	// 聊天图片允许的后缀白名单。留空表示不允许任何后缀。
+	ImageAllowedExts []string `protobuf:"bytes,9,rep,name=image_allowed_exts,json=imageAllowedExts,proto3" json:"image_allowed_exts,omitempty"`
+	// 聊天图片最大字节数。0 表示不限。
+	ImageMaxSize  int64 `protobuf:"varint,10,opt,name=image_max_size,json=imageMaxSize,proto3" json:"image_max_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Storage) Reset() {
+	*x = Storage{}
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Storage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Storage) ProtoMessage() {}
+
+func (x *Storage) ProtoReflect() protoreflect.Message {
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Storage.ProtoReflect.Descriptor instead.
+func (*Storage) Descriptor() ([]byte, []int) {
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Storage) GetEndpoint() string {
+	if x != nil {
+		return x.Endpoint
+	}
+	return ""
+}
+
+func (x *Storage) GetBucket() string {
+	if x != nil {
+		return x.Bucket
+	}
+	return ""
+}
+
+func (x *Storage) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *Storage) GetRoleArn() string {
+	if x != nil {
+		return x.RoleArn
+	}
+	return ""
+}
+
+func (x *Storage) GetAccessKeyId() string {
+	if x != nil {
+		return x.AccessKeyId
+	}
+	return ""
+}
+
+func (x *Storage) GetAccessKeySecret() string {
+	if x != nil {
+		return x.AccessKeySecret
+	}
+	return ""
+}
+
+func (x *Storage) GetUploadHost() string {
+	if x != nil {
+		return x.UploadHost
+	}
+	return ""
+}
+
+func (x *Storage) GetUrlPrefix() string {
+	if x != nil {
+		return x.UrlPrefix
+	}
+	return ""
+}
+
+func (x *Storage) GetImageAllowedExts() []string {
+	if x != nil {
+		return x.ImageAllowedExts
+	}
+	return nil
+}
+
+func (x *Storage) GetImageMaxSize() int64 {
+	if x != nil {
+		return x.ImageMaxSize
+	}
+	return 0
+}
+
 type Registry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nacos         *Registry_Nacos        `protobuf:"bytes,1,opt,name=nacos,proto3" json:"nacos,omitempty"`
@@ -108,7 +248,7 @@ type Registry struct {
 
 func (x *Registry) Reset() {
 	*x = Registry{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -120,7 +260,7 @@ func (x *Registry) String() string {
 func (*Registry) ProtoMessage() {}
 
 func (x *Registry) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -133,7 +273,7 @@ func (x *Registry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Registry.ProtoReflect.Descriptor instead.
 func (*Registry) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Registry) GetNacos() *Registry_Nacos {
@@ -153,7 +293,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -165,7 +305,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -178,7 +318,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -205,7 +345,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +357,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +370,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -275,7 +415,7 @@ type Auth struct {
 
 func (x *Auth) Reset() {
 	*x = Auth{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -287,7 +427,7 @@ func (x *Auth) String() string {
 func (*Auth) ProtoMessage() {}
 
 func (x *Auth) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -300,7 +440,7 @@ func (x *Auth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Auth.ProtoReflect.Descriptor instead.
 func (*Auth) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{4}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Auth) GetJwtSecret() string {
@@ -388,7 +528,7 @@ type Observability struct {
 
 func (x *Observability) Reset() {
 	*x = Observability{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -400,7 +540,7 @@ func (x *Observability) String() string {
 func (*Observability) ProtoMessage() {}
 
 func (x *Observability) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -413,7 +553,7 @@ func (x *Observability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observability.ProtoReflect.Descriptor instead.
 func (*Observability) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{5}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Observability) GetMetricsAddr() string {
@@ -463,7 +603,7 @@ type Registry_Nacos struct {
 
 func (x *Registry_Nacos) Reset() {
 	*x = Registry_Nacos{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +615,7 @@ func (x *Registry_Nacos) String() string {
 func (*Registry_Nacos) ProtoMessage() {}
 
 func (x *Registry_Nacos) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +628,7 @@ func (x *Registry_Nacos) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Registry_Nacos.ProtoReflect.Descriptor instead.
 func (*Registry_Nacos) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{1, 0}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
 }
 
 func (x *Registry_Nacos) GetServerAddresses() []string {
@@ -565,7 +705,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -577,7 +717,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -590,7 +730,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -625,7 +765,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -637,7 +777,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -650,7 +790,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{2, 1}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -699,7 +839,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -711,7 +851,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -724,7 +864,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
 }
 
 func (x *Data_Database) GetDriver() string {
@@ -795,7 +935,7 @@ type Data_Redis struct {
 
 func (x *Data_Redis) Reset() {
 	*x = Data_Redis{}
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -807,7 +947,7 @@ func (x *Data_Redis) String() string {
 func (*Data_Redis) ProtoMessage() {}
 
 func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_message_service_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_message_service_internal_conf_conf_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -820,7 +960,7 @@ func (x *Data_Redis) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Redis.ProtoReflect.Descriptor instead.
 func (*Data_Redis) Descriptor() ([]byte, []int) {
-	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+	return file_message_service_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
 }
 
 func (x *Data_Redis) GetNetwork() string {
@@ -855,13 +995,28 @@ var File_message_service_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_message_service_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
-	"(message/service/internal/conf/conf.proto\x12\x15chatroom.message.conf\x1a\x1egoogle/protobuf/duration.proto\"\xad\x02\n" +
+	"(message/service/internal/conf/conf.proto\x12\x15chatroom.message.conf\x1a\x1egoogle/protobuf/duration.proto\"\xe7\x02\n" +
 	"\tBootstrap\x125\n" +
 	"\x06server\x18\x01 \x01(\v2\x1d.chatroom.message.conf.ServerR\x06server\x12/\n" +
 	"\x04data\x18\x02 \x01(\v2\x1b.chatroom.message.conf.DataR\x04data\x12/\n" +
 	"\x04auth\x18\x03 \x01(\v2\x1b.chatroom.message.conf.AuthR\x04auth\x12J\n" +
 	"\robservability\x18\x04 \x01(\v2$.chatroom.message.conf.ObservabilityR\robservability\x12;\n" +
-	"\bregistry\x18\x05 \x01(\v2\x1f.chatroom.message.conf.RegistryR\bregistry\"\xe0\x02\n" +
+	"\bregistry\x18\x05 \x01(\v2\x1f.chatroom.message.conf.RegistryR\bregistry\x128\n" +
+	"\astorage\x18\x06 \x01(\v2\x1e.chatroom.message.conf.StorageR\astorage\"\xd4\x02\n" +
+	"\aStorage\x12\x1a\n" +
+	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12\x16\n" +
+	"\x06bucket\x18\x02 \x01(\tR\x06bucket\x12\x16\n" +
+	"\x06region\x18\x03 \x01(\tR\x06region\x12\x19\n" +
+	"\brole_arn\x18\x04 \x01(\tR\aroleArn\x12\"\n" +
+	"\raccess_key_id\x18\x05 \x01(\tR\vaccessKeyId\x12*\n" +
+	"\x11access_key_secret\x18\x06 \x01(\tR\x0faccessKeySecret\x12\x1f\n" +
+	"\vupload_host\x18\a \x01(\tR\n" +
+	"uploadHost\x12\x1d\n" +
+	"\n" +
+	"url_prefix\x18\b \x01(\tR\turlPrefix\x12,\n" +
+	"\x12image_allowed_exts\x18\t \x03(\tR\x10imageAllowedExts\x12$\n" +
+	"\x0eimage_max_size\x18\n" +
+	" \x01(\x03R\fimageMaxSize\"\xe0\x02\n" +
 	"\bRegistry\x12;\n" +
 	"\x05nacos\x18\x01 \x01(\v2%.chatroom.message.conf.Registry.NacosR\x05nacos\x1a\x96\x02\n" +
 	"\x05Nacos\x12)\n" +
@@ -933,47 +1088,49 @@ func file_message_service_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_message_service_internal_conf_conf_proto_rawDescData
 }
 
-var file_message_service_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_message_service_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_message_service_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: chatroom.message.conf.Bootstrap
-	(*Registry)(nil),            // 1: chatroom.message.conf.Registry
-	(*Server)(nil),              // 2: chatroom.message.conf.Server
-	(*Data)(nil),                // 3: chatroom.message.conf.Data
-	(*Auth)(nil),                // 4: chatroom.message.conf.Auth
-	(*Observability)(nil),       // 5: chatroom.message.conf.Observability
-	(*Registry_Nacos)(nil),      // 6: chatroom.message.conf.Registry.Nacos
-	(*Server_HTTP)(nil),         // 7: chatroom.message.conf.Server.HTTP
-	(*Server_GRPC)(nil),         // 8: chatroom.message.conf.Server.GRPC
-	(*Data_Database)(nil),       // 9: chatroom.message.conf.Data.Database
-	(*Data_Redis)(nil),          // 10: chatroom.message.conf.Data.Redis
-	(*durationpb.Duration)(nil), // 11: google.protobuf.Duration
+	(*Storage)(nil),             // 1: chatroom.message.conf.Storage
+	(*Registry)(nil),            // 2: chatroom.message.conf.Registry
+	(*Server)(nil),              // 3: chatroom.message.conf.Server
+	(*Data)(nil),                // 4: chatroom.message.conf.Data
+	(*Auth)(nil),                // 5: chatroom.message.conf.Auth
+	(*Observability)(nil),       // 6: chatroom.message.conf.Observability
+	(*Registry_Nacos)(nil),      // 7: chatroom.message.conf.Registry.Nacos
+	(*Server_HTTP)(nil),         // 8: chatroom.message.conf.Server.HTTP
+	(*Server_GRPC)(nil),         // 9: chatroom.message.conf.Server.GRPC
+	(*Data_Database)(nil),       // 10: chatroom.message.conf.Data.Database
+	(*Data_Redis)(nil),          // 11: chatroom.message.conf.Data.Redis
+	(*durationpb.Duration)(nil), // 12: google.protobuf.Duration
 }
 var file_message_service_internal_conf_conf_proto_depIdxs = []int32{
-	2,  // 0: chatroom.message.conf.Bootstrap.server:type_name -> chatroom.message.conf.Server
-	3,  // 1: chatroom.message.conf.Bootstrap.data:type_name -> chatroom.message.conf.Data
-	4,  // 2: chatroom.message.conf.Bootstrap.auth:type_name -> chatroom.message.conf.Auth
-	5,  // 3: chatroom.message.conf.Bootstrap.observability:type_name -> chatroom.message.conf.Observability
-	1,  // 4: chatroom.message.conf.Bootstrap.registry:type_name -> chatroom.message.conf.Registry
-	6,  // 5: chatroom.message.conf.Registry.nacos:type_name -> chatroom.message.conf.Registry.Nacos
-	7,  // 6: chatroom.message.conf.Server.http:type_name -> chatroom.message.conf.Server.HTTP
-	8,  // 7: chatroom.message.conf.Server.grpc:type_name -> chatroom.message.conf.Server.GRPC
-	9,  // 8: chatroom.message.conf.Data.database:type_name -> chatroom.message.conf.Data.Database
-	10, // 9: chatroom.message.conf.Data.redis:type_name -> chatroom.message.conf.Data.Redis
-	11, // 10: chatroom.message.conf.Auth.token_ttl:type_name -> google.protobuf.Duration
-	11, // 11: chatroom.message.conf.Auth.login_lock_ttl:type_name -> google.protobuf.Duration
-	11, // 12: chatroom.message.conf.Auth.access_ttl:type_name -> google.protobuf.Duration
-	11, // 13: chatroom.message.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
-	11, // 14: chatroom.message.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	11, // 15: chatroom.message.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	11, // 16: chatroom.message.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	11, // 17: chatroom.message.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
-	11, // 18: chatroom.message.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	11, // 19: chatroom.message.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	3,  // 0: chatroom.message.conf.Bootstrap.server:type_name -> chatroom.message.conf.Server
+	4,  // 1: chatroom.message.conf.Bootstrap.data:type_name -> chatroom.message.conf.Data
+	5,  // 2: chatroom.message.conf.Bootstrap.auth:type_name -> chatroom.message.conf.Auth
+	6,  // 3: chatroom.message.conf.Bootstrap.observability:type_name -> chatroom.message.conf.Observability
+	2,  // 4: chatroom.message.conf.Bootstrap.registry:type_name -> chatroom.message.conf.Registry
+	1,  // 5: chatroom.message.conf.Bootstrap.storage:type_name -> chatroom.message.conf.Storage
+	7,  // 6: chatroom.message.conf.Registry.nacos:type_name -> chatroom.message.conf.Registry.Nacos
+	8,  // 7: chatroom.message.conf.Server.http:type_name -> chatroom.message.conf.Server.HTTP
+	9,  // 8: chatroom.message.conf.Server.grpc:type_name -> chatroom.message.conf.Server.GRPC
+	10, // 9: chatroom.message.conf.Data.database:type_name -> chatroom.message.conf.Data.Database
+	11, // 10: chatroom.message.conf.Data.redis:type_name -> chatroom.message.conf.Data.Redis
+	12, // 11: chatroom.message.conf.Auth.token_ttl:type_name -> google.protobuf.Duration
+	12, // 12: chatroom.message.conf.Auth.login_lock_ttl:type_name -> google.protobuf.Duration
+	12, // 13: chatroom.message.conf.Auth.access_ttl:type_name -> google.protobuf.Duration
+	12, // 14: chatroom.message.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
+	12, // 15: chatroom.message.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	12, // 16: chatroom.message.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	12, // 17: chatroom.message.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	12, // 18: chatroom.message.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	12, // 19: chatroom.message.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	12, // 20: chatroom.message.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	21, // [21:21] is the sub-list for method output_type
+	21, // [21:21] is the sub-list for method input_type
+	21, // [21:21] is the sub-list for extension type_name
+	21, // [21:21] is the sub-list for extension extendee
+	0,  // [0:21] is the sub-list for field type_name
 }
 
 func init() { file_message_service_internal_conf_conf_proto_init() }
@@ -987,7 +1144,7 @@ func file_message_service_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_service_internal_conf_conf_proto_rawDesc), len(file_message_service_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

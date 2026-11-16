@@ -17,6 +17,7 @@ var _ = new(context.Context)
 
 const _ = http.SupportPackageIsVersion3
 
+const OperationMessageGetImageUploadToken = "/api.message.v1.Message/GetImageUploadToken"
 const OperationMessageGetUnreadCount = "/api.message.v1.Message/GetUnreadCount"
 const OperationMessageListMessages = "/api.message.v1.Message/ListMessages"
 const OperationMessageListMessagesSince = "/api.message.v1.Message/ListMessagesSince"
@@ -24,6 +25,21 @@ const OperationMessageMarkRead = "/api.message.v1.Message/MarkRead"
 const OperationMessageSendMessage = "/api.message.v1.Message/SendMessage"
 
 type MessageHTTPServer interface {
+	// GetImageUploadToken GetImageUploadToken 签发聊天图片的直传凭证。
+	//
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+	// SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。
+	GetImageUploadToken(context.Context, *GetImageUploadTokenRequest) (*GetImageUploadTokenReply, error)
 	// GetUnreadCount GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
 	GetUnreadCount(context.Context, *GetUnreadCountRequest) (*GetUnreadCountReply, error)
 	// ListMessages ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
@@ -46,6 +62,7 @@ func RegisterMessageHTTPServer(s *http.Server, srv MessageHTTPServer) {
 	r.Handle("GET", "/api/message/list", _Message_ListMessages0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/message/since", _Message_ListMessagesSince0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/message/read", _Message_MarkRead0_HTTP_Handler(srv))
+	r.Handle("POST", "/api/message/image/upload_token", _Message_GetImageUploadToken0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/message/unread", _Message_GetUnreadCount0_HTTP_Handler(srv))
 }
 
@@ -125,6 +142,25 @@ func _Message_MarkRead0_HTTP_Handler(srv MessageHTTPServer) func(ctx http.Contex
 	}
 }
 
+func _Message_GetImageUploadToken0_HTTP_Handler(srv MessageHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetImageUploadTokenRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationMessageGetImageUploadToken)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.GetImageUploadToken(ctx, req.(*GetImageUploadTokenRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*GetImageUploadTokenReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _Message_GetUnreadCount0_HTTP_Handler(srv MessageHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GetUnreadCountRequest
@@ -145,6 +181,21 @@ func _Message_GetUnreadCount0_HTTP_Handler(srv MessageHTTPServer) func(ctx http.
 }
 
 type MessageHTTPClient interface {
+	// GetImageUploadToken GetImageUploadToken 签发聊天图片的直传凭证。
+	//
+	// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+	// 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+	//
+	// 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+	// SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+	//
+	// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+	// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+	// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+	//
+	// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+	// 自己的目录。
+	GetImageUploadToken(ctx context.Context, req *GetImageUploadTokenRequest, opts ...http.CallOption) (rsp *GetImageUploadTokenReply, err error)
 	// GetUnreadCount GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
 	GetUnreadCount(ctx context.Context, req *GetUnreadCountRequest, opts ...http.CallOption) (rsp *GetUnreadCountReply, err error)
 	// ListMessages ListMessages 拉历史消息。游标分页，按 id 倒序（新的在前）。
@@ -167,6 +218,37 @@ type MessageHTTPClientImpl struct {
 
 func NewMessageHTTPClient(client *http.Client) MessageHTTPClient {
 	return &MessageHTTPClientImpl{client}
+}
+
+// GetImageUploadToken GetImageUploadToken 签发聊天图片的直传凭证。
+//
+// 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+// 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+//
+// 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+// SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+//
+// 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+// content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+// 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+//
+// key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+// 自己的目录。
+func (c *MessageHTTPClientImpl) GetImageUploadToken(ctx context.Context, in *GetImageUploadTokenRequest, opts ...http.CallOption) (*GetImageUploadTokenReply, error) {
+	var out GetImageUploadTokenReply
+	pattern := "/api/message/image/upload_token"
+	path := http.BuildPath(pattern, in)
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.ContentType("application/protojson"),
+		http.Operation(OperationMessageGetImageUploadToken),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // GetUnreadCount GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。

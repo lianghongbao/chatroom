@@ -126,6 +126,8 @@ func messageTypeFromUint8(t uint8) messagev1.MessageType {
 	switch t {
 	case 2:
 		return messagev1.MessageType_MESSAGE_TYPE_IMAGE
+	case 3:
+		return messagev1.MessageType_MESSAGE_TYPE_EMOJI
 	default:
 		return messagev1.MessageType_MESSAGE_TYPE_TEXT
 	}

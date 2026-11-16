@@ -66,3 +66,29 @@ observability:
   tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'
   service_name: "${NACOS_SERVICE_NAME:chatroom-message}"
   unauth_sample_rate: 0.1
+
+# 阿里云 OSS。聊天图片直传凭证的签发与校验都要用。
+#
+# 留空（OSS_* 环境变量没设）时聊天图片上传能力自动关闭 ——
+# 文本和表情消息不受影响。
+storage:
+  endpoint: "${OSS_ENDPOINT:}"
+  bucket: "${OSS_BUCKET:}"
+  region: "${OSS_REGION:}"
+  role_arn: "${OSS_ROLE_ARN:}"
+  # 长期 RAM AK/SK，只用于调 STS AssumeRole，不出服务端。
+  access_key_id: "${OSS_ACCESS_KEY_ID:}"
+  access_key_secret: "${OSS_ACCESS_KEY_SECRET:}"
+  # 客户端直传目标。留空回退到 https://<bucket>.<endpoint>。
+  upload_host: "${OSS_UPLOAD_HOST:}"
+  # 公开访问前缀（CDN 域名）。留空表示不做公开访问。
+  url_prefix: "${OSS_URL_PREFIX:}"
+  # 聊天图片允许的后缀白名单。留空 = 不允许任何后缀（fail closed）。
+  image_allowed_exts:
+    - jpg
+    - jpeg
+    - png
+    - webp
+    - gif
+  # 聊天图片最大字节数。10MB —— 比头像宽松，聊天图本来就更大。
+  image_max_size: 10485760

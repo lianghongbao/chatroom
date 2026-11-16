@@ -6,6 +6,7 @@ import (
 	"time"
 
 	v1 "chatroom/api/message/service/v1"
+	"chatroom/pkg/oss"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 )
@@ -26,6 +27,7 @@ type MessageType uint8
 const (
 	MessageTypeText  MessageType = 1 // 文本消息
 	MessageTypeImage MessageType = 2 // 图片消息 —— Content 存图片 URL
+	MessageTypeEmoji MessageType = 3 // 表情消息 —— Content 存表情字符
 )
 
 // 消息内容限制与分页参数。
@@ -83,6 +85,12 @@ type MessageUsecase struct {
 	unread     UnreadCounter
 	lister     ConversationMemberLister
 	logger     *slog.Logger
+	// oss OSS 客户端，为 nil 时关闭聊天图片上传。
+	oss *oss.Client
+	// imageExts 聊天图片允许的后缀白名单。
+	imageExts []string
+	// imageMaxSize 聊天图片最大字节数，0 表示不限。
+	imageMaxSize int64
 }
 
 // NewMessageUsecase 构造 MessageUsecase。
@@ -91,18 +99,22 @@ type MessageUsecase struct {
 // publisher 广播器
 // unread 未读数读写
 // lister 会话成员列举
+// storage 对象存储能力，为零值时关闭聊天图片上传
 // logger 日志器，为 nil 时用默认 logger
-func NewMessageUsecase(repo MessageRepo, membership ConversationMembershipChecker, publisher MessagePublisher, unread UnreadCounter, lister ConversationMemberLister, logger *slog.Logger) *MessageUsecase {
+func NewMessageUsecase(repo MessageRepo, membership ConversationMembershipChecker, publisher MessagePublisher, unread UnreadCounter, lister ConversationMemberLister, storage StorageOptions, logger *slog.Logger) *MessageUsecase {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &MessageUsecase{
-		repo:       repo,
-		membership: membership,
-		publisher:  publisher,
-		unread:     unread,
-		lister:     lister,
-		logger:     logger,
+		repo:          repo,
+		membership:    membership,
+		publisher:     publisher,
+		unread:        unread,
+		lister:        lister,
+		logger:        logger,
+		oss:           storage.Client,
+		imageExts:     storage.AllowedExts,
+		imageMaxSize:  storage.MaxSize,
 	}
 }
 
@@ -122,7 +134,7 @@ func (uc *MessageUsecase) SendMessage(ctx context.Context, callerID string, conv
 	if typ == 0 {
 		typ = MessageTypeText
 	}
-	if typ != MessageTypeText && typ != MessageTypeImage {
+	if typ != MessageTypeText && typ != MessageTypeImage && typ != MessageTypeEmoji {
 		return nil, ErrMessageInvalidArgument
 	}
 	if content == "" {
@@ -132,8 +144,35 @@ func (uc *MessageUsecase) SendMessage(ctx context.Context, callerID string, conv
 		return nil, ErrMessageContentTooLong
 	}
 
+	// 成员校验先做 —— 不是会员就不该有任何后续动作。
+	//
+	// 顺序有讲究：把图片 / 表情的内容校验放在成员校验**之后**，
+	// 否则没权限的人能靠错误码差异探测会话存不存在
+	// （MESSAGE_NOT_MEMBER vs MESSAGE_UPLOAD_URL_INVALID）。
 	if err := uc.checkMembership(ctx, callerID, conversationID); err != nil {
 		return nil, err
+	}
+
+	// 表情消息的正文必须真的是表情 —— 单个 Unicode 字符，或带变体选择符的
+	// 组合序列（如 "❤️" 是 U+2764 U+FE0F 两个码位）。
+	//
+	// 不校验的话，客户端能拿表情类型发任意文本 —— 消息列表里就出现
+	// 「类型是表情、内容是一整段话」的记录，渲染逻辑没法区分。
+	if typ == MessageTypeEmoji {
+		if !isEmojiContent(content) {
+			return nil, ErrMessageInvalidArgument
+		}
+	}
+	// 图片消息的正文必须是本服务签发的对象地址，且对象得真的存在。
+	//
+	// 不校验的话，任何人都能把外链（甚至内网地址）当图片发进会话 ——
+	// 拿到消息列表的人会去拉那个地址。
+	if typ == MessageTypeImage {
+		clean, err := uc.ValidateImageURL(ctx, callerID, content)
+		if err != nil {
+			return nil, err
+		}
+		content = clean
 	}
 
 	saved, err := uc.repo.Create(ctx, &Message{

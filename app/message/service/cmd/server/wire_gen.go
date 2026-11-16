@@ -13,6 +13,7 @@ import (
 	"chatroom/app/message/service/internal/observability"
 	"chatroom/app/message/service/internal/server"
 	"chatroom/app/message/service/internal/service"
+	"chatroom/app/message/service/internal/storage"
 	"chatroom/pkg/middleware"
 	"chatroom/pkg/nacos"
 	observability2 "chatroom/pkg/observability"
@@ -68,7 +69,10 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	messagePublisher := data.NewMessagePublisher(dataData)
 	unreadAdapter := data.NewUnreadAdapter(remoteConversationClient)
 	memberListerAdapter := data.NewMemberListerAdapter(remoteConversationClient)
-	messageUsecase := biz.NewMessageUsecase(messageRepo, membershipAdapter, messagePublisher, unreadAdapter, memberListerAdapter, logger)
+	confStorage := bootstrap.Storage
+	client := storage.NewClient(confStorage, logger)
+	storageOptions := biz.NewStorageOptions(client, confStorage)
+	messageUsecase := biz.NewMessageUsecase(messageRepo, membershipAdapter, messagePublisher, unreadAdapter, memberListerAdapter, storageOptions, logger)
 	messageService := service.NewMessageService(messageUsecase)
 	grpcServer := server.NewGRPCServer(confServer, auth, provider, blacklistChecker, messageService)
 	checker := data.NewHealthChecker(dataData)

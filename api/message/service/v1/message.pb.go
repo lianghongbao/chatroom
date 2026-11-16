@@ -31,6 +31,12 @@ const (
 	MessageType_MESSAGE_TYPE_TEXT MessageType = 1
 	// 图片 —— content 存图片 URL。
 	MessageType_MESSAGE_TYPE_IMAGE MessageType = 2
+	// 表情 —— content 存表情字符本身（如 "😀"）。
+	//
+	// 独立于文本：渲染时按大号表情展示，不跟文字消息挤在一个气泡里。
+	// content 存的是 Unicode 字符，不是表情 ID —— 客户端按字符渲染，
+	// 不需要额外的表情资源表。
+	MessageType_MESSAGE_TYPE_EMOJI MessageType = 3
 )
 
 // Enum value maps for MessageType.
@@ -39,11 +45,13 @@ var (
 		0: "MESSAGE_TYPE_UNSPECIFIED",
 		1: "MESSAGE_TYPE_TEXT",
 		2: "MESSAGE_TYPE_IMAGE",
+		3: "MESSAGE_TYPE_EMOJI",
 	}
 	MessageType_value = map[string]int32{
 		"MESSAGE_TYPE_UNSPECIFIED": 0,
 		"MESSAGE_TYPE_TEXT":        1,
 		"MESSAGE_TYPE_IMAGE":       2,
+		"MESSAGE_TYPE_EMOJI":       3,
 	}
 )
 
@@ -85,7 +93,7 @@ type MessageInfo struct {
 	SenderId string `protobuf:"bytes,3,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
 	// 消息类型。
 	Type MessageType `protobuf:"varint,4,opt,name=type,proto3,enum=api.message.v1.MessageType" json:"type,omitempty"`
-	// 消息内容。文本消息是原文，图片消息是图片 URL。
+	// 消息内容。文本消息是原文，图片消息是图片 URL，表情消息是表情字符。
 	Content string `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
 	// 发送时间（Unix 秒）。
 	CreatedAt     int64 `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
@@ -172,7 +180,10 @@ type SendMessageRequest struct {
 	ConversationId uint64 `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
 	// 消息类型。缺省按文本处理。
 	Type MessageType `protobuf:"varint,2,opt,name=type,proto3,enum=api.message.v1.MessageType" json:"type,omitempty"`
-	// 消息内容。文本消息是原文，图片消息是图片 URL。≤ 4000 字符。
+	// 消息内容。文本消息是原文，图片消息是图片 URL，表情消息是表情字符。≤ 4000 字符。
+	//
+	// 图片消息的 content 必须是 GetImageUploadToken 签发的凭证上传出来的地址 ——
+	// 服务端会校验地址合法性和对象存在性，外链会被拒。
 	Content       string `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -716,6 +727,157 @@ func (x *GetUnreadCountReply) GetPerConversation() map[uint64]uint32 {
 	return nil
 }
 
+// GetImageUploadTokenRequest 签发聊天图片直传凭证。
+type GetImageUploadTokenRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 文件后缀，不带点，如 "png"。必须在白名单内。
+	Ext           string `protobuf:"bytes,1,opt,name=ext,proto3" json:"ext,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImageUploadTokenRequest) Reset() {
+	*x = GetImageUploadTokenRequest{}
+	mi := &file_message_service_v1_message_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageUploadTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageUploadTokenRequest) ProtoMessage() {}
+
+func (x *GetImageUploadTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_message_service_v1_message_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageUploadTokenRequest.ProtoReflect.Descriptor instead.
+func (*GetImageUploadTokenRequest) Descriptor() ([]byte, []int) {
+	return file_message_service_v1_message_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetImageUploadTokenRequest) GetExt() string {
+	if x != nil {
+		return x.Ext
+	}
+	return ""
+}
+
+// GetImageUploadTokenReply 直传凭证 —— OSS PostObject 表单。
+type GetImageUploadTokenReply struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// OSS 上传地址，客户端 POST 到这里。
+	//
+	// 例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+	// PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+	Host string `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	// 表单字段。客户端原样塞进 FormData 提交。
+	//
+	// 包含 key / policy / x-oss-signature-version / x-oss-credential /
+	// x-oss-date / x-oss-security-token / x-oss-signature /
+	// success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+	//
+	// file 域不放这里 —— 文件本身由客户端从本地读。
+	Fields map[string]string `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+	FileKey string `protobuf:"bytes,3,opt,name=file_key,json=fileKey,proto3" json:"file_key,omitempty"`
+	// 上传后可访问的地址。客户端上传完把它塞进 SendMessage 的 content（type=IMAGE）。
+	PublicUrl string `protobuf:"bytes,4,opt,name=public_url,json=publicUrl,proto3" json:"public_url,omitempty"`
+	// 过期时间，Unix 秒。
+	ExpireAt int64 `protobuf:"varint,5,opt,name=expire_at,json=expireAt,proto3" json:"expire_at,omitempty"`
+	// 允许的最大字节数，0 表示不限。
+	//
+	// **服务端强制** —— policy 的 content-length-range 里带着这个值，
+	// 超限的请求 OSS 直接拒（EntityTooLarge），文件不会落盘。
+	// 这个字段是给客户端的提示，让它能在上传前就拦下超限文件，
+	// 省一次注定失败的直传。
+	MaxSize       int64 `protobuf:"varint,6,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImageUploadTokenReply) Reset() {
+	*x = GetImageUploadTokenReply{}
+	mi := &file_message_service_v1_message_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageUploadTokenReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageUploadTokenReply) ProtoMessage() {}
+
+func (x *GetImageUploadTokenReply) ProtoReflect() protoreflect.Message {
+	mi := &file_message_service_v1_message_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageUploadTokenReply.ProtoReflect.Descriptor instead.
+func (*GetImageUploadTokenReply) Descriptor() ([]byte, []int) {
+	return file_message_service_v1_message_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetImageUploadTokenReply) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *GetImageUploadTokenReply) GetFields() map[string]string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *GetImageUploadTokenReply) GetFileKey() string {
+	if x != nil {
+		return x.FileKey
+	}
+	return ""
+}
+
+func (x *GetImageUploadTokenReply) GetPublicUrl() string {
+	if x != nil {
+		return x.PublicUrl
+	}
+	return ""
+}
+
+func (x *GetImageUploadTokenReply) GetExpireAt() int64 {
+	if x != nil {
+		return x.ExpireAt
+	}
+	return 0
+}
+
+func (x *GetImageUploadTokenReply) GetMaxSize() int64 {
+	if x != nil {
+		return x.MaxSize
+	}
+	return 0
+}
+
 var File_message_service_v1_message_proto protoreflect.FileDescriptor
 
 const file_message_service_v1_message_proto_rawDesc = "" +
@@ -762,16 +924,31 @@ const file_message_service_v1_message_proto_rawDesc = "" +
 	"\x10per_conversation\x18\x02 \x03(\v28.api.message.v1.GetUnreadCountReply.PerConversationEntryR\x0fperConversation\x1aB\n" +
 	"\x14PerConversationEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01*Z\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\".\n" +
+	"\x1aGetImageUploadTokenRequest\x12\x10\n" +
+	"\x03ext\x18\x01 \x01(\tR\x03ext\"\xa9\x02\n" +
+	"\x18GetImageUploadTokenReply\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12L\n" +
+	"\x06fields\x18\x02 \x03(\v24.api.message.v1.GetImageUploadTokenReply.FieldsEntryR\x06fields\x12\x19\n" +
+	"\bfile_key\x18\x03 \x01(\tR\afileKey\x12\x1d\n" +
+	"\n" +
+	"public_url\x18\x04 \x01(\tR\tpublicUrl\x12\x1b\n" +
+	"\texpire_at\x18\x05 \x01(\x03R\bexpireAt\x12\x19\n" +
+	"\bmax_size\x18\x06 \x01(\x03R\amaxSize\x1a9\n" +
+	"\vFieldsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*r\n" +
 	"\vMessageType\x12\x1c\n" +
 	"\x18MESSAGE_TYPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11MESSAGE_TYPE_TEXT\x10\x01\x12\x16\n" +
-	"\x12MESSAGE_TYPE_IMAGE\x10\x022\xd8\x04\n" +
+	"\x12MESSAGE_TYPE_IMAGE\x10\x02\x12\x16\n" +
+	"\x12MESSAGE_TYPE_EMOJI\x10\x032\xf2\x05\n" +
 	"\aMessage\x12q\n" +
 	"\vSendMessage\x12\".api.message.v1.SendMessageRequest\x1a .api.message.v1.SendMessageReply\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/message/send\x12q\n" +
 	"\fListMessages\x12#.api.message.v1.ListMessagesRequest\x1a!.api.message.v1.ListMessagesReply\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/api/message/list\x12\x81\x01\n" +
 	"\x11ListMessagesSince\x12(.api.message.v1.ListMessagesSinceRequest\x1a&.api.message.v1.ListMessagesSinceReply\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/message/since\x12h\n" +
-	"\bMarkRead\x12\x1f.api.message.v1.MarkReadRequest\x1a\x1d.api.message.v1.MarkReadReply\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/message/read\x12y\n" +
+	"\bMarkRead\x12\x1f.api.message.v1.MarkReadRequest\x1a\x1d.api.message.v1.MarkReadReply\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/message/read\x12\x97\x01\n" +
+	"\x13GetImageUploadToken\x12*.api.message.v1.GetImageUploadTokenRequest\x1a(.api.message.v1.GetImageUploadTokenReply\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/api/message/image/upload_token\x12y\n" +
 	"\x0eGetUnreadCount\x12%.api.message.v1.GetUnreadCountRequest\x1a#.api.message.v1.GetUnreadCountReply\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/message/unreadBE\n" +
 	"\x0eapi.message.v1P\x01Z\"chatroom/api/message/service/v1;v1\xa2\x02\fAPIMessageV1b\x06proto3"
 
@@ -788,21 +965,24 @@ func file_message_service_v1_message_proto_rawDescGZIP() []byte {
 }
 
 var file_message_service_v1_message_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_message_service_v1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_message_service_v1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_message_service_v1_message_proto_goTypes = []any{
-	(MessageType)(0),                 // 0: api.message.v1.MessageType
-	(*MessageInfo)(nil),              // 1: api.message.v1.MessageInfo
-	(*SendMessageRequest)(nil),       // 2: api.message.v1.SendMessageRequest
-	(*SendMessageReply)(nil),         // 3: api.message.v1.SendMessageReply
-	(*ListMessagesRequest)(nil),      // 4: api.message.v1.ListMessagesRequest
-	(*ListMessagesReply)(nil),        // 5: api.message.v1.ListMessagesReply
-	(*ListMessagesSinceRequest)(nil), // 6: api.message.v1.ListMessagesSinceRequest
-	(*ListMessagesSinceReply)(nil),   // 7: api.message.v1.ListMessagesSinceReply
-	(*MarkReadRequest)(nil),          // 8: api.message.v1.MarkReadRequest
-	(*MarkReadReply)(nil),            // 9: api.message.v1.MarkReadReply
-	(*GetUnreadCountRequest)(nil),    // 10: api.message.v1.GetUnreadCountRequest
-	(*GetUnreadCountReply)(nil),      // 11: api.message.v1.GetUnreadCountReply
-	nil,                              // 12: api.message.v1.GetUnreadCountReply.PerConversationEntry
+	(MessageType)(0),                   // 0: api.message.v1.MessageType
+	(*MessageInfo)(nil),                // 1: api.message.v1.MessageInfo
+	(*SendMessageRequest)(nil),         // 2: api.message.v1.SendMessageRequest
+	(*SendMessageReply)(nil),           // 3: api.message.v1.SendMessageReply
+	(*ListMessagesRequest)(nil),        // 4: api.message.v1.ListMessagesRequest
+	(*ListMessagesReply)(nil),          // 5: api.message.v1.ListMessagesReply
+	(*ListMessagesSinceRequest)(nil),   // 6: api.message.v1.ListMessagesSinceRequest
+	(*ListMessagesSinceReply)(nil),     // 7: api.message.v1.ListMessagesSinceReply
+	(*MarkReadRequest)(nil),            // 8: api.message.v1.MarkReadRequest
+	(*MarkReadReply)(nil),              // 9: api.message.v1.MarkReadReply
+	(*GetUnreadCountRequest)(nil),      // 10: api.message.v1.GetUnreadCountRequest
+	(*GetUnreadCountReply)(nil),        // 11: api.message.v1.GetUnreadCountReply
+	(*GetImageUploadTokenRequest)(nil), // 12: api.message.v1.GetImageUploadTokenRequest
+	(*GetImageUploadTokenReply)(nil),   // 13: api.message.v1.GetImageUploadTokenReply
+	nil,                                // 14: api.message.v1.GetUnreadCountReply.PerConversationEntry
+	nil,                                // 15: api.message.v1.GetImageUploadTokenReply.FieldsEntry
 }
 var file_message_service_v1_message_proto_depIdxs = []int32{
 	0,  // 0: api.message.v1.MessageInfo.type:type_name -> api.message.v1.MessageType
@@ -810,22 +990,25 @@ var file_message_service_v1_message_proto_depIdxs = []int32{
 	1,  // 2: api.message.v1.SendMessageReply.message:type_name -> api.message.v1.MessageInfo
 	1,  // 3: api.message.v1.ListMessagesReply.messages:type_name -> api.message.v1.MessageInfo
 	1,  // 4: api.message.v1.ListMessagesSinceReply.messages:type_name -> api.message.v1.MessageInfo
-	12, // 5: api.message.v1.GetUnreadCountReply.per_conversation:type_name -> api.message.v1.GetUnreadCountReply.PerConversationEntry
-	2,  // 6: api.message.v1.Message.SendMessage:input_type -> api.message.v1.SendMessageRequest
-	4,  // 7: api.message.v1.Message.ListMessages:input_type -> api.message.v1.ListMessagesRequest
-	6,  // 8: api.message.v1.Message.ListMessagesSince:input_type -> api.message.v1.ListMessagesSinceRequest
-	8,  // 9: api.message.v1.Message.MarkRead:input_type -> api.message.v1.MarkReadRequest
-	10, // 10: api.message.v1.Message.GetUnreadCount:input_type -> api.message.v1.GetUnreadCountRequest
-	3,  // 11: api.message.v1.Message.SendMessage:output_type -> api.message.v1.SendMessageReply
-	5,  // 12: api.message.v1.Message.ListMessages:output_type -> api.message.v1.ListMessagesReply
-	7,  // 13: api.message.v1.Message.ListMessagesSince:output_type -> api.message.v1.ListMessagesSinceReply
-	9,  // 14: api.message.v1.Message.MarkRead:output_type -> api.message.v1.MarkReadReply
-	11, // 15: api.message.v1.Message.GetUnreadCount:output_type -> api.message.v1.GetUnreadCountReply
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	14, // 5: api.message.v1.GetUnreadCountReply.per_conversation:type_name -> api.message.v1.GetUnreadCountReply.PerConversationEntry
+	15, // 6: api.message.v1.GetImageUploadTokenReply.fields:type_name -> api.message.v1.GetImageUploadTokenReply.FieldsEntry
+	2,  // 7: api.message.v1.Message.SendMessage:input_type -> api.message.v1.SendMessageRequest
+	4,  // 8: api.message.v1.Message.ListMessages:input_type -> api.message.v1.ListMessagesRequest
+	6,  // 9: api.message.v1.Message.ListMessagesSince:input_type -> api.message.v1.ListMessagesSinceRequest
+	8,  // 10: api.message.v1.Message.MarkRead:input_type -> api.message.v1.MarkReadRequest
+	12, // 11: api.message.v1.Message.GetImageUploadToken:input_type -> api.message.v1.GetImageUploadTokenRequest
+	10, // 12: api.message.v1.Message.GetUnreadCount:input_type -> api.message.v1.GetUnreadCountRequest
+	3,  // 13: api.message.v1.Message.SendMessage:output_type -> api.message.v1.SendMessageReply
+	5,  // 14: api.message.v1.Message.ListMessages:output_type -> api.message.v1.ListMessagesReply
+	7,  // 15: api.message.v1.Message.ListMessagesSince:output_type -> api.message.v1.ListMessagesSinceReply
+	9,  // 16: api.message.v1.Message.MarkRead:output_type -> api.message.v1.MarkReadReply
+	13, // 17: api.message.v1.Message.GetImageUploadToken:output_type -> api.message.v1.GetImageUploadTokenReply
+	11, // 18: api.message.v1.Message.GetUnreadCount:output_type -> api.message.v1.GetUnreadCountReply
+	13, // [13:19] is the sub-list for method output_type
+	7,  // [7:13] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_message_service_v1_message_proto_init() }
@@ -839,7 +1022,7 @@ func file_message_service_v1_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_message_service_v1_message_proto_rawDesc), len(file_message_service_v1_message_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   12,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -47,6 +47,27 @@ service Message {
         };
     }
 
+    // GetImageUploadToken 签发聊天图片的直传凭证。
+    //
+    // 客户端拿到表单字段后**直接 POST multipart/form-data 到 OSS**，
+    // 服务端不碰文件字节。上传完再把 public_url 当作 IMAGE 消息的 content 提交。
+    //
+    // 流程：签凭证 → 客户端直传 OSS → SendMessage(type=IMAGE, content=public_url)。
+    // SendMessage 那边会校验这个地址是不是本服务签发过的对象 —— 拿外链当图片发进来会被拒。
+    //
+    // 用 PostObject 而不是预签名 PUT：PostObject 的 policy 能带
+    // content-length-range，**OSS 服务端在收数据前就拒掉超限请求** ——
+    // 预签名 PUT 做不到这点，只能事后查大小，而那时文件已经落盘了。
+    //
+    // key 前缀由服务端按当前 uid 拼，客户端改不了 —— 拿着临时凭证也越不出
+    // 自己的目录。
+    rpc GetImageUploadToken (GetImageUploadTokenRequest) returns (GetImageUploadTokenReply) {
+        option (google.api.http) = {
+            post: "/api/message/image/upload_token"
+            body: "*"
+        };
+    }
+
     // GetUnreadCount 查会话级未读数。不传 conversation_id 时返回所有会话的未读总数（角标用）。
     rpc GetUnreadCount (GetUnreadCountRequest) returns (GetUnreadCountReply) {
         option (google.api.http) = {
@@ -62,6 +83,12 @@ enum MessageType {
     MESSAGE_TYPE_TEXT = 1;
     // 图片 —— content 存图片 URL。
     MESSAGE_TYPE_IMAGE = 2;
+    // 表情 —— content 存表情字符本身（如 "😀"）。
+    //
+    // 独立于文本：渲染时按大号表情展示，不跟文字消息挤在一个气泡里。
+    // content 存的是 Unicode 字符，不是表情 ID —— 客户端按字符渲染，
+    // 不需要额外的表情资源表。
+    MESSAGE_TYPE_EMOJI = 3;
 }
 
 // MessageInfo 一条消息。
@@ -74,7 +101,7 @@ message MessageInfo {
     string sender_id = 3;
     // 消息类型。
     MessageType type = 4;
-    // 消息内容。文本消息是原文，图片消息是图片 URL。
+    // 消息内容。文本消息是原文，图片消息是图片 URL，表情消息是表情字符。
     string content = 5;
     // 发送时间（Unix 秒）。
     int64 created_at = 6;
@@ -86,7 +113,10 @@ message SendMessageRequest {
     uint64 conversation_id = 1;
     // 消息类型。缺省按文本处理。
     MessageType type = 2;
-    // 消息内容。文本消息是原文，图片消息是图片 URL。≤ 4000 字符。
+    // 消息内容。文本消息是原文，图片消息是图片 URL，表情消息是表情字符。≤ 4000 字符。
+    //
+    // 图片消息的 content 必须是 GetImageUploadToken 签发的凭证上传出来的地址 ——
+    // 服务端会校验地址合法性和对象存在性，外链会被拒。
     string content = 3;
 }
 
@@ -159,4 +189,40 @@ message GetUnreadCountReply {
     uint32 unread_count = 1;
     // 各会话的未读数，key 是 conversation_id。只在没指定 conversation_id 时有值。
     map<uint64, uint32> per_conversation = 2;
+}
+
+// GetImageUploadTokenRequest 签发聊天图片直传凭证。
+message GetImageUploadTokenRequest {
+    // 文件后缀，不带点，如 "png"。必须在白名单内。
+    string ext = 1;
+}
+
+// GetImageUploadTokenReply 直传凭证 —— OSS PostObject 表单。
+message GetImageUploadTokenReply {
+    // OSS 上传地址，客户端 POST 到这里。
+    //
+    // 例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+    // PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+    string host = 1;
+    // 表单字段。客户端原样塞进 FormData 提交。
+    //
+    // 包含 key / policy / x-oss-signature-version / x-oss-credential /
+    // x-oss-date / x-oss-security-token / x-oss-signature /
+    // success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+    //
+    // file 域不放这里 —— 文件本身由客户端从本地读。
+    map<string, string> fields = 2;
+    // object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+    string file_key = 3;
+    // 上传后可访问的地址。客户端上传完把它塞进 SendMessage 的 content（type=IMAGE）。
+    string public_url = 4;
+    // 过期时间，Unix 秒。
+    int64 expire_at = 5;
+    // 允许的最大字节数，0 表示不限。
+    //
+    // **服务端强制** —— policy 的 content-length-range 里带着这个值，
+    // 超限的请求 OSS 直接拒（EntityTooLarge），文件不会落盘。
+    // 这个字段是给客户端的提示，让它能在上传前就拦下超限文件，
+    // 省一次注定失败的直传。
+    int64 max_size = 6;
 }

@@ -32,7 +32,7 @@ type ClientFrame struct {
 	UserID string `json:"user_id,omitempty"`
 	// 客户端最后看到的消息 id。resume 帧用。
 	LastMessageID uint64 `json:"last_message_id,omitempty"`
-	// 消息类型 1=文本 2=图片。与 message 服务的枚举对齐。
+	// 消息类型 1=文本 2=图片 3=表情。与 message 服务的枚举对齐。
 	MsgType uint8 `json:"msg_type,omitempty"`
 	// 消息内容。chat 帧用。
 	Content string `json:"content,omitempty"`

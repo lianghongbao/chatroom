@@ -6,6 +6,7 @@ import (
 	pb "chatroom/api/message/service/v1"
 	"chatroom/app/message/service/internal/biz"
 	"chatroom/pkg/middleware"
+	"chatroom/pkg/oss"
 )
 
 // MessageService message.proto 的 transport adapter。
@@ -123,6 +124,50 @@ func (s *MessageService) GetUnreadCount(ctx context.Context, req *pb.GetUnreadCo
 	return out, nil
 }
 
+// GetImageUploadToken 签发聊天图片直传凭证。req 是签发请求。
+func (s *MessageService) GetImageUploadToken(ctx context.Context, req *pb.GetImageUploadTokenRequest) (*pb.GetImageUploadTokenReply, error) {
+	if req == nil {
+		return nil, biz.ErrMessageInvalidArgument
+	}
+	uid, ok := middleware.FromContext(ctx)
+	if !ok {
+		return nil, biz.ErrMessageInvalidArgument
+	}
+	token, err := s.uc.GetImageUploadToken(ctx, uid, req.GetExt())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetImageUploadTokenReply{
+		Host:      token.Host,
+		Fields:    postFormFields(token),
+		FileKey:   token.Key,
+		PublicUrl: token.PublicUrl,
+		ExpireAt:  token.ExpireAt,
+		MaxSize:   token.MaxSize,
+	}, nil
+}
+
+// postFormFields 把 PostObject 凭证转成客户端要提交的表单域。
+// token 签发出来的凭证
+//
+// key 放在 fields 里 —— 客户端自己指定 object key，
+// 服务端给的只是推荐值；policy 限定了前缀，客户端改不出自己的目录。
+func postFormFields(token *oss.PostUploadForm) map[string]string {
+	if token == nil {
+		return nil
+	}
+	return map[string]string{
+		"key":                     token.Key,
+		"policy":                  token.Policy,
+		"x-oss-signature-version": oss.SignatureVersion,
+		"x-oss-credential":        token.Credential,
+		"x-oss-date":              token.DateTime,
+		"x-oss-security-token":    token.SecurityToken,
+		"x-oss-signature":         token.Signature,
+		"success_action_status":   "200",
+	}
+}
+
 // messageTypeFromDTO 把 proto MessageType 转成 biz.MessageType。
 // t 是 proto 里的消息类型枚举，未知值返 ErrMessageInvalidArgument。
 func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
@@ -134,6 +179,8 @@ func messageTypeFromDTO(t pb.MessageType) (biz.MessageType, error) {
 		return biz.MessageTypeText, nil
 	case pb.MessageType_MESSAGE_TYPE_IMAGE:
 		return biz.MessageTypeImage, nil
+	case pb.MessageType_MESSAGE_TYPE_EMOJI:
+		return biz.MessageTypeEmoji, nil
 	default:
 		return 0, biz.ErrMessageInvalidArgument
 	}
@@ -161,6 +208,8 @@ func messageTypeToDTO(t biz.MessageType) pb.MessageType {
 		return pb.MessageType_MESSAGE_TYPE_TEXT
 	case biz.MessageTypeImage:
 		return pb.MessageType_MESSAGE_TYPE_IMAGE
+	case biz.MessageTypeEmoji:
+		return pb.MessageType_MESSAGE_TYPE_EMOJI
 	default:
 		return pb.MessageType_MESSAGE_TYPE_UNSPECIFIED
 	}
