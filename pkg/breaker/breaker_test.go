@@ -10,7 +10,7 @@ import (
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
 	"github.com/go-kratos/kratos/v3/transport"
-	"github.com/sony/gobreaker"
+	"github.com/sony/gobreaker/v2"
 )
 
 // fakeTransport 是 transport.Transporter 的最小实现。
@@ -30,6 +30,7 @@ func newTestGroup(minRequests int64, ratio float64, timeout time.Duration) *brea
 		failureRatio: ratio,
 		request:      uint32(minRequests),
 		interval:     10 * time.Second,
+		bucketPeriod: time.Second,
 		timeout:      timeout,
 		maxRequests:  1,
 	})
@@ -41,7 +42,7 @@ func TestBreakerOpensAfterFailureRatio(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 4; i++ {
-		_, err := cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		_, err := cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 		if err == nil {
 			t.Fatal("下游失败时应透传错误")
 		}
@@ -58,7 +59,7 @@ func TestBreakerStaysClosedBelowMinRequests(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 3; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 
 	if cb.State() != gobreaker.StateClosed {
@@ -74,9 +75,9 @@ func TestBreakerStaysClosedWithGoodSuccessRatio(t *testing.T) {
 	// 10 次里只失败 1 次（失败率 10%），远低于 50% 的阈值
 	for i := 0; i < 10; i++ {
 		if i == 0 {
-			cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+			cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 		} else {
-			cb.Execute(func() (interface{}, error) { return "ok", nil })
+			cb.Execute(func() (any, error) { return "ok", nil })
 		}
 	}
 
@@ -91,7 +92,7 @@ func TestBreakerHalfOpensAfterCooldown(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	if cb.State() != gobreaker.StateOpen {
 		t.Fatalf("应处于熔断状态, state=%v", cb.State())
@@ -110,14 +111,14 @@ func TestBreakerClosesAfterSuccessfulProbe(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	time.Sleep(80 * time.Millisecond)
 
 	if cb.State() != gobreaker.StateHalfOpen {
 		t.Fatalf("冷却期后应进半开, state=%v", cb.State())
 	}
-	cb.Execute(func() (interface{}, error) { return "ok", nil })
+	cb.Execute(func() (any, error) { return "ok", nil })
 
 	if cb.State() != gobreaker.StateClosed {
 		t.Fatalf("试探成功后应恢复关闭, state=%v", cb.State())
@@ -130,14 +131,14 @@ func TestBreakerReopensAfterFailedProbe(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	time.Sleep(80 * time.Millisecond)
 
 	if cb.State() != gobreaker.StateHalfOpen {
 		t.Fatalf("冷却期后应进半开, state=%v", cb.State())
 	}
-	cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 
 	if cb.State() != gobreaker.StateOpen {
 		t.Fatalf("试探失败后应重新熔断, state=%v", cb.State())
@@ -151,7 +152,7 @@ func TestLocalRejectsDoNotPolluteCounts(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	if cb.State() != gobreaker.StateOpen {
 		t.Fatalf("应熔断, state=%v", cb.State())
@@ -161,7 +162,7 @@ func TestLocalRejectsDoNotPolluteCounts(t *testing.T) {
 
 	// 熔断期间连拒 50 次 —— 下游根本没被调用
 	for i := 0; i < 50; i++ {
-		_, err := cb.Execute(func() (interface{}, error) {
+		_, err := cb.Execute(func() (any, error) {
 			t.Error("熔断期间不该调到下游")
 			return nil, nil
 		})
@@ -189,6 +190,7 @@ func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
 		failureRatio: 0.99, // 几乎不熔断，隔离出计数问题
 		request:      1000,
 		interval:     time.Hour,
+		bucketPeriod: time.Second,
 		timeout:      time.Hour,
 		maxRequests:  1,
 	})
@@ -196,7 +198,7 @@ func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
 
 	// 先让它熔断
 	for i := 0; i < 1000; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	if cb.State() != gobreaker.StateOpen {
 		t.Fatalf("应熔断, state=%v", cb.State())
@@ -208,7 +210,7 @@ func TestConcurrentLocalRejectsDoNotPolluteCounts(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				cb.Execute(func() (interface{}, error) { return nil, nil })
+				cb.Execute(func() (any, error) { return nil, nil })
 			}
 		}()
 	}
@@ -229,7 +231,7 @@ func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 2; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	time.Sleep(80 * time.Millisecond)
 
@@ -239,7 +241,7 @@ func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 	if cb.State() != gobreaker.StateHalfOpen {
 		t.Fatalf("应进半开, state=%v", cb.State())
 	}
-	cb.Execute(func() (interface{}, error) { return "ok", nil })
+	cb.Execute(func() (any, error) { return "ok", nil })
 	if cb.State() != gobreaker.StateClosed {
 		t.Fatalf("试探成功后应关闭, state=%v", cb.State())
 	}
@@ -250,18 +252,22 @@ func TestStaleResultDoesNotPolluteNewGeneration(t *testing.T) {
 }
 
 // 统计周期到了之后计数清空 —— gobreaker 的原生语义。
+//
+// 固定窗口模式（bucketPeriod=0）下，Interval 就是整个窗口，
+// 过期后计数清零重算。
 func TestIntervalClearsCounts(t *testing.T) {
 	g := newBreakerGroup(&options{
 		failureRatio: 0.5,
 		request:      100, // 样本要求高，避免熔断干扰观察
 		interval:     100 * time.Millisecond,
+		bucketPeriod: 0, // 固定窗口
 		timeout:      time.Minute,
 		maxRequests:  1,
 	})
 	cb := g.Get("/svc/X")
 
 	for i := 0; i < 5; i++ {
-		cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 	}
 	if cb.Counts().Requests != 5 {
 		t.Fatalf("应记了 5 次, got %+v", cb.Counts())
@@ -269,10 +275,119 @@ func TestIntervalClearsCounts(t *testing.T) {
 
 	// 等过周期，再来一个请求触发惰性清空。
 	time.Sleep(150 * time.Millisecond)
-	cb.Execute(func() (interface{}, error) { return nil, errors.New("boom") })
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
 
 	if cb.Counts().Requests != 1 {
 		t.Errorf("周期过期后计数应清空重算, got %+v", cb.Counts())
+	}
+}
+
+// 桶宽必须整除周期 —— v2 会把 Interval 向上取整到 BucketPeriod 的整数倍。
+//
+// interval=100ms、bucketPeriod=1s → 实际窗口被撑成 1s。
+// 这条把「桶宽怎么选」钉死，免得有人配出一个比预期长得多的窗口。
+func TestBucketPeriodRoundsIntervalUp(t *testing.T) {
+	g := newBreakerGroup(&options{
+		failureRatio: 0.5,
+		request:      100,
+		interval:     100 * time.Millisecond,
+		bucketPeriod: time.Second,
+		timeout:      time.Minute,
+		maxRequests:  1,
+	})
+	cb := g.Get("/svc/X")
+
+	for i := 0; i < 5; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+
+	// 原始 Interval（100ms）过了，但窗口被撑到 1s，计数不该清
+	time.Sleep(150 * time.Millisecond)
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	if got := cb.Counts().Requests; got != 6 {
+		t.Errorf("窗口被撑到 1s，150ms 时不该清空, got %+v", cb.Counts())
+	}
+
+	// 撑过的窗口真到期了才清
+	time.Sleep(1100 * time.Millisecond)
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	if got := cb.Counts().Requests; got != 1 {
+		t.Errorf("1.25s 后窗口应清空, got %+v", cb.Counts())
+	}
+}
+
+// v2 的滚动窗口：桶宽小于周期时，统计随时间逐桶滑出，
+// 而不是整段清零重算。窗口里残留的旧请求会被自然挤出去。
+func TestRollingWindowSlidesOutOldBuckets(t *testing.T) {
+	g := newBreakerGroup(&options{
+		failureRatio: 0.5,
+		request:      100, // 样本要求高，避免熔断干扰观察
+		interval:     200 * time.Millisecond,
+		bucketPeriod: 50 * time.Millisecond,
+		timeout:      time.Minute,
+		maxRequests:  1,
+	})
+	cb := g.Get("/svc/X")
+
+	// 先攒 4 次失败
+	for i := 0; i < 4; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+	if cb.Counts().Requests != 4 {
+		t.Fatalf("应记了 4 次, got %+v", cb.Counts())
+	}
+
+	// 等过整个窗口 —— 4 个桶依次滑出，计数应该归零
+	time.Sleep(250 * time.Millisecond)
+	// 来一个请求触发惰性滚动
+	cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+
+	if got := cb.Counts().Requests; got != 1 {
+		t.Errorf("窗口滑过后只剩这次的 1 次, got %+v", cb.Counts())
+	}
+}
+
+// 排除项：调用方自己取消的请求不该进统计 ——
+// 它跟下游健不健康没关系，算成失败会把好端点误判成挂了。
+func TestExcludedErrorsDoNotAffectCounts(t *testing.T) {
+	g := newTestGroup(4, 0.5, time.Minute)
+	cb := g.Get("/svc/X")
+
+	for i := 0; i < 20; i++ {
+		cb.Execute(func() (any, error) { return nil, context.Canceled })
+	}
+
+	counts := cb.Counts()
+	if counts.TotalFailures != 0 {
+		t.Errorf("取消的请求不该算失败, got %+v", counts)
+	}
+	if counts.TotalSuccesses != 0 {
+		t.Errorf("取消的请求不该算成功, got %+v", counts)
+	}
+	if counts.TotalExclusions != 20 {
+		t.Errorf("取消的请求应记成排除项, got %+v", counts)
+	}
+	// 排除项不算有效样本，熔断器不该被它们撑开
+	if cb.State() != gobreaker.StateClosed {
+		t.Errorf("全是取消请求时不该熔断, state=%v", cb.State())
+	}
+}
+
+// 超时取消同样排除在外。
+func TestDeadlineExceededIsExcluded(t *testing.T) {
+	g := newTestGroup(4, 0.5, time.Minute)
+	cb := g.Get("/svc/X")
+
+	for i := 0; i < 10; i++ {
+		cb.Execute(func() (any, error) { return nil, context.DeadlineExceeded })
+	}
+
+	counts := cb.Counts()
+	if counts.TotalFailures != 0 || counts.TotalSuccesses != 0 {
+		t.Errorf("超时取消不该计入成败, got %+v", counts)
+	}
+	if counts.TotalExclusions != 10 {
+		t.Errorf("应记成排除项, got %+v", counts)
 	}
 }
 
@@ -351,6 +466,7 @@ func TestBreakerOpenThenRecover(t *testing.T) {
 	mw := Client(
 		WithRequest(3),
 		WithInterval(time.Hour), // 周期设长，避免清空干扰
+		WithBucketPeriod(0),     // 固定窗口，避免滚动干扰
 		WithTimeout(100*time.Millisecond),
 	)
 
@@ -440,6 +556,26 @@ func TestClientMiddlewareIgnoresBusinessErrors(t *testing.T) {
 	// 404 不算失败 → 熔断器一直是闭合的 → 每次都真的打到了 handler
 	if got := atomic.LoadInt64(&calls); got != 10 {
 		t.Fatalf("404 不该触发熔断, calls=%d", got)
+	}
+}
+
+// 调用方取消的请求不该触发熔断。
+func TestClientMiddlewareIgnoresCanceledRequests(t *testing.T) {
+	mw := Client(WithRequest(2), WithInterval(10*time.Second), WithTimeout(time.Minute))
+
+	var calls int64
+	handler := func(ctx context.Context, req any) (any, error) {
+		atomic.AddInt64(&calls, 1)
+		return nil, context.Canceled
+	}
+	chain := mw(handler)
+	ctx := transport.NewClientContext(context.Background(), &fakeTransport{operation: "/svc/Cancel"})
+
+	for i := 0; i < 10; i++ {
+		_, _ = chain(ctx, nil)
+	}
+	if got := atomic.LoadInt64(&calls); got != 10 {
+		t.Fatalf("取消的请求不该触发熔断, calls=%d", got)
 	}
 }
 
