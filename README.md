@@ -266,11 +266,12 @@ cd app/user/service && make run          # 前台启动（带全 env + NACOS_SER
 五个服务一起起（后台，日志在 `/tmp/chatroom-<服务>.log`）：
 
 ```bash
-for svc in user friend conversation message ws-gateway; do
-  (cd $svc-service && nohup make run > /tmp/chatroom-$svc.log 2>&1 &)
-  sleep 1
-done
+make run-all       # 从仓库根跑
+make stop-all      # 停掉
 ```
+
+`run-all` 按依赖顺序逐个起，每个服务在**自己的目录**里跑 `make run`
+（那里才带全 env），服务之间隔 1s 让 nacos 注册先生效。
 
 启动顺序有依赖：`user` → `conversation` → `message` → `ws-gateway`。
 后几个要经 nacos discovery 调前面的服务，先起被调方。
