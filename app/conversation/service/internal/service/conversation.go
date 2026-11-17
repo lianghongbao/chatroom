@@ -6,7 +6,6 @@ import (
 	pb "chatroom/api/conversation/service/v1"
 	"chatroom/app/conversation/service/internal/biz"
 	"chatroom/pkg/middleware"
-	"chatroom/pkg/oss"
 )
 
 // ConversationService 会话服务的传输层适配器。
@@ -198,33 +197,12 @@ func (s *ConversationService) GetGroupAvatarUploadToken(ctx context.Context, req
 	}
 	return &pb.GetGroupAvatarUploadTokenReply{
 		Host:      token.Host,
-		Fields:    postFormFields(token),
+		Fields:    token.Fields(),
 		FileKey:   token.Key,
 		PublicUrl: token.PublicUrl,
 		ExpireAt:  token.ExpireAt,
 		MaxSize:   token.MaxSize,
 	}, nil
-}
-
-// postFormFields 把 PostObject 凭证转成客户端要提交的表单域。
-// token 签发出来的凭证
-//
-// key 放在 fields 里 —— 客户端自己指定 object key，
-// 服务端给的只是推荐值；policy 限定了前缀，客户端改不出自己的目录。
-func postFormFields(token *oss.PostUploadForm) map[string]string {
-	if token == nil {
-		return nil
-	}
-	return map[string]string{
-		"key":                     token.Key,
-		"policy":                  token.Policy,
-		"x-oss-signature-version": oss.SignatureVersion,
-		"x-oss-credential":        token.Credential,
-		"x-oss-date":              token.DateTime,
-		"x-oss-security-token":    token.SecurityToken,
-		"x-oss-signature":         token.Signature,
-		"success_action_status":   "200",
-	}
 }
 
 // TransferOwner 转让群主。

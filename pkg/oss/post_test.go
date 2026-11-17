@@ -209,3 +209,56 @@ func TestPostPolicyNoContentType(t *testing.T) {
 		}
 	}
 }
+
+// TestPostPolicyCacheControl 缓存策略要同时出现在 policy 和表单域里。
+//
+// 两边必须一致：OSS 会校验 policy 里的每条条件都有对应的表单域，
+// 少一个就返 InvalidArgument —— 上传全挂，而且报错信息跟 Cache-Control 没关系，
+// 很难查。
+func TestPostPolicyCacheControl(t *testing.T) {
+	client := &Client{cfg: Config{Bucket: "b", Region: "cn-guangzhou"}}
+	client.stsCred = &STSCredential{AccessKeyId: "a", AccessKeySecret: "s", SecurityToken: "t"}
+	client.stsCached = timeNowForTest()
+
+	form, err := client.GeneratePostUploadForm(t.Context(), PostUploadOptions{
+		Dir:         "chat_image/u1/",
+		Ext:         "png",
+		AllowedExts: []string{"png"},
+		MaxSize:     1024,
+	})
+	if err != nil {
+		t.Fatalf("签发失败: %v", err)
+	}
+
+	raw, _ := base64.StdEncoding.DecodeString(form.Policy)
+	var policy struct {
+		Conditions []any `json:"conditions"`
+	}
+	if err := json.Unmarshal(raw, &policy); err != nil {
+		t.Fatalf("policy 不是合法 JSON: %v", err)
+	}
+
+	// policy 里要有一条 Cache-Control 的固定值条件。
+	inPolicy := false
+	for _, c := range policy.Conditions {
+		obj, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, has := obj["Cache-Control"]; has {
+			inPolicy = true
+			if v != CacheControlValue {
+				t.Errorf("policy 里的 Cache-Control 不对: %v", v)
+			}
+		}
+	}
+	if !inPolicy {
+		t.Fatalf("policy 里没有 Cache-Control 条件: %s", raw)
+	}
+
+	// 表单域里也要有，且值一致。
+	fields := form.Fields()
+	if got := fields["Cache-Control"]; got != CacheControlValue {
+		t.Errorf("表单域里的 Cache-Control 不对: %q", got)
+	}
+}

@@ -47,6 +47,15 @@ import (
 // postProduct V4 签名里的 service 标识。
 const postProduct = "oss"
 
+// CacheControlValue 上传对象的缓存策略。
+//
+// object key 每次上传都是新的（newObjectID），同一个地址永远对应同一份内容，
+// 所以可以声明 immutable —— 浏览器和 CDN 缓存多久都不会拿到旧图。
+//
+// 不设这个头的话 OSS 不返回 Cache-Control，缓存策略由浏览器自己决定，
+// 实际效果是每次都回源校验一遍：往上翻一次聊天记录，图片就重下一次。
+const CacheControlValue = "public, max-age=31536000, immutable"
+
 // PostUploadForm 客户端拼 PostObject 表单需要的全部字段。
 type PostUploadForm struct {
 	// Host 上传地址，例 "https://my-bucket.oss-cn-hangzhou.aliyuncs.com"。
@@ -69,6 +78,36 @@ type PostUploadForm struct {
 	Signature string
 	// MaxSize 服务端强制的文件大小上限，字节。
 	MaxSize int64
+	// CacheControl 对象的缓存策略。空串表示不设。
+	CacheControl string
+}
+
+// Fields 返回客户端要提交的表单域。
+//
+// 表单域必须跟 policy 的 conditions 对得上 —— OSS 会校验**每一个**表单域
+// 都在 policy 里，也要求 policy 里的每条条件都有对应的表单域。
+// 所以这份清单跟 policy 在同一个地方生成，别处别自己拼一份 ——
+// 少一个字段 OSS 直接返 InvalidArgument，上传全挂。
+func (f *PostUploadForm) Fields() map[string]string {
+	if f == nil {
+		return nil
+	}
+	fields := map[string]string{
+		"key":                     f.Key,
+		"policy":                  f.Policy,
+		"x-oss-signature-version": SignatureVersion,
+		"x-oss-credential":        f.Credential,
+		"x-oss-date":              f.DateTime,
+		"x-oss-security-token":    f.SecurityToken,
+		"x-oss-signature":         f.Signature,
+		"success_action_status":   "200",
+	}
+	// Cache-Control 只在签发时带了才写进表单 ——
+	// 空值跟 policy 里的条件对不上，OSS 会拒。
+	if f.CacheControl != "" {
+		fields["Cache-Control"] = f.CacheControl
+	}
+	return fields
 }
 
 // PostUploadOptions 签发 PostObject 直传表单的入参。
@@ -154,6 +193,8 @@ func (c *Client) GeneratePostUploadForm(ctx context.Context, opts PostUploadOpti
 		map[string]string{"x-oss-security-token": cred.SecurityToken},
 		// key 必须以 dir 开头 —— 防越权上传到别人的目录。
 		[]any{"starts-with", "$key", dir},
+		// 对象的缓存策略。固定值 —— 表单域里的 Cache-Control 必须跟这条一模一样。
+		map[string]string{"Cache-Control": CacheControlValue},
 		// 文件长度区间。**这是服务端强制上限的落点**，
 		// 超限直接返 EntityTooLarge，文件根本不会落盘。
 		[]any{"content-length-range", opts.MinSize, opts.MaxSize},
@@ -194,6 +235,7 @@ func (c *Client) GeneratePostUploadForm(ctx context.Context, opts PostUploadOpti
 		DateTime:      dateTime,
 		Signature:     signature,
 		MaxSize:       opts.MaxSize,
+		CacheControl:  CacheControlValue,
 	}, nil
 }
 
