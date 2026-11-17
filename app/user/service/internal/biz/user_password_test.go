@@ -16,7 +16,7 @@ func TestChangePassword_RevokesRefreshToken(t *testing.T) {
 	repo := newFakeUserRepo()
 	auth := &conf.Auth{JwtSecret: "a1b2c3d4e5f67890abcdef1234567890"}
 	store := newFakeTokenStore()
-	uc := NewUserUsecase(repo, auth, nil, nil, store, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, auth, nil, nil, nil, store, nil, StorageOptions{}, nil)
 	seedUser(t, repo, "alice", "secret123")
 
 	const accessJTI = "access-jti-1"
@@ -49,10 +49,10 @@ func TestChangePassword_RevokesRefreshToken(t *testing.T) {
 func TestChangePassword_KeepsPasswordWhitespace(t *testing.T) {
 	repo := newFakeUserRepo()
 	auth := &conf.Auth{JwtSecret: "a1b2c3d4e5f67890abcdef1234567890"}
-	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
 	const pwd = " pass "
-	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice", "", ""); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice", "", "", "1.2.3.4"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -66,10 +66,10 @@ func TestChangePassword_KeepsPasswordWhitespace(t *testing.T) {
 func TestLogin_PasswordWhitespaceRoundTrip(t *testing.T) {
 	repo := newFakeUserRepo()
 	auth := &conf.Auth{JwtSecret: "a1b2c3d4e5f67890abcdef1234567890"}
-	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
 	const pwd = " pass "
-	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice", "", ""); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", pwd, "Alice", "", "", "1.2.3.4"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -96,9 +96,9 @@ func TestRegister_RejectsOverlongInputs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := newFakeUserRepo()
 			auth := &conf.Auth{JwtSecret: "a1b2c3d4e5f67890abcdef1234567890"}
-			uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, StorageOptions{}, nil)
+			uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-			_, err := uc.Register(context.Background(), tc.username, tc.password, tc.nickname, "", "")
+			_, err := uc.Register(context.Background(), tc.username, tc.password, tc.nickname, "", "", "1.2.3.4")
 			if !errors.Is(err, ErrUserInvalidArgument) {
 				t.Errorf("err = %v, want ErrUserInvalidArgument", err)
 			}
@@ -113,7 +113,7 @@ func TestRegister_RejectsOverlongInputs(t *testing.T) {
 func TestUpdateUser_RejectsOverlongProfile(t *testing.T) {
 	repo := newFakeUserRepo()
 	auth := &conf.Auth{JwtSecret: "a1b2c3d4e5f67890abcdef1234567890"}
-	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, auth, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seedUser(t, repo, "alice", "secret123")
 
 	_, err := uc.UpdateUser(context.Background(), "uid-1", strings.Repeat("n", MaxNicknameLength+1), "http://x/y.png")

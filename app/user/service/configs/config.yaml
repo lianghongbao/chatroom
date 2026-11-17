@@ -44,6 +44,32 @@ auth:
     - /api.user.v1.User/Register
     - /api.user.v1.User/Login
 
+# 限流（Redis + Lua 令牌桶）。
+#
+# capacity 桶容量 —— 一次最多能拿走多少个令牌（突发量上限）。
+# rate 每秒补几个令牌 —— 长期平均速率，这才是真正的闸门。
+# ttl 桶的空闲回收时间 —— 没人用的桶多久消失。
+#
+# rate_limit 是通用默认值；rate_limits 里各场景可以覆盖。
+# 不写就用代码里的默认值。
+rate_limit:
+  capacity: 5
+  rate: 1
+  ttl: 60s
+
+rate_limits:
+  # 登录失败计数桶。容量 = 允许的连续失败次数（与 auth.login_max_fail 对齐）。
+  # 速率决定锁多久之后能再试：5 次 / 900s ≈ 每 3 分钟回充 1 次。
+  login_fail:
+    capacity: 5
+    rate: 0.0056
+    ttl: 900s
+  # 注册桶（按 IP）。稳态 5 个/分钟，突发 10 个。
+  register:
+    capacity: 10
+    rate: 0.0833
+    ttl: 300s
+
 observability:
   metrics_addr: ""
   tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'

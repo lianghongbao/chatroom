@@ -15,6 +15,22 @@ message Bootstrap {
   Registry registry = 5;
   // 对象存储配置（阿里云 OSS）。头像直传用。
   Storage storage = 6;
+  // 限流配置（令牌桶）。整段留空 = 用代码默认值。
+  RateLimit rate_limit = 7;
+  // 各业务场景的限流参数覆盖。没配的用 rate_limit 的通用值。
+  // 每个场景可以有自己的突发量和速率 —— 登录和注册的容忍度不一样。
+  RateLimits rate_limits = 8;
+}
+
+// 各业务场景的限流参数。
+//
+// 按场景分开是因为「突发量 + 稳态速率」的合理值每个场景不同：
+// 注册要挡批量注册（低速、严格），登录要挡撞库（允许少量突发试错）。
+message RateLimits {
+  // 登录失败计数桶 —— 连续失败到这个数就锁。
+  RateLimit login_fail = 1;
+  // 注册桶 —— 单 IP 的注册速率。
+  RateLimit register = 2;
 }
 
 // Storage 对象存储配置。
@@ -124,6 +140,23 @@ message Auth {
   // 服务间内部调用凭证，走 X-Internal-Token 头。留空表示禁用内部接口（端点一律 403）。
   // 生产环境必须通过 Secret 注入。
   string internal_secret = 9;
+}
+
+// 令牌桶限流配置。
+//
+// 三个参数对应令牌桶的三要素：
+//   - capacity 桶容量 —— 一次最多能拿走多少个令牌（突发量上限）。
+//   - rate 每秒补几个令牌 —— 长期平均速率。
+//   - ttl 桶的空闲回收时间 —— 没人用的桶多久消失。
+//
+// 留空或 <= 0 时走代码里的默认值。
+message RateLimit {
+  // 桶容量（令牌数）。默认 1。
+  double capacity = 1;
+  // 每秒补充的令牌数。默认 1。
+  double rate = 2;
+  // 桶的空闲回收时间。默认 1m。
+  google.protobuf.Duration ttl = 3;
 }
 
 // 可观测性配置。两端点都为空时不启动对应 middleware。

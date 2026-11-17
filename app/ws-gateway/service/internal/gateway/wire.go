@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strconv"
 	"time"
 
 	"chatroom/app/ws-gateway/service/internal/conf"
@@ -39,22 +40,52 @@ type GatewayConfig struct {
 	IdleTimeout    time.Duration // 空闲踢出阈值。0 = 不踢
 	OnlineTTL      time.Duration // 在线状态 TTL
 	MemberCacheTTL time.Duration // 会话成员缓存有效期
+
+	// 准入限制。
+	HandshakeRate    int  // 单 IP 每秒握手次数。0 = 默认 20
+	HandshakeBurst   int  // 单 IP 突发握手额度。0 = 默认 40
+	MaxConnections   int  // 单实例总连接数上限。0 = 默认 5000
+	MaxConnsPerUser  int  // 单用户连接数上限。0 = 默认 5
+	TrustProxyHeader bool // 读 X-Forwarded-For 取客户端 IP。默认 false
 }
 
 // NewGatewayConfig 返回默认配置。
+//
+// 准入限制的参数从环境变量读 —— 它们是网关独有的运维旋钮，
+// 跟业务参数（conf proto 里的）不是一回事。调参不用改代码重新打镜像。
 func NewGatewayConfig() GatewayConfig {
 
 	return GatewayConfig{
-		InstanceID:     defaultInstanceID(),
-		Path:           "/ws",
-		SendQueueSize:  defaultSendQueueSize,
-		PingInterval:   defaultPingInterval,
-		PongWait:       defaultPongWait,
-		WriteWait:      defaultWriteWait,
-		IdleTimeout:    defaultIdleTimeout,
-		OnlineTTL:      defaultOnlineTTL,
-		MemberCacheTTL: defaultMemberCacheTTL,
+		InstanceID:       defaultInstanceID(),
+		Path:             "/ws",
+		SendQueueSize:    defaultSendQueueSize,
+		PingInterval:     defaultPingInterval,
+		PongWait:         defaultPongWait,
+		WriteWait:        defaultWriteWait,
+		IdleTimeout:      defaultIdleTimeout,
+		OnlineTTL:        defaultOnlineTTL,
+		MemberCacheTTL:   defaultMemberCacheTTL,
+		HandshakeRate:    envInt("GATEWAY_HANDSHAKE_RATE", defaultHandshakeRate),
+		HandshakeBurst:   envInt("GATEWAY_HANDSHAKE_BURST", defaultHandshakeBurst),
+		MaxConnections:   envInt("GATEWAY_MAX_CONNECTIONS", defaultMaxConnections),
+		MaxConnsPerUser:  envInt("GATEWAY_MAX_CONNS_PER_USER", defaultMaxConnsPerUser),
+		TrustProxyHeader: os.Getenv("GATEWAY_TRUST_PROXY_HEADER") == "true",
 	}
+}
+
+// envInt 读整数环境变量。空值或解析失败时用默认值。
+// name 环境变量名
+// def 默认值
+func envInt(name string, def int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 // defaultInstanceID 默认实例 ID。优先取 GATEWAY_INSTANCE_ID 环境变量，其次 hostname。
@@ -124,13 +155,18 @@ func NewServerFromConfig(cfg GatewayConfig, deps *Dependencies, sender MessageSe
 		cfg.InstanceID = defaultInstanceID()
 	}
 	srv := NewServer(Config{
-		InstanceID:    cfg.InstanceID,
-		Path:          cfg.Path,
-		SendQueueSize: cfg.SendQueueSize,
-		WriteWait:     cfg.WriteWait,
-		PongWait:      cfg.PongWait,
-		PingInterval:  cfg.PingInterval,
-		IdleTimeout:   cfg.IdleTimeout,
+		InstanceID:       cfg.InstanceID,
+		Path:             cfg.Path,
+		SendQueueSize:    cfg.SendQueueSize,
+		WriteWait:        cfg.WriteWait,
+		PongWait:         cfg.PongWait,
+		PingInterval:     cfg.PingInterval,
+		IdleTimeout:      cfg.IdleTimeout,
+		HandshakeRate:    cfg.HandshakeRate,
+		HandshakeBurst:   cfg.HandshakeBurst,
+		MaxConnections:   cfg.MaxConnections,
+		MaxConnsPerUser:  cfg.MaxConnsPerUser,
+		TrustProxyHeader: cfg.TrustProxyHeader,
 	}, deps.Pool, sender, verify, deps.Members, deps.Online, logger)
 	srv.WithUserConversations(convs) // 上线/下线时通知会话里的同伴
 	srv.WithMessageLister(lister)    // 断线重连补回漏掉的消息

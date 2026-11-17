@@ -353,7 +353,7 @@ const testSecret = "test-secret-32-bytes-long-xxxxxx"
 // locker —— 全部是 biz 层声明的接口。
 func newService(repo *fakeRepo, store *fakeTokenStore, lim *fakeLimiter, lock *fakeLocker) *UserService {
 	auth := &conf.Auth{JwtSecret: testSecret, TokenIssuer: "chatroom"}
-	uc := biz.NewUserUsecase(repo, auth, lim, lock, store, nil, biz.StorageOptions{}, nil)
+	uc := biz.NewUserUsecase(repo, auth, lim, nil, lock, store, nil, biz.StorageOptions{}, nil)
 	return NewUserService(uc, auth)
 }
 

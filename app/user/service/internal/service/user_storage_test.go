@@ -16,7 +16,7 @@ import (
 // storage 存储配置
 func newStorageService(storage biz.StorageOptions) *UserService {
 	auth := &conf.Auth{JwtSecret: testSecret, TokenIssuer: "chatroom"}
-	uc := biz.NewUserUsecase(&fakeRepo{}, auth, nil, nil, nil, nil, storage, nil)
+	uc := biz.NewUserUsecase(&fakeRepo{}, auth, nil, nil, nil, nil, nil, storage, nil)
 	return NewUserService(uc, auth)
 }
 

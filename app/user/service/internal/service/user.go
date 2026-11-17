@@ -7,7 +7,6 @@ import (
 	"chatroom/app/user/service/internal/biz"
 	"chatroom/app/user/service/internal/conf"
 	"chatroom/pkg/middleware"
-	"chatroom/pkg/oss"
 
 	"github.com/go-kratos/kratos/v3/log"
 )
@@ -33,7 +32,7 @@ func (s *UserService) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 	if req == nil {
 		return nil, biz.ErrUserInvalidArgument
 	}
-	id, err := s.uc.Register(ctx, req.GetUsername(), req.GetPassword(), req.GetNickname(), req.GetPhone(), req.GetEmail())
+	id, err := s.uc.Register(ctx, req.GetUsername(), req.GetPassword(), req.GetNickname(), req.GetPhone(), req.GetEmail(), biz.ClientIPFromContext(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -177,33 +176,12 @@ func (s *UserService) GetUploadToken(ctx context.Context, req *pb.GetUploadToken
 	}
 	return &pb.GetUploadTokenReply{
 		Host:      token.Host,
-		Fields:    postFormFields(token),
+		Fields:    token.Fields(),
 		FileKey:   token.Key,
 		PublicUrl: token.PublicUrl,
 		ExpireAt:  token.ExpireAt,
 		MaxSize:   token.MaxSize,
 	}, nil
-}
-
-// postFormFields 把 PostObject 凭证转成客户端要提交的表单域。
-// token 签发出来的凭证
-//
-// key 放在 fields 里 —— 客户端自己指定 object key，
-// 服务端给的只是推荐值；policy 限定了前缀，客户端改不出自己的目录。
-func postFormFields(token *oss.PostUploadForm) map[string]string {
-	if token == nil {
-		return nil
-	}
-	return map[string]string{
-		"key":                     token.Key,
-		"policy":                  token.Policy,
-		"x-oss-signature-version": oss.SignatureVersion,
-		"x-oss-credential":        token.Credential,
-		"x-oss-date":              token.DateTime,
-		"x-oss-security-token":    token.SecurityToken,
-		"x-oss-signature":         token.Signature,
-		"success_action_status":   "200",
-	}
 }
 
 // ChangePassword 改密。req 是改密请求；改完强制重登（黑名单当前 access + 撤销当前 refresh）。

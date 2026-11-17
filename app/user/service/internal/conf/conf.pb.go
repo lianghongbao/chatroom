@@ -31,7 +31,12 @@ type Bootstrap struct {
 	Observability *Observability `protobuf:"bytes,4,opt,name=observability,proto3" json:"observability,omitempty"`
 	Registry      *Registry      `protobuf:"bytes,5,opt,name=registry,proto3" json:"registry,omitempty"`
 	// 对象存储配置（阿里云 OSS）。头像直传用。
-	Storage       *Storage `protobuf:"bytes,6,opt,name=storage,proto3" json:"storage,omitempty"`
+	Storage *Storage `protobuf:"bytes,6,opt,name=storage,proto3" json:"storage,omitempty"`
+	// 限流配置（令牌桶）。整段留空 = 用代码默认值。
+	RateLimit *RateLimit `protobuf:"bytes,7,opt,name=rate_limit,json=rateLimit,proto3" json:"rate_limit,omitempty"`
+	// 各业务场景的限流参数覆盖。没配的用 rate_limit 的通用值。
+	// 每个场景可以有自己的突发量和速率 —— 登录和注册的容忍度不一样。
+	RateLimits    *RateLimits `protobuf:"bytes,8,opt,name=rate_limits,json=rateLimits,proto3" json:"rate_limits,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -108,6 +113,78 @@ func (x *Bootstrap) GetStorage() *Storage {
 	return nil
 }
 
+func (x *Bootstrap) GetRateLimit() *RateLimit {
+	if x != nil {
+		return x.RateLimit
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetRateLimits() *RateLimits {
+	if x != nil {
+		return x.RateLimits
+	}
+	return nil
+}
+
+// 各业务场景的限流参数。
+//
+// 按场景分开是因为「突发量 + 稳态速率」的合理值每个场景不同：
+// 注册要挡批量注册（低速、严格），登录要挡撞库（允许少量突发试错）。
+type RateLimits struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 登录失败计数桶 —— 连续失败到这个数就锁。
+	LoginFail *RateLimit `protobuf:"bytes,1,opt,name=login_fail,json=loginFail,proto3" json:"login_fail,omitempty"`
+	// 注册桶 —— 单 IP 的注册速率。
+	Register      *RateLimit `protobuf:"bytes,2,opt,name=register,proto3" json:"register,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateLimits) Reset() {
+	*x = RateLimits{}
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateLimits) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateLimits) ProtoMessage() {}
+
+func (x *RateLimits) ProtoReflect() protoreflect.Message {
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateLimits.ProtoReflect.Descriptor instead.
+func (*RateLimits) Descriptor() ([]byte, []int) {
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RateLimits) GetLoginFail() *RateLimit {
+	if x != nil {
+		return x.LoginFail
+	}
+	return nil
+}
+
+func (x *RateLimits) GetRegister() *RateLimit {
+	if x != nil {
+		return x.Register
+	}
+	return nil
+}
+
 // Storage 对象存储配置。
 type Storage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -137,7 +214,7 @@ type Storage struct {
 
 func (x *Storage) Reset() {
 	*x = Storage{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -149,7 +226,7 @@ func (x *Storage) String() string {
 func (*Storage) ProtoMessage() {}
 
 func (x *Storage) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,7 +239,7 @@ func (x *Storage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Storage.ProtoReflect.Descriptor instead.
 func (*Storage) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Storage) GetEndpoint() string {
@@ -244,7 +321,7 @@ type Registry struct {
 
 func (x *Registry) Reset() {
 	*x = Registry{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -256,7 +333,7 @@ func (x *Registry) String() string {
 func (*Registry) ProtoMessage() {}
 
 func (x *Registry) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -269,7 +346,7 @@ func (x *Registry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Registry.ProtoReflect.Descriptor instead.
 func (*Registry) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Registry) GetNacos() *Registry_Nacos {
@@ -289,7 +366,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -301,7 +378,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -314,7 +391,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -341,7 +418,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -353,7 +430,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -366,7 +443,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{4}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -411,7 +488,7 @@ type Auth struct {
 
 func (x *Auth) Reset() {
 	*x = Auth{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +500,7 @@ func (x *Auth) String() string {
 func (*Auth) ProtoMessage() {}
 
 func (x *Auth) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +513,7 @@ func (x *Auth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Auth.ProtoReflect.Descriptor instead.
 func (*Auth) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{5}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Auth) GetJwtSecret() string {
@@ -502,6 +579,77 @@ func (x *Auth) GetInternalSecret() string {
 	return ""
 }
 
+// 令牌桶限流配置。
+//
+// 三个参数对应令牌桶的三要素：
+//   - capacity 桶容量 —— 一次最多能拿走多少个令牌（突发量上限）。
+//   - rate 每秒补几个令牌 —— 长期平均速率。
+//   - ttl 桶的空闲回收时间 —— 没人用的桶多久消失。
+//
+// 留空或 <= 0 时走代码里的默认值。
+type RateLimit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 桶容量（令牌数）。默认 1。
+	Capacity float64 `protobuf:"fixed64,1,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	// 每秒补充的令牌数。默认 1。
+	Rate float64 `protobuf:"fixed64,2,opt,name=rate,proto3" json:"rate,omitempty"`
+	// 桶的空闲回收时间。默认 1m。
+	Ttl           *durationpb.Duration `protobuf:"bytes,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateLimit) Reset() {
+	*x = RateLimit{}
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateLimit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateLimit) ProtoMessage() {}
+
+func (x *RateLimit) ProtoReflect() protoreflect.Message {
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateLimit.ProtoReflect.Descriptor instead.
+func (*RateLimit) Descriptor() ([]byte, []int) {
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RateLimit) GetCapacity() float64 {
+	if x != nil {
+		return x.Capacity
+	}
+	return 0
+}
+
+func (x *RateLimit) GetRate() float64 {
+	if x != nil {
+		return x.Rate
+	}
+	return 0
+}
+
+func (x *RateLimit) GetTtl() *durationpb.Duration {
+	if x != nil {
+		return x.Ttl
+	}
+	return nil
+}
+
 // 可观测性配置。两端点都为空时不启动对应 middleware。
 // metrics: Prometheus exporter HTTP 监听端点，如 ":9090"，同地址开 /metrics。
 // tracing: OTLP gRPC endpoint，如 "otel-collector:4317"。
@@ -524,7 +672,7 @@ type Observability struct {
 
 func (x *Observability) Reset() {
 	*x = Observability{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +684,7 @@ func (x *Observability) String() string {
 func (*Observability) ProtoMessage() {}
 
 func (x *Observability) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -549,7 +697,7 @@ func (x *Observability) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Observability.ProtoReflect.Descriptor instead.
 func (*Observability) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{6}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Observability) GetMetricsAddr() string {
@@ -599,7 +747,7 @@ type Registry_Nacos struct {
 
 func (x *Registry_Nacos) Reset() {
 	*x = Registry_Nacos{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -611,7 +759,7 @@ func (x *Registry_Nacos) String() string {
 func (*Registry_Nacos) ProtoMessage() {}
 
 func (x *Registry_Nacos) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -624,7 +772,7 @@ func (x *Registry_Nacos) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Registry_Nacos.ProtoReflect.Descriptor instead.
 func (*Registry_Nacos) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
 }
 
 func (x *Registry_Nacos) GetServerAddresses() []string {
@@ -701,7 +849,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -713,7 +861,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -726,7 +874,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -761,7 +909,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -773,7 +921,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -786,7 +934,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -835,7 +983,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -847,7 +995,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -860,7 +1008,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *Data_Database) GetDriver() string {
@@ -931,7 +1079,7 @@ type Data_Redis struct {
 
 func (x *Data_Redis) Reset() {
 	*x = Data_Redis{}
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[11]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -943,7 +1091,7 @@ func (x *Data_Redis) String() string {
 func (*Data_Redis) ProtoMessage() {}
 
 func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_user_service_internal_conf_conf_proto_msgTypes[11]
+	mi := &file_user_service_internal_conf_conf_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -956,7 +1104,7 @@ func (x *Data_Redis) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Redis.ProtoReflect.Descriptor instead.
 func (*Data_Redis) Descriptor() ([]byte, []int) {
-	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
+	return file_user_service_internal_conf_conf_proto_rawDescGZIP(), []int{5, 1}
 }
 
 func (x *Data_Redis) GetNetwork() string {
@@ -991,14 +1139,23 @@ var File_user_service_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_user_service_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
-	"%user/service/internal/conf/conf.proto\x12\x12chatroom.user.conf\x1a\x1egoogle/protobuf/duration.proto\"\xd5\x02\n" +
+	"%user/service/internal/conf/conf.proto\x12\x12chatroom.user.conf\x1a\x1egoogle/protobuf/duration.proto\"\xd4\x03\n" +
 	"\tBootstrap\x122\n" +
 	"\x06server\x18\x01 \x01(\v2\x1a.chatroom.user.conf.ServerR\x06server\x12,\n" +
 	"\x04data\x18\x02 \x01(\v2\x18.chatroom.user.conf.DataR\x04data\x12,\n" +
 	"\x04auth\x18\x03 \x01(\v2\x18.chatroom.user.conf.AuthR\x04auth\x12G\n" +
 	"\robservability\x18\x04 \x01(\v2!.chatroom.user.conf.ObservabilityR\robservability\x128\n" +
 	"\bregistry\x18\x05 \x01(\v2\x1c.chatroom.user.conf.RegistryR\bregistry\x125\n" +
-	"\astorage\x18\x06 \x01(\v2\x1b.chatroom.user.conf.StorageR\astorage\"\xd8\x02\n" +
+	"\astorage\x18\x06 \x01(\v2\x1b.chatroom.user.conf.StorageR\astorage\x12<\n" +
+	"\n" +
+	"rate_limit\x18\a \x01(\v2\x1d.chatroom.user.conf.RateLimitR\trateLimit\x12?\n" +
+	"\vrate_limits\x18\b \x01(\v2\x1e.chatroom.user.conf.RateLimitsR\n" +
+	"rateLimits\"\x85\x01\n" +
+	"\n" +
+	"RateLimits\x12<\n" +
+	"\n" +
+	"login_fail\x18\x01 \x01(\v2\x1d.chatroom.user.conf.RateLimitR\tloginFail\x129\n" +
+	"\bregister\x18\x02 \x01(\v2\x1d.chatroom.user.conf.RateLimitR\bregister\"\xd8\x02\n" +
 	"\aStorage\x12\x1a\n" +
 	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12\x16\n" +
 	"\x06bucket\x18\x02 \x01(\tR\x06bucket\x12\x16\n" +
@@ -1065,7 +1222,11 @@ const file_user_service_internal_conf_conf_proto_rawDesc = "" +
 	"\vrefresh_ttl\x18\a \x01(\v2\x19.google.protobuf.DurationR\n" +
 	"refreshTtl\x12!\n" +
 	"\ftoken_issuer\x18\b \x01(\tR\vtokenIssuer\x12'\n" +
-	"\x0finternal_secret\x18\t \x01(\tR\x0einternalSecret\"\xae\x01\n" +
+	"\x0finternal_secret\x18\t \x01(\tR\x0einternalSecret\"h\n" +
+	"\tRateLimit\x12\x1a\n" +
+	"\bcapacity\x18\x01 \x01(\x01R\bcapacity\x12\x12\n" +
+	"\x04rate\x18\x02 \x01(\x01R\x04rate\x12+\n" +
+	"\x03ttl\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\"\xae\x01\n" +
 	"\rObservability\x12!\n" +
 	"\fmetrics_addr\x18\x01 \x01(\tR\vmetricsAddr\x12)\n" +
 	"\x10tracing_endpoint\x18\x02 \x01(\tR\x0ftracingEndpoint\x12!\n" +
@@ -1084,49 +1245,56 @@ func file_user_service_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_user_service_internal_conf_conf_proto_rawDescData
 }
 
-var file_user_service_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_user_service_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_user_service_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: chatroom.user.conf.Bootstrap
-	(*Storage)(nil),             // 1: chatroom.user.conf.Storage
-	(*Registry)(nil),            // 2: chatroom.user.conf.Registry
-	(*Server)(nil),              // 3: chatroom.user.conf.Server
-	(*Data)(nil),                // 4: chatroom.user.conf.Data
-	(*Auth)(nil),                // 5: chatroom.user.conf.Auth
-	(*Observability)(nil),       // 6: chatroom.user.conf.Observability
-	(*Registry_Nacos)(nil),      // 7: chatroom.user.conf.Registry.Nacos
-	(*Server_HTTP)(nil),         // 8: chatroom.user.conf.Server.HTTP
-	(*Server_GRPC)(nil),         // 9: chatroom.user.conf.Server.GRPC
-	(*Data_Database)(nil),       // 10: chatroom.user.conf.Data.Database
-	(*Data_Redis)(nil),          // 11: chatroom.user.conf.Data.Redis
-	(*durationpb.Duration)(nil), // 12: google.protobuf.Duration
+	(*RateLimits)(nil),          // 1: chatroom.user.conf.RateLimits
+	(*Storage)(nil),             // 2: chatroom.user.conf.Storage
+	(*Registry)(nil),            // 3: chatroom.user.conf.Registry
+	(*Server)(nil),              // 4: chatroom.user.conf.Server
+	(*Data)(nil),                // 5: chatroom.user.conf.Data
+	(*Auth)(nil),                // 6: chatroom.user.conf.Auth
+	(*RateLimit)(nil),           // 7: chatroom.user.conf.RateLimit
+	(*Observability)(nil),       // 8: chatroom.user.conf.Observability
+	(*Registry_Nacos)(nil),      // 9: chatroom.user.conf.Registry.Nacos
+	(*Server_HTTP)(nil),         // 10: chatroom.user.conf.Server.HTTP
+	(*Server_GRPC)(nil),         // 11: chatroom.user.conf.Server.GRPC
+	(*Data_Database)(nil),       // 12: chatroom.user.conf.Data.Database
+	(*Data_Redis)(nil),          // 13: chatroom.user.conf.Data.Redis
+	(*durationpb.Duration)(nil), // 14: google.protobuf.Duration
 }
 var file_user_service_internal_conf_conf_proto_depIdxs = []int32{
-	3,  // 0: chatroom.user.conf.Bootstrap.server:type_name -> chatroom.user.conf.Server
-	4,  // 1: chatroom.user.conf.Bootstrap.data:type_name -> chatroom.user.conf.Data
-	5,  // 2: chatroom.user.conf.Bootstrap.auth:type_name -> chatroom.user.conf.Auth
-	6,  // 3: chatroom.user.conf.Bootstrap.observability:type_name -> chatroom.user.conf.Observability
-	2,  // 4: chatroom.user.conf.Bootstrap.registry:type_name -> chatroom.user.conf.Registry
-	1,  // 5: chatroom.user.conf.Bootstrap.storage:type_name -> chatroom.user.conf.Storage
-	7,  // 6: chatroom.user.conf.Registry.nacos:type_name -> chatroom.user.conf.Registry.Nacos
-	8,  // 7: chatroom.user.conf.Server.http:type_name -> chatroom.user.conf.Server.HTTP
-	9,  // 8: chatroom.user.conf.Server.grpc:type_name -> chatroom.user.conf.Server.GRPC
-	10, // 9: chatroom.user.conf.Data.database:type_name -> chatroom.user.conf.Data.Database
-	11, // 10: chatroom.user.conf.Data.redis:type_name -> chatroom.user.conf.Data.Redis
-	12, // 11: chatroom.user.conf.Auth.token_ttl:type_name -> google.protobuf.Duration
-	12, // 12: chatroom.user.conf.Auth.login_lock_ttl:type_name -> google.protobuf.Duration
-	12, // 13: chatroom.user.conf.Auth.access_ttl:type_name -> google.protobuf.Duration
-	12, // 14: chatroom.user.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
-	12, // 15: chatroom.user.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	12, // 16: chatroom.user.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	12, // 17: chatroom.user.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	12, // 18: chatroom.user.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
-	12, // 19: chatroom.user.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	12, // 20: chatroom.user.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	21, // [21:21] is the sub-list for method output_type
-	21, // [21:21] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	4,  // 0: chatroom.user.conf.Bootstrap.server:type_name -> chatroom.user.conf.Server
+	5,  // 1: chatroom.user.conf.Bootstrap.data:type_name -> chatroom.user.conf.Data
+	6,  // 2: chatroom.user.conf.Bootstrap.auth:type_name -> chatroom.user.conf.Auth
+	8,  // 3: chatroom.user.conf.Bootstrap.observability:type_name -> chatroom.user.conf.Observability
+	3,  // 4: chatroom.user.conf.Bootstrap.registry:type_name -> chatroom.user.conf.Registry
+	2,  // 5: chatroom.user.conf.Bootstrap.storage:type_name -> chatroom.user.conf.Storage
+	7,  // 6: chatroom.user.conf.Bootstrap.rate_limit:type_name -> chatroom.user.conf.RateLimit
+	1,  // 7: chatroom.user.conf.Bootstrap.rate_limits:type_name -> chatroom.user.conf.RateLimits
+	7,  // 8: chatroom.user.conf.RateLimits.login_fail:type_name -> chatroom.user.conf.RateLimit
+	7,  // 9: chatroom.user.conf.RateLimits.register:type_name -> chatroom.user.conf.RateLimit
+	9,  // 10: chatroom.user.conf.Registry.nacos:type_name -> chatroom.user.conf.Registry.Nacos
+	10, // 11: chatroom.user.conf.Server.http:type_name -> chatroom.user.conf.Server.HTTP
+	11, // 12: chatroom.user.conf.Server.grpc:type_name -> chatroom.user.conf.Server.GRPC
+	12, // 13: chatroom.user.conf.Data.database:type_name -> chatroom.user.conf.Data.Database
+	13, // 14: chatroom.user.conf.Data.redis:type_name -> chatroom.user.conf.Data.Redis
+	14, // 15: chatroom.user.conf.Auth.token_ttl:type_name -> google.protobuf.Duration
+	14, // 16: chatroom.user.conf.Auth.login_lock_ttl:type_name -> google.protobuf.Duration
+	14, // 17: chatroom.user.conf.Auth.access_ttl:type_name -> google.protobuf.Duration
+	14, // 18: chatroom.user.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
+	14, // 19: chatroom.user.conf.RateLimit.ttl:type_name -> google.protobuf.Duration
+	14, // 20: chatroom.user.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	14, // 21: chatroom.user.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	14, // 22: chatroom.user.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	14, // 23: chatroom.user.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	14, // 24: chatroom.user.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	14, // 25: chatroom.user.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	26, // [26:26] is the sub-list for method output_type
+	26, // [26:26] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_user_service_internal_conf_conf_proto_init() }
@@ -1140,7 +1308,7 @@ func file_user_service_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_user_service_internal_conf_conf_proto_rawDesc), len(file_user_service_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -44,13 +44,15 @@ func wireApp(bootstrap *conf.Bootstrap, registry *conf.Registry, logger *slog.Lo
 	}
 	tokenStore := data.NewTokenStore(dataData)
 	userRepo := data.NewUserRepo(dataData)
-	loginLimiter := data.NewLoginLimiter(dataData, auth)
+	rateLimits := bootstrap.RateLimits
+	loginLimiter := data.NewLoginLimiter(dataData, auth, rateLimits)
+	registerLimiter := data.NewRegisterLimiter(dataData, rateLimits)
 	locker := data.NewLocker(dataData)
 	userCache := data.NewUserCache(dataData)
 	confStorage := bootstrap.Storage
 	client := storage.NewClient(confStorage, logger)
 	storageOptions := biz.NewStorageOptions(client, confStorage)
-	userUsecase := biz.NewUserUsecase(userRepo, auth, loginLimiter, locker, tokenStore, userCache, storageOptions, logger)
+	userUsecase := biz.NewUserUsecase(userRepo, auth, loginLimiter, registerLimiter, locker, tokenStore, userCache, storageOptions, logger)
 	userService := service.NewUserService(userUsecase, auth)
 	grpcServer := server.NewGRPCServer(confServer, auth, provider, tokenStore, userService)
 	checker := data.NewHealthChecker(dataData)

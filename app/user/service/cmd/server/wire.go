@@ -38,7 +38,7 @@ func wireApp(*conf.Bootstrap, *conf.Registry, *slog.Logger) (*kratos.App, func()
 		// 把本服务的 registry.nacos 段翻译成 pkg/nacos.Options。
 		conf.NacosOptions,
 		// 把 *conf.Bootstrap 的子字段暴露为独立 provider，各层直接吃 *conf.Xxx，不做二次翻译
-		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability", "Storage"),
+		wire.FieldsOf(new(*conf.Bootstrap), "Server", "Data", "Auth", "Observability", "Storage", "RateLimits"),
 		// 观测能力：conf.Observability → observability.Config → *observability.Provider。
 		// Provider 构造时即注册 otel 全局 provider，server 依赖 *Provider，
 		// 依赖关系保证了它先于 server 建好。

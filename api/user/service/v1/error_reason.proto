@@ -32,4 +32,6 @@ enum ErrorReason {
   USER_UPLOAD_OBJECT_MISMATCH = 14;
   // 头像地址不是本系统签发的（host / 前缀 / 后缀不匹配）。
   USER_UPLOAD_URL_INVALID = 15;
+  // 触发限频。注册 / 登录超额时返回。
+  USER_RATE_LIMITED = 16;
 }

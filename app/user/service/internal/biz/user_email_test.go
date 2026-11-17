@@ -8,9 +8,9 @@ import (
 // TestRegister_StoresEmail 注册时填的邮箱要落库。
 func TestRegister_StoresEmail(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "alice@example.com")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "alice@example.com", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -26,9 +26,9 @@ func TestRegister_StoresEmail(t *testing.T) {
 // TestRegister_EmailOptional 不填邮箱也能注册。
 func TestRegister_EmailOptional(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -46,13 +46,13 @@ func TestRegister_EmailOptional(t *testing.T) {
 // 邮箱没加唯一索引，所以这里不存在 ErrUserEmailTaken 之类的错误。
 func TestRegister_EmailNotUnique(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
 	const shared = "shared@example.com"
-	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", shared); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", shared, "1.2.3.4"); err != nil {
 		t.Fatalf("Register alice: %v", err)
 	}
-	if _, err := uc.Register(context.Background(), "bob", "secret123", "Bob", "", shared); err != nil {
+	if _, err := uc.Register(context.Background(), "bob", "secret123", "Bob", "", shared, "1.2.3.4"); err != nil {
 		t.Fatalf("Register bob: %v", err)
 	}
 }
@@ -62,9 +62,9 @@ func TestRegister_EmailNotUnique(t *testing.T) {
 // 邮箱目前只是个备注字段，格式校验等接「验证码改密」时再加。
 func TestRegister_EmailNoFormatValidation(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "not-an-email"); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "not-an-email", "1.2.3.4"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 }
@@ -72,9 +72,9 @@ func TestRegister_EmailNoFormatValidation(t *testing.T) {
 // TestUpdateUserFields_SetsEmail 通过 update_mask 改邮箱。
 func TestUpdateUserFields_SetsEmail(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -91,9 +91,9 @@ func TestUpdateUserFields_SetsEmail(t *testing.T) {
 // TestUpdateUserFields_ClearsEmail 空串表示清空邮箱 —— 跟手机号一个语义。
 func TestUpdateUserFields_ClearsEmail(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "alice@example.com")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "alice@example.com", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -110,9 +110,9 @@ func TestUpdateUserFields_ClearsEmail(t *testing.T) {
 // TestUpdateUserFields_EmailTrims 邮箱首尾空白被 trim 掉。
 func TestUpdateUserFields_EmailTrims(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -131,9 +131,9 @@ func TestUpdateUserFields_EmailTrims(t *testing.T) {
 // 之前 phone-only 更新会被 guard 拒掉（400），这里守住 email 的同类路径。
 func TestUpdateUserFields_EmailOnly(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -146,9 +146,9 @@ func TestUpdateUserFields_EmailOnly(t *testing.T) {
 // TestUpdateUserFields_RequiresAnyField 一个字段都没设就拒。
 func TestUpdateUserFields_RequiresAnyField(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -160,13 +160,13 @@ func TestUpdateUserFields_RequiresAnyField(t *testing.T) {
 // TestGetUserByID_HidesEmailFromOthers 查别人时邮箱被清空。
 func TestGetUserByID_HidesEmailFromOthers(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	viewerID, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "alice@example.com")
+	viewerID, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "alice@example.com", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register alice: %v", err)
 	}
-	targetID, err := uc.Register(context.Background(), "bob", "secret123", "Bob", "", "bob@example.com")
+	targetID, err := uc.Register(context.Background(), "bob", "secret123", "Bob", "", "bob@example.com", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register bob: %v", err)
 	}

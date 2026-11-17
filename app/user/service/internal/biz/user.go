@@ -29,6 +29,8 @@ var (
 	ErrUserBanned = kratoserrors.Forbidden(v1.ErrorReason_USER_BANNED.String(), "account is disabled")
 	// ErrUserPhoneTaken 手机号已被占用（全局唯一）。注册 / 改手机号时返回。
 	ErrUserPhoneTaken = kratoserrors.Conflict(v1.ErrorReason_USER_PHONE_TAKEN.String(), "phone number already taken")
+	// ErrUserRateLimited 触发限频。注册超额时返回。
+	ErrUserRateLimited = kratoserrors.TooManyRequests(v1.ErrorReason_USER_RATE_LIMITED.String(), "too many requests, try again later")
 )
 
 // 输入长度上限。schema 里没给 username / nickname / avatar 定 MaxLen，
@@ -216,6 +218,16 @@ type LoginLimiter interface {
 	OnFailure(ctx context.Context, username, clientIP string)
 }
 
+// RegisterLimiter 注册频控抽象。
+//
+// 与 LoginLimiter 分开是因为维度不同：注册按「IP」限，不按用户名 ——
+// 用户名可以随便编，按用户名限挡不住批量注册。
+type RegisterLimiter interface {
+	// Allow 在 Register 入口调用，超配额返回 ErrUserRateLimited。
+	// clientIP 是调用方 IP。
+	Allow(ctx context.Context, clientIP string) error
+}
+
 // Release Acquire 的释放闭包，必须幂等；用闭包强制 caller defer 调用。
 type Release func()
 
@@ -266,6 +278,7 @@ type UserUsecase struct {
 	repo          UserRepo
 	auth          *conf.Auth
 	lim           LoginLimiter
+	regLim        RegisterLimiter
 	locker        Locker
 	store         TokenStore
 	cache         UserCache
@@ -279,17 +292,18 @@ type UserUsecase struct {
 // NewUserUsecase 构造用户用例
 // repo 仓储实现
 // auth 鉴权配置，为 nil 时关闭登录
-// lim 限频器，为 nil 时关闭限频
+// lim 登录限频器，为 nil 时关闭登录限频
+// regLim 注册限频器，为 nil 时关闭注册限频
 // locker 注册锁，为 nil 时关闭加锁
 // store token 存储，为 nil 时关闭持久化
 // cache 资料缓存，为 nil 时关闭缓存
 // storage 对象存储能力，为零值时关闭头像上传
 // logger 日志器，为 nil 时用默认 logger。
-func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Locker, store TokenStore, cache UserCache, storage StorageOptions, logger *slog.Logger) *UserUsecase {
+func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, regLim RegisterLimiter, locker Locker, store TokenStore, cache UserCache, storage StorageOptions, logger *slog.Logger) *UserUsecase {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	uc := &UserUsecase{repo: repo, auth: auth, lim: lim, locker: locker, store: store, cache: cache, logger: logger}
+	uc := &UserUsecase{repo: repo, auth: auth, lim: lim, regLim: regLim, locker: locker, store: store, cache: cache, logger: logger}
 	if auth != nil && auth.GetJwtSecret() != "" {
 		uc.tokenFn = uc.signToken
 	}
@@ -305,8 +319,9 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, locker Loc
 // nickname 是昵称（可空，留空时回退成 username）
 // phone 是手机号（可空，留空表示不填）。非空时全局唯一，被占用返 ErrUserPhoneTaken。
 // email 是邮箱（可空，留空表示不填）。不唯一、不校验格式。
+// clientIP 调用方 IP，用于注册限频。
 // username trim 后小写化。
-func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname, phone, email string) (string, error) {
+func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname, phone, email, clientIP string) (string, error) {
 	username = strings.TrimSpace(username)
 	nickname = strings.TrimSpace(nickname)
 	phone = strings.TrimSpace(phone)
@@ -324,6 +339,19 @@ func (uc *UserUsecase) Register(ctx context.Context, username, password, nicknam
 		return "", err
 	}
 	username = strings.ToLower(username)
+
+	// 注册限频放在参数校验之后、取锁之前。
+	//
+	// 位置很讲究：
+	//   - 参数非法不该消耗配额 —— 恶意空请求会把正常用户的额度耗光，
+	//     所以先校验参数再限频。
+	//   - 限频在取锁之前 —— 限频是 Redis 往返，比内存锁慢，
+	//     但它挡的是「一个 IP 狂注册」这种量级，取锁那点开销无所谓。
+	if uc.regLim != nil {
+		if err := uc.regLim.Allow(ctx, clientIP); err != nil {
+			return "", err
+		}
+	}
 
 	rel, err := uc.acquireRegisterLock(ctx, username)
 	if err != nil {

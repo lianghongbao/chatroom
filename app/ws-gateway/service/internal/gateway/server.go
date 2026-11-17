@@ -2,9 +2,12 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,6 +71,19 @@ type Config struct {
 	PongWait      time.Duration
 	PingInterval  time.Duration
 	IdleTimeout   time.Duration
+	// HandshakeRate 单 IP 每秒允许的握手次数。0 = 用默认值。
+	HandshakeRate int
+	// HandshakeBurst 单 IP 的突发握手额度。0 = 用默认值。
+	HandshakeBurst int
+	// MaxConnections 单实例的总连接数上限。0 = 用默认值。
+	MaxConnections int
+	// MaxConnsPerUser 单用户的连接数上限。0 = 用默认值。
+	MaxConnsPerUser int
+	// TrustProxyHeader 读 X-Forwarded-For 拿客户端 IP。
+	//
+	// 只有网关前面确实有 ingress、且客户端**不能**直连网关时才开。
+	// 开着的��候任何人都能伪造这个头绕过 IP 限流。
+	TrustProxyHeader bool
 }
 
 // Server WebSocket 网关。
@@ -85,6 +101,11 @@ type Server struct {
 	presence      *Presence              // 可为 nil（查不到在线状态）
 	conversations UserConversationLister // 为 nil 时不通知在线状态变化
 	lister        MessageLister          // 可为 nil（不支持补消息）
+
+	// 准入限制。handshake 限单 IP 的握手频率，
+	// conns 限连接数配额（单实例总数 + 单用户数）。
+	handshake *handshakeLimiter
+	conns     *connectionLimiter
 
 	wg sync.WaitGroup
 }
@@ -128,6 +149,8 @@ func NewServer(cfg Config, pool *Pool, sender MessageSender, verify TokenVerifie
 		logger:   logger,
 		online:   online,
 		presence: NewPresence(online, pool, members),
+		handshake: newHandshakeLimiter(cfg.HandshakeRate, cfg.HandshakeBurst),
+		conns:     newConnectionLimiter(cfg.MaxConnections, cfg.MaxConnsPerUser),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -171,6 +194,18 @@ func (s *Server) Path() string {
 // w 响应写入器
 // r HTTP 请求
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	// 准入的顺序是有意的：**先限流再验 token**。
+	//
+	// 反过来（先验 token）的话，攻击者可以用一堆假 token 把验签的
+	// CPU 打满 —— 验签是 bcrypt/RSA 级别的运算，比限流贵得多。
+	// IP 限流在最外层，先把无意义的请求挡掉。
+	ip := s.clientIP(r)
+	if !s.handshake.Allow(ip) {
+		s.logger.WarnContext(r.Context(), "握手限流命中", "ip", ip)
+		http.Error(w, "too many handshake attempts", http.StatusTooManyRequests)
+		return
+	}
+
 	// token 在 query 里（浏览器 WebSocket API 不能自定义 header）
 	raw := r.URL.Query().Get("token")
 	if raw == "" {
@@ -186,6 +221,37 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
+
+	// 预留连接配额 —— 必须在 Upgrade **之前**。
+	//
+	// 反过来的话，两个并发握手都能通过「还有名额」的检查，
+	// 最后一个把总连接数顶破。
+	//
+	// 两种超限给不同的状态码：
+	//   - 单用户超限 → 429。这个客户端自己的配额超了，重试没用，
+	//     但换个设备/断开重连可以。
+	//   - 实例总连接数超限 → 503。服务端满了，客户端稍后重试就行 ——
+	//     这跟「服务端暂时不可用」是同一件事，返回 503 让客户端的
+	//     重试策略能正确处理。
+	if err := s.conns.reserve(uid); err != nil {
+		s.logger.WarnContext(r.Context(), "连接数超限", "user_id", uid, "ip", ip, "reason", err)
+		if errors.Is(err, errConnLimitTotal) {
+			http.Error(w, "server connection limit reached", http.StatusServiceUnavailable)
+		} else {
+			http.Error(w, "too many connections for this user", http.StatusTooManyRequests)
+		}
+		return
+	}
+	// Upgrade 失败必须把配额还回去 —— 否则一次失败的握手
+	// 就永久占掉一个名额。
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			s.conns.release(uid)
+		}
+	}
+	defer release()
 
 	ws, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -217,6 +283,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// 还有别的连接就不算离线
 		nowOffline := s.pool.Count(uid) == 0
 		conn.Close()
+		// 连接真正建立了 —— 配额转交给连接，defer 里不再还。
+		released = true
 		s.logger.InfoContext(r.Context(), "WebSocket 已断开",
 			"user_id", uid, "instance", s.cfg.InstanceID)
 		if nowOffline {
@@ -227,6 +295,32 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// 读协程在这里阻塞，写协程单独跑
 	go s.writePump(conn)
 	s.readPump(conn)
+}
+
+// clientIP 取调用方 IP。
+//
+// 默认从 RemoteAddr 取 —— 只有网关前面确实有 ingress、且客户端
+// 不能直连网关时，才读 X-Forwarded-For。开着的���候任何人都能
+// 伪造这个头绕过 IP 限流。
+func (s *Server) clientIP(r *http.Request) string {
+	if s.cfg.TrustProxyHeader {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// XFF 是「客户端, 代理1, 代理2」—— 第一个才是真实客户端。
+			if i := strings.IndexByte(xff, ','); i >= 0 {
+				xff = xff[:i]
+			}
+			if ip := strings.TrimSpace(xff); ip != "" {
+				return ip
+			}
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && host != "" {
+		return host
+	}
+	if r.RemoteAddr != "" {
+		return r.RemoteAddr
+	}
+	return "unknown"
 }
 
 // readPump 读协程：处理客户端上行帧 + 响应 pong。conn 是当前连接。

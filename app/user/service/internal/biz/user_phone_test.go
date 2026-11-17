@@ -41,9 +41,9 @@ func TestValidatePhone(t *testing.T) {
 // TestRegister_StoresPhone 注册时填的手机号要落库。
 func TestRegister_StoresPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "13812345678", "")
+	id, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "13812345678", "", "1.2.3.4")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -59,9 +59,9 @@ func TestRegister_StoresPhone(t *testing.T) {
 // TestRegister_PhoneOptional 不填手机号也能注册。
 func TestRegister_PhoneOptional(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", ""); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "", "", "1.2.3.4"); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	u, err := repo.FindByUsername(context.Background(), "alice")
@@ -76,12 +76,12 @@ func TestRegister_PhoneOptional(t *testing.T) {
 // TestRegister_RejectsDuplicatePhone 手机号全局唯一，撞了返 ErrUserPhoneTaken。
 func TestRegister_RejectsDuplicatePhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "13812345678", ""); err != nil {
+	if _, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "13812345678", "", "1.2.3.4"); err != nil {
 		t.Fatalf("Register(alice): %v", err)
 	}
-	_, err := uc.Register(context.Background(), "bob", "secret123", "Bob", "13812345678", "")
+	_, err := uc.Register(context.Background(), "bob", "secret123", "Bob", "13812345678", "", "1.2.3.4")
 	if !errors.Is(err, ErrUserPhoneTaken) {
 		t.Errorf("err = %v, want ErrUserPhoneTaken", err)
 	}
@@ -90,9 +90,9 @@ func TestRegister_RejectsDuplicatePhone(t *testing.T) {
 // TestRegister_RejectsInvalidPhone 格式不对直接拒，不进库。
 func TestRegister_RejectsInvalidPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
-	_, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "12345", "")
+	_, err := uc.Register(context.Background(), "alice", "secret123", "Alice", "12345", "", "1.2.3.4")
 	if !errors.Is(err, ErrUserInvalidArgument) {
 		t.Errorf("err = %v, want ErrUserInvalidArgument", err)
 	}
@@ -101,7 +101,7 @@ func TestRegister_RejectsInvalidPhone(t *testing.T) {
 // TestGetUserByPhone_FindsByExactPhone 按手机号精确查到人。
 func TestGetUserByPhone_FindsByExactPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seeded := seedUser(t, repo, "alice", "secret123")
 	seeded.Phone = "13812345678"
 
@@ -117,7 +117,7 @@ func TestGetUserByPhone_FindsByExactPhone(t *testing.T) {
 // TestGetUserByPhone_NotFound 查无此人返 ErrUserNotFound。
 func TestGetUserByPhone_NotFound(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seedUser(t, repo, "alice", "secret123")
 
 	_, err := uc.GetUserByPhone(context.Background(), "13800000000")
@@ -129,7 +129,7 @@ func TestGetUserByPhone_NotFound(t *testing.T) {
 // TestGetUserByPhone_RejectsInvalidPhone 格式不对返参数错误，不是「查无此人」。
 func TestGetUserByPhone_RejectsInvalidPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 
 	_, err := uc.GetUserByPhone(context.Background(), "abc")
 	if !errors.Is(err, ErrUserInvalidArgument) {
@@ -141,7 +141,7 @@ func TestGetUserByPhone_RejectsInvalidPhone(t *testing.T) {
 // 对方关了「对陌生人可见」也照样能查到 —— 加好友这条路不能被堵死。
 func TestGetUserByPhone_IgnoresVisibility(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seeded := seedUser(t, repo, "alice", "secret123")
 	seeded.Phone = "13812345678"
 	seeded.IsVisibleToStranger = false
@@ -159,7 +159,7 @@ func TestGetUserByPhone_IgnoresVisibility(t *testing.T) {
 // 邮箱/电话/密码哈希一律不外泄 —— 连查手机号本身也不回显。
 func TestGetUserByPhone_ClearsSensitiveFields(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seeded := seedUser(t, repo, "alice", "secret123")
 	seeded.Phone = "13812345678"
 	seeded.Email = "alice@example.com"
@@ -182,7 +182,7 @@ func TestGetUserByPhone_ClearsSensitiveFields(t *testing.T) {
 // TestUpdateUserFields_SetsPhone 改资料时能写手机号。
 func TestUpdateUserFields_SetsPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seeded := seedUser(t, repo, "alice", "secret123")
 
 	phone := "13812345678"
@@ -198,7 +198,7 @@ func TestUpdateUserFields_SetsPhone(t *testing.T) {
 // TestUpdateUserFields_ClearsPhone 手机号传空串 = 清空。
 func TestUpdateUserFields_ClearsPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seeded := seedUser(t, repo, "alice", "secret123")
 	seeded.Phone = "13812345678"
 
@@ -215,7 +215,7 @@ func TestUpdateUserFields_ClearsPhone(t *testing.T) {
 // TestUpdateUserFields_RejectsDuplicatePhone 改手机号不能撞上别人的号。
 func TestUpdateUserFields_RejectsDuplicatePhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	alice := seedUser(t, repo, "alice", "secret123")
 	bob := seedUser(t, repo, "bob", "secret123")
 	bob.Phone = "13812345678"
@@ -230,7 +230,7 @@ func TestUpdateUserFields_RejectsDuplicatePhone(t *testing.T) {
 // TestUpdateUserFields_KeepsOwnPhone 改成自己已经有的号不该报冲突。
 func TestUpdateUserFields_KeepsOwnPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	alice := seedUser(t, repo, "alice", "secret123")
 	alice.Phone = "13812345678"
 
@@ -247,7 +247,7 @@ func TestUpdateUserFields_KeepsOwnPhone(t *testing.T) {
 // TestUpdateUserFields_RejectsInvalidPhone 格式不对拒掉，不写库。
 func TestUpdateUserFields_RejectsInvalidPhone(t *testing.T) {
 	repo := newFakeUserRepo()
-	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, StorageOptions{}, nil)
+	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	alice := seedUser(t, repo, "alice", "secret123")
 
 	bad := "123"

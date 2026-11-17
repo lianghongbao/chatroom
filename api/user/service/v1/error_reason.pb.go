@@ -48,6 +48,8 @@ const (
 	ErrorReason_USER_UPLOAD_OBJECT_MISMATCH ErrorReason = 14
 	// 头像地址不是本系统签发的（host / 前缀 / 后缀不匹配）。
 	ErrorReason_USER_UPLOAD_URL_INVALID ErrorReason = 15
+	// 触发限频。注册 / 登录超额时返回。
+	ErrorReason_USER_RATE_LIMITED ErrorReason = 16
 )
 
 // Enum value maps for ErrorReason.
@@ -69,6 +71,7 @@ var (
 		13: "USER_UPLOAD_OBJECT_NOT_FOUND",
 		14: "USER_UPLOAD_OBJECT_MISMATCH",
 		15: "USER_UPLOAD_URL_INVALID",
+		16: "USER_RATE_LIMITED",
 	}
 	ErrorReason_value = map[string]int32{
 		"USER_UNSPECIFIED":             0,
@@ -87,6 +90,7 @@ var (
 		"USER_UPLOAD_OBJECT_NOT_FOUND": 13,
 		"USER_UPLOAD_OBJECT_MISMATCH":  14,
 		"USER_UPLOAD_URL_INVALID":      15,
+		"USER_RATE_LIMITED":            16,
 	}
 )
 
@@ -121,7 +125,7 @@ var File_user_service_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_user_service_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"\"user/service/v1/error_reason.proto\x12\vapi.user.v1*\xba\x03\n" +
+	"\"user/service/v1/error_reason.proto\x12\vapi.user.v1*\xd1\x03\n" +
 	"\vErrorReason\x12\x14\n" +
 	"\x10USER_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eUSER_NOT_FOUND\x10\x01\x12\x19\n" +
@@ -139,7 +143,8 @@ const file_user_service_v1_error_reason_proto_rawDesc = "" +
 	"\x1bUSER_UPLOAD_EXT_NOT_ALLOWED\x10\f\x12 \n" +
 	"\x1cUSER_UPLOAD_OBJECT_NOT_FOUND\x10\r\x12\x1f\n" +
 	"\x1bUSER_UPLOAD_OBJECT_MISMATCH\x10\x0e\x12\x1b\n" +
-	"\x17USER_UPLOAD_URL_INVALID\x10\x0fB<\n" +
+	"\x17USER_UPLOAD_URL_INVALID\x10\x0f\x12\x15\n" +
+	"\x11USER_RATE_LIMITED\x10\x10B<\n" +
 	"\vapi.user.v1P\x01Z\x1fchatroom/api/user/service/v1;v1\xa2\x02\tAPIUserV1b\x06proto3"
 
 var (

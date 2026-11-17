@@ -20,7 +20,7 @@ import (
 )
 
 // ProviderSet 是 user 服务的 data providers。
-var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewUserRepo, NewUserCache, NewTokenStore, NewLoginLimiter, NewLocker, NewHealthChecker)
+var ProviderSet = wire.NewSet(NewData, NewRedisCmdable, NewUserRepo, NewUserCache, NewTokenStore, NewLoginLimiter, NewRegisterLimiter, NewLocker, NewHealthChecker)
 
 // NewRedisCmdable 暴露共享的 redis.Cmdable。d 是存储客户端。
 func NewRedisCmdable(d *Data) redis.Cmdable {

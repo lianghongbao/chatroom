@@ -10,7 +10,7 @@ import (
 // newStorageUsecase 构造一个带对象存储的用例。
 // storage 存储配置
 func newStorageUsecase(storage StorageOptions) *UserUsecase {
-	return NewUserUsecase(nil, nil, nil, nil, nil, nil, storage, nil)
+	return NewUserUsecase(nil, nil, nil, nil, nil, nil, nil, storage, nil)
 }
 
 // testOSSClient 构造一个测试用的 OSS 客户端。
