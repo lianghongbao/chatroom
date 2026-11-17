@@ -18,6 +18,7 @@ import (
 	"time"
 
 	kratoserrors "github.com/go-kratos/kratos/v3/errors"
+	"github.com/go-kratos/kratos/v3/log"
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport"
 	"github.com/sony/gobreaker/v2"
@@ -117,8 +118,48 @@ func newBreakerGroup(st []gobreaker.Settings) *breakerGroup {
 	// 只有 5xx 算失败、取消的请求排除在外。
 	settings.IsSuccessful = isSuccessful
 	settings.IsExcluded = isExcluded
+	// 状态切换记一条日志。调用方自己传了 OnStateChange 就两个都跑
+	settings.OnStateChange = chainStateChange(settings.OnStateChange)
 
 	return &breakerGroup{settings: settings, breakers: make(map[string]*gobreaker.CircuitBreaker[any])}
+}
+
+// chainStateChange 把调用方的 OnStateChange 和日志回调串起来。
+//
+// 返回的函数先记日志再调调用方的
+func chainStateChange(user func(name string, from gobreaker.State, to gobreaker.State)) func(string, gobreaker.State, gobreaker.State) {
+	return func(name string, from gobreaker.State, to gobreaker.State) {
+		logStateChange(name, from, to)
+		if user != nil {
+			user(name, from, to)
+		}
+	}
+}
+
+// logStateChange 记一条状态切换日志。
+//
+// 熔断打开是「下游出问题了」的第一手线索 —— 没有这条日志，
+// 线上只会看到一堆 503，但看不出是谁先挂的、什么时候挂的。
+//
+// 级别按方向分：
+//   - 打开（closed → open）用 Warn：下游开始拒绝流量了。
+//   - 半开用 Info：开始试探。
+//   - 关闭（open/half-open → closed）用 Info：恢复了。
+//
+// name 是 operation 名 —— 按 operation 粒度统计，一个端点挂了
+// 不影响同一个下游的其它端点，所以这个字段能定位到具体是哪个端点。
+func logStateChange(name string, from, to gobreaker.State) {
+	switch to {
+	case gobreaker.StateOpen:
+		log.Warn("熔断打开，开始拒绝下游请求",
+			"operation", name, "from", from.String(), "to", to.String())
+	case gobreaker.StateHalfOpen:
+		log.Info("熔断半开，开始试探下游",
+			"operation", name, "from", from.String(), "to", to.String())
+	case gobreaker.StateClosed:
+		log.Info("熔断关闭，下游恢复正常",
+			"operation", name, "from", from.String(), "to", to.String())
+	}
 }
 
 // Get 取某个 operation 的熔断器，没有就造一个。key 是 operation 名。

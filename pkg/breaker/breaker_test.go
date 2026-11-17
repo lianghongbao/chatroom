@@ -671,3 +671,99 @@ func TestClientMiddlewareConcurrent(t *testing.T) {
 		t.Errorf("下游被打的次数超过调用次数, calls=%d", got)
 	}
 }
+
+// 状态切换会触发 OnStateChange。
+//
+// 这是「下游什么时候开始挂的」的第一手线索 —— 没有它，线上只看到
+// 一堆 503，不知道是哪个端点、什么时候挂的。
+func TestOnStateChangeFiresOnTransition(t *testing.T) {
+	var mu sync.Mutex
+	var transitions []string
+
+	st := testSettings(2, 0.5, 50*time.Millisecond)
+	st.OnStateChange = func(name string, from, to gobreaker.State) {
+		mu.Lock()
+		defer mu.Unlock()
+		transitions = append(transitions, name+":"+from.String()+"->"+to.String())
+	}
+	g := newBreakerGroup([]gobreaker.Settings{st})
+	cb := g.Get("/svc/StateChange")
+
+	// 打满失败率 → 熔断打开
+	for i := 0; i < 2; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+	if cb.State() != gobreaker.StateOpen {
+		t.Fatalf("应熔断, state=%v", cb.State())
+	}
+
+	mu.Lock()
+	got := len(transitions)
+	first := ""
+	if got > 0 {
+		first = transitions[0]
+	}
+	mu.Unlock()
+
+	if got == 0 {
+		t.Fatal("状态切换没有触发 OnStateChange")
+	}
+	if first != "/svc/StateChange:closed->open" {
+		t.Errorf("首次切换记录不对: %q", first)
+	}
+}
+
+// 调用方自己传的 OnStateChange 不能被日志回调顶掉 —— 两个都得跑。
+func TestUserOnStateChangeNotOverridden(t *testing.T) {
+	var mu sync.Mutex
+	var called int
+
+	st := testSettings(2, 0.5, 50*time.Millisecond)
+	st.OnStateChange = func(name string, from, to gobreaker.State) {
+		mu.Lock()
+		defer mu.Unlock()
+		called++
+	}
+	g := newBreakerGroup([]gobreaker.Settings{st})
+	cb := g.Get("/svc/UserCb")
+
+	for i := 0; i < 2; i++ {
+		cb.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if called == 0 {
+		t.Error("调用方的 OnStateChange 没被调用 —— 被默认实现顶掉了")
+	}
+}
+
+// 每个 operation 的熔断器是独立的，状态切换回调也各记各的。
+func TestOnStateChangePerOperation(t *testing.T) {
+	var mu sync.Mutex
+	names := map[string]bool{}
+
+	st := testSettings(2, 0.5, time.Minute)
+	st.OnStateChange = func(name string, from, to gobreaker.State) {
+		mu.Lock()
+		defer mu.Unlock()
+		names[name] = true
+	}
+	g := newBreakerGroup([]gobreaker.Settings{st})
+
+	cbA := g.Get("/svc/A")
+	cbB := g.Get("/svc/B")
+
+	for i := 0; i < 2; i++ {
+		cbA.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+	for i := 0; i < 2; i++ {
+		cbB.Execute(func() (any, error) { return nil, errors.New("boom") })
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !names["/svc/A"] || !names["/svc/B"] {
+		t.Errorf("两个 operation 的状态切换都该记: %v", names)
+	}
+}

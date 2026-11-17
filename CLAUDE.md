@@ -151,6 +151,10 @@ grpc.WithMiddleware(
   才评估。5 QPS 的服务窗口内才 15 个请求，永远达不到 20，熔断器等于没有。
   `pkg/breaker` 窗口 10s，并把「样本太少」当作「不熔断」。
 - 熔断拒绝对调用方表现为 **error**，正好落在上面的降级契约里：绝不能被压成空结果。
+- **状态切换一律记日志**（`pkg/breaker` 的 `OnStateChange`）：打开用 Warn，
+  半开和关闭用 Info，日志带 `operation` 字段。熔断打开是「下游什么时候开始
+  挂的」的第一手线索 —— 没有它，线上只看到一堆 503，看不出是哪个端点、
+  什么时候挂的。调用方自己传了 `Settings.OnStateChange` 不会被顶掉，两个回调都跑。
 
 ### 配置分两份（bootstrap vs config）
 
