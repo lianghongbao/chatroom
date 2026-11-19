@@ -3,7 +3,7 @@
 `deploy.yml` 是 CI/CD 流水线：五个服务（user / friend / conversation / message /
 ws-gateway）各 build 一个镜像推到 ACR，再部署到 ECS 的 self-hosted runner。
 
-MySQL / Redis 走**共享底座**（`deploy/infra/`），本流水线**不碰**那两个容器 ——
+MySQL / Redis 是独立部署的服务，本流水线**不碰**那两个容器 ——
 底座的生命周期独立，不随业务代码发布重启。
 
 ## 架构
@@ -83,18 +83,18 @@ nacos → user → friend → conversation → message → ws-gateway
 
 | 文件 | 作用 |
 |------|------|
-| `.env` | 应用凭证 + 镜像仓库拉取凭证。**至少**含 `MYSQL_ROOT_PASSWORD` / `REDIS_PASSWORD`（跟共享底座同一个值）/ `NACOS_USERNAME` / `NACOS_PASSWORD` / `AUTH_JWT_SECRET` / `AUTH_INTERNAL_SECRET` / `REGISTRY_USERNAME` / `REGISTRY_PASSWORD` |
+| `.env` | 应用凭证 + 镜像仓库拉取凭证。**至少**含 `MYSQL_ROOT_PASSWORD` / `REDIS_PASSWORD`（跟数据存储同一个值）/ `NACOS_USERNAME` / `NACOS_PASSWORD` / `AUTH_JWT_SECRET` / `AUTH_INTERNAL_SECRET` / `REGISTRY_USERNAME` / `REGISTRY_PASSWORD` |
 
 `.env` 不在仓库里（`.gitignore` 里有），流水线只在**缺失时**从 `.env.example`
 生成一份并**直接退出** —— 不拿着占位值往下部署。
 
-共享底座（`deploy/infra/`）要先单独起好，见 `deploy/README.md`。
+数据存储要先单独起好，见 `deploy/README.md`。
 
 ## 首次启用步骤
 
 1. 在 GitHub 上配好上面的 Vars 和 Secrets。
 2. ECS 上手工建好 `${DEPLOY_DIR}/.env`（**先填凭证**，别用占位值）。
-3. ECS 上起共享底座：`cd deploy/infra && ./deploy.sh up`。
+3. ECS 上起数据存储：`cd ../local-life-api/deploy/mysql && docker compose up -d`（Redis 同理）。
 4. 把五个服务的业务配置推进 nacos（各服务 `make nacos-config-push`）。
 5. push 到 main 触发流水线。
 

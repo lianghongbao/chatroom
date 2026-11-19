@@ -2,8 +2,8 @@
 # ============================================================
 # chatroom 部署脚本
 # ============================================================
-# 起 nacos + 五个业务服务。MySQL / Redis 走共享底座（deploy/infra/），
-# 本脚本不碰那两个容器。
+# 起 nacos + 五个业务服务。MySQL / Redis 是独立部署的服务
+# （deploy/mysql、deploy/redis），本脚本不碰那两个容器。
 #
 #   ./deploy.sh up       首次部署 / 改配置后应用
 #   ./deploy.sh status   看状态
@@ -17,6 +17,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 PROJECT=chatroom
+# 数据存储的网络 —— 业务容器和数据存储都接进来
+NETWORK=data-net
 NACOS_CONTAINER=chatroom-nacos
 
 load_env() {
@@ -72,11 +74,44 @@ verify_nacos_login() {
 cmd_up() {
 	load_env
 
-	# 1. nacos 先单独起 —— 它要先有管理员，业务服务才连得上
+	# 0. data-net 是外部网络，多个项目的容器接进来互相访问。
+	# 外部网络不会自动创建，幂等地补一次。
+	if ! docker network inspect "${NETWORK}" >/dev/null 2>&1; then
+		echo "▶ 创建网络 ${NETWORK}"
+		docker network create "${NETWORK}" >/dev/null
+	else
+		echo "✓ 网络 ${NETWORK} 已存在"
+	fi
+
+	# 1. 建库
+	#
+	# MySQL 是独立部署的服务，chatroom 用自己的 schema。
+	# ent 的 auto_migrate 只建表不建 schema，所以库要先建出来。
+	# 表结构由服务启动时的 auto_migrate 对齐。
+	if ! docker ps --format '{{.Names}}' | grep -qx mysql; then
+		echo "❌ 找不到 mysql 容器 —— 数据存储是独立部署的服务，要先起"
+		echo "   cd ../local-life-api/deploy/mysql && docker compose up -d"
+		exit 1
+	fi
+	echo "▶ 确保 chatroom 库存在..."
+	# 建库输出只有 mysql 客户端的 password warning 时算成功;
+	# 有别的输出就是失败(密码不对之类)。
+	CREATE_DB_OUT=$(docker exec mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -e "
+		CREATE DATABASE IF NOT EXISTS \`chatroom\`
+			DEFAULT CHARACTER SET utf8mb4
+			COLLATE utf8mb4_bin;" 2>&1 | grep -v "^mysql: \[Warning\]" || true)
+	if [ -n "${CREATE_DB_OUT}" ]; then
+		echo "❌ 建库失败: ${CREATE_DB_OUT}" >&2
+		echo "   检查 MYSQL_ROOT_PASSWORD 跟数据存储是否一致" >&2
+		exit 1
+	fi
+	echo "✅ chatroom 库就绪"
+
+	# 2. nacos 先单独起 —— 它要先有管理员，业务服务才连得上
 	echo "▶ 启动 nacos..."
 	docker compose -p "$PROJECT" up -d nacos
 
-	# 2. 等 nacos 健康（healthcheck 打 /nacos/v1/ns/operator/metrics）
+	# 3. 等 nacos 健康（healthcheck 打 /nacos/v1/ns/operator/metrics）
 	echo "⏳ 等待 nacos 健康..."
 	local ok=0
 	for _ in $(seq 1 30); do
@@ -94,12 +129,19 @@ cmd_up() {
 	fi
 	echo "✅ nacos 健康"
 
-	# 3. 建管理员 + 校验登录
+	# 4. 建管理员 + 校验登录
 	ensure_nacos_admin
 	verify_nacos_login
 
-	# 4. 业务服务（compose 的 depends_on 保证启动顺序）
+	# 5. 业务服务（compose 的 depends_on 保证启动顺序）
+	#
+	# 首次创建时有个竞态：依赖链上游的服务（user）刚建好，healthcheck
+	# 还没通过，下游就都停在 Created。compose 不会自己重试判定，
+	# 再跑一次 up 就全通了。
 	echo "▶ 启动业务服务..."
+	docker compose -p "$PROJECT" up -d
+	# 再跑一次 —— 让 compose 重新判定 depends_on 的健康门禁。
+	# 已经起来的容器不会被重建。
 	docker compose -p "$PROJECT" up -d
 
 	echo ""

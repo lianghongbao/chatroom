@@ -43,9 +43,10 @@ go.work.sum
 .env
 .env.local
 *.env.local
-# Docker Compose 凭证文件（deploy/.env / deploy/infra/.env）
+# Docker Compose 凭证文件（deploy/.env / deploy/mysql/.env / deploy/redis/.env）
 deploy/.env
-deploy/infra/.env
+deploy/mysql/.env
+deploy/redis/.env
 
 # 覆盖率报告
 coverage.out

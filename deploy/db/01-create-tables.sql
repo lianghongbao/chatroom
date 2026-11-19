@@ -1,7 +1,7 @@
 -- ============================================================
--- 共享底座：chatroom 库建表
+-- chatroom 库建表
 -- ============================================================
--- 内容来自 chatroom 各服务的 migrations/*.sql（表结构权威是 ent schema，
+-- 内容来自各服务的 migrations/*.sql（表结构权威是 ent schema，
 -- 服务启动时会自动增量对齐；这里只是让空库也能直接用，不依赖 Go 运行时）。
 --
 -- 四个服务各管各的表，都放在 chatroom 这一个 schema 里：
@@ -10,7 +10,7 @@
 --   conversations / conversation_members ← conversation
 --   messages             ← message
 --
--- 只在 mysql 数据目录为空（首次创建）时执行。底座跑过之后本文件
+-- 只在 mysql 数据目录为空（首次创建）时执行。跑过之后本文件
 -- 不会自动重跑，需要手动补执行（见 README.md）。
 
 USE `chatroom`;

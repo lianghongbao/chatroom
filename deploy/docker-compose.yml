@@ -1,10 +1,9 @@
 # ============================================================
 # chatroom 生产部署
 # ============================================================
-# MySQL / Redis 走共享底座（deploy/infra/），本文件只跑业务容器 + nacos。
+# MySQL / Redis 是独立部署的服务，本文件只跑业务容器 + nacos。
 #
-# 共享底座先起：
-#   cd deploy/infra && ./deploy.sh up
+# 数据存储先起（容器名 mysql / redis，通过 data-net 网络访问）。
 #
 # 所有凭证从 deploy/.env 读取（需 .gitignore）
 # 首次使用：cp deploy/.env.example deploy/.env 并填真实值
@@ -27,14 +26,14 @@ x-service-common: &service-common
   restart: unless-stopped
   stop_grace_period: 30s
   networks:
-    - shared-infra-net
+    - data-net
   environment: &service-env
     TZ: Asia/Shanghai
-    # ---- 共享底座 ----
-    # MySQL —— 共享实例上的 chatroom 库。容器名只在 shared-infra-net 网络里可解析。
-    DB_SOURCE: root:${MYSQL_ROOT_PASSWORD}@tcp(shared-mysql:3306)/chatroom?parseTime=true&loc=Local&charset=utf8mb4
-    # Redis —— 共享实例，靠 key 前缀跟 local-life-api 隔离（chatroom: 前缀）
-    REDIS_ADDR: shared-redis:6379
+    # ---- 数据存储 ----
+    # MySQL —— 容器名只在 data-net 网络里可解析。
+    DB_SOURCE: root:${MYSQL_ROOT_PASSWORD}@tcp(mysql:3306)/chatroom?parseTime=true&loc=Local&charset=utf8mb4
+    # Redis —— 所有 key 都带 chatroom: 前缀
+    REDIS_ADDR: redis:6379
     REDIS_PASSWORD: ${REDIS_PASSWORD}
     # ---- nacos ----
     NACOS_SERVERS: ${NACOS_SERVERS}
@@ -83,7 +82,7 @@ services:
       - nacos-data:/home/nacos/data
       - nacos-logs:/home/nacos/logs
     networks:
-      - shared-infra-net
+      - data-net
     healthcheck:
       # nacos 3.x 的就绪端点。
       # 注意：/nacos/v3/console/health/readiness 在 3.x 里不存在（返 404），
@@ -210,10 +209,11 @@ services:
         condition: service_healthy
 
 networks:
-  # 共享底座的网络。external —— 由 deploy/infra 创建，不在本 compose 的生命周期内。
-  shared-infra-net:
+  # 数据存储的网络。external —— 由 deploy/mysql 或 deploy/redis 创建，
+  # 不在本 compose 的生命周期内。
+  data-net:
     external: true
-    name: shared-infra-net
+    name: data-net
 
 volumes:
   nacos-data:

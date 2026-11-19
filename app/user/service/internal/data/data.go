@@ -75,7 +75,7 @@ func NewData(c *conf.Data) (*Data, func(), error) {
 		rdb = redis.NewClient(&redis.Options{
 			Network:      rc.GetNetwork(),
 			Addr:         rc.GetAddr(),
-			// 共享底座的 Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
+			// Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
 			Password:     rc.GetPassword(),
 			ReadTimeout:  durationOf(rc.GetReadTimeout()),
 			WriteTimeout: durationOf(rc.GetWriteTimeout()),

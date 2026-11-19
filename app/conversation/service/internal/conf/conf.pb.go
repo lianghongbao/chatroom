@@ -928,7 +928,7 @@ type Data_Redis struct {
 	Addr         string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
 	ReadTimeout  *durationpb.Duration   `protobuf:"bytes,3,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
 	WriteTimeout *durationpb.Duration   `protobuf:"bytes,4,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
-	// 密码。共享底座的 Redis 设了 requirepass，留空则不带认证。
+	// 密码。Redis 设了 requirepass，留空则不带认证。
 	Password      string `protobuf:"bytes,5,opt,name=password,proto3" json:"password,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

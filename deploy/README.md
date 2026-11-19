@@ -1,15 +1,16 @@
 # chatroom 生产部署
 
 五个服务（user / friend / conversation / message / ws-gateway）+ nacos。
-MySQL / Redis 走**共享底座**（`deploy/infra/`），本 compose 只跑业务容器。
+MySQL / Redis 是**独立部署**的服务，本 compose 只跑业务容器，
+通过 `data-net` 网络访问数据存储。
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  共享底座 (compose project: shared-infra)       │
-│    shared-mysql:3306 → chatroom 库               │
-│    shared-redis:6379 → chatroom: 前缀的 key      │
+│  data-net（外部网络）                            │
+│    mysql:3306 → chatroom 库                      │
+│    redis:6379 → chatroom: 前缀的 key             │
 └─────────────────────────────────────────────────┘
-                    ▲ shared-infra-net
+                    ▲
         ┌───────────┴───────────────────────────┐
         │  chatroom (compose project: chatroom) │
         │    nacos:8848                          │
@@ -23,30 +24,25 @@ MySQL / Redis 走**共享底座**（`deploy/infra/`），本 compose 只跑业�
 
 ## 首次部署
 
-### 1. 先起共享底座
+### 1. 数据存储先起
+
+MySQL / Redis 是独立部署的服务，在它们各自的目录里起：
 
 ```bash
-cd deploy/infra
+cd ../local-life-api/deploy/mysql   # 或任何提供 MySQL 的项目
+cp .env.example .env && vi .env && chmod 600 .env
+docker compose up -d
 
-cp .env.example .env
-vi .env          # MYSQL_ROOT_PASSWORD / REDIS_PASSWORD / ACR 仓库
-chmod 600 .env
-
-./deploy.sh up
+cd ../redis
+cp .env.example .env && vi .env && chmod 600 .env
+docker compose up -d
 ```
 
-脚本会建 `shared-infra-net` 网络、起 `shared-mysql` / `shared-redis`、
-等两个容器健康。
-
-确认 `chatroom` 库建出来了：
+`data-net` 是外部网络，两边都要接进来 —— 没有的话先建：
 
 ```bash
-docker exec shared-mysql mysql -uroot -p"$(grep MYSQL_ROOT_PASSWORD .env | cut -d= -f2)" \
-  -e "SHOW DATABASES;"
+docker network create data-net
 ```
-
-> 建表脚本挂在 mysql 的 `/docker-entrypoint-initdb.d/`，**只在数据目录为空
-> （首次创建）时执行一次**。底座已经跑过的话，用 `./deploy.sh init-db` 补。
 
 ### 2. 填本项目的 .env
 
@@ -57,13 +53,13 @@ vi .env
 chmod 600 .env
 ```
 
-**`MYSQL_ROOT_PASSWORD` / `REDIS_PASSWORD` 必须跟 `deploy/infra/.env` 一致** ——
-这两个是连共享底座的凭证。
+**`MYSQL_ROOT_PASSWORD` / `REDIS_PASSWORD` 必须跟数据存储的 `.env` 一致** ——
+这两个是连它们用的凭证。
 
 ### 3. 推配置到 nacos
 
 五个服务的业务配置在 nacos 配置中心（`configs/config.yaml` 原文）。
-底座刚起、nacos 是空的话，先推一遍：
+nacos 是空的话，先推一遍：
 
 ```bash
 cd app/user/service      && make nacos-config-push
@@ -87,10 +83,11 @@ cd deploy
 ./deploy.sh up
 ```
 
-`deploy.sh` 比裸 `docker compose up -d` 多做两件事，**首次部署必做**：
+`deploy.sh` 比裸 `docker compose up -d` 多做三件事，**首次部署必做**：
 
-1. **先单独起 nacos**，等它健康 —— 业务服务连不上 nacos 就没法注册。
-2. **建 nacos 管理员账号**（`/nacos/v3/auth/user/admin`）并校验登录。
+1. **建 `chatroom` 库** —— ent 的 auto_migrate 只建表不建 schema，库得先在。
+2. **先单独起 nacos**，等它健康 —— 业务服务连不上 nacos 就没法注册。
+3. **建 nacos 管理员账号**（`/nacos/v3/auth/user/admin`）并校验登录。
 
 > ⚠️ nacos 3.x 开了 `NACOS_AUTH_ENABLE` 后，**首次启动不会自动建管理员**。
 > 没有管理员的话所有 API 都返 401（`User not found!`），业务服务启动时直接
@@ -144,11 +141,11 @@ docker exec chatroom-nacos curl -s \
 # 期望看到 9 条：5 个服务 × http/grpc（ws-gateway 只有 http）
 
 # Redis key 前缀隔离（跟 local-life-api 共用一个 redis 实例）
-docker exec shared-redis redis-cli -a "<pwd>" --scan --pattern 'chatroom:*' | head
+docker exec redis redis-cli -a "<pwd>" --scan --pattern 'chatroom:*' | head
 # 期望扫到 chatroom: 前缀的 key
 
 # 两个应用的 key 共存、互不干扰
-docker exec shared-redis redis-cli -a "<pwd>" --scan --pattern '*' | sort
+docker exec redis redis-cli -a "<pwd>" --scan --pattern '*' | sort
 # 期望只有 chatroom:* 和 local-life:* 两种前缀
 ```
 
@@ -217,12 +214,13 @@ cd app/user/service && make docker-build
 
 加载优先级：文件 < nacos < 环境变量。
 
-## 共享底座相关的坑
+## 数据存储相关的坑
 
-- **Redis key 前缀**：chatroom 用 `chatroom:` 前缀（`pkg/keys`），
-  local-life-api 用 `local-life:` 前缀。共用一个实例靠这个隔开。
-  Redis Pub/Sub **不按 DB 隔离** —— 两个应用的频道名不能重。
-- **MySQL 连接额度**：五个服务共享一个实例。默认 `max_connections=151` 不够
-  （5 服务 × 10 副本 × 10 连接 = 500），共享底座的 mysql 已经调到 1000。
-- **Redis 密码**：共享底座设了 `requirepass`，所以 conf 的 `Redis` message
+- **Redis key 前缀**：所有 key 都带 `chatroom:` 前缀（定义在 `pkg/keys`）。
+  Redis Pub/Sub **不按 DB 隔离** —— 频道名也要带前缀。
+- **MySQL 连接额度**：五个服务连同一个实例。默认 `max_connections=151` 不够
+  （5 服务 × 10 副本 × 10 连接 = 500），MySQL 的启动参数调到 1000。
+- **Redis 密码**：Redis 设了 `requirepass`，所以 conf 的 `Redis` message
   多了 `password` 字段（`conf.proto`），值从 `REDIS_PASSWORD` env 注入。
+- **schema 不会自动建**：ent 的 `auto_migrate` 只建表不建 schema，
+  `chatroom` 库由 `deploy.sh` 建。

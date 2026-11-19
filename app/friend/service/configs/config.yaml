@@ -35,7 +35,7 @@ data:
     conn_max_idle_time: 300s
   redis:
     addr: "${REDIS_ADDR}"
-    # 共享底座的 Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
+    # Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
     password: "${REDIS_PASSWORD:}"
     read_timeout: 0.2s
     write_timeout: 0.2s

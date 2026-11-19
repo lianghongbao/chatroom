@@ -102,7 +102,7 @@ message Data {
     string addr = 2;
     google.protobuf.Duration read_timeout = 3;
     google.protobuf.Duration write_timeout = 4;
-    // 密码。共享底座的 Redis 设了 requirepass，留空则不带认证。
+    // 密码。Redis 设了 requirepass，留空则不带认证。
     string password = 5;
   }
   Database database = 1;
