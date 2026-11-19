@@ -309,7 +309,7 @@ message GetUsersByIDsReply {
 
 // GetUserByUsernameRequest 按用户名精确查公开资料。
 message GetUserByUsernameRequest {
-  // 用户名。精确匹配（不区分大小写：username 存库时已小写化）。
+  // 用户名。精确匹配，**区分大小写** —— alice 和 ALICE 是两个不同的账号。
   string username = 1;
 }
 
@@ -321,7 +321,7 @@ message GetUserByPhoneRequest {
 
 // CheckUsernameAvailableRequest 查用户名是否可注册。
 message CheckUsernameAvailableRequest {
-  // 用户名。不区分大小写 —— username 存库时已小写化，查询侧同样小写化。
+  // 用户名。**区分大小写** —— alice 和 ALICE 是两个不同的账号。
   string username = 1;
 }
 

@@ -24,13 +24,20 @@ func TestGetUserByUsername_FindsByExactUsername(t *testing.T) {
 	}
 }
 
-// TestGetUserByUsername_IgnoresCase 用户名存库时已小写化，查询侧同样小写化才能对上。
-func TestGetUserByUsername_IgnoresCase(t *testing.T) {
+// TestGetUserByUsername_IsCaseSensitive 用户名**区分大小写** ——
+// alice 和 ALICE 是两个不同的账号，查不到对方。
+func TestGetUserByUsername_IsCaseSensitive(t *testing.T) {
 	repo := newFakeUserRepo()
 	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seeded := seedUser(t, repo, "alice", "secret123")
 
-	got, err := uc.GetUserByUsername(context.Background(), "ALICE")
+	// 大写形式查不到 —— 它是另一个（还不存在的）账号。
+	if _, err := uc.GetUserByUsername(context.Background(), "ALICE"); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("err = %v, want ErrUserNotFound —— 大小写应该区分", err)
+	}
+
+	// 原样能查到。
+	got, err := uc.GetUserByUsername(context.Background(), "alice")
 	if err != nil {
 		t.Fatalf("GetUserByUsername: %v", err)
 	}

@@ -96,7 +96,7 @@ func validatePassword(password string) error {
 	return nil
 }
 
-// validateUsername 校验用户名长度。username 由调用方先 trim + 小写化。
+// validateUsername 校验用户名长度。username 由调用方先 trim。
 func validateUsername(username string) error {
 	if username == "" {
 		return ErrUserInvalidArgument
@@ -327,7 +327,7 @@ func NewUserUsecase(repo UserRepo, auth *conf.Auth, lim LoginLimiter, regLim Reg
 // phone 是手机号（可空，留空表示不填）。非空时全局唯一，被占用返 ErrUserPhoneTaken。
 // email 是邮箱（可空，留空表示不填）。不唯一、不校验格式。
 // clientIP 调用方 IP，用于注册限频。
-// username trim 后小写化。
+// username trim 后原样存储（大小写区分）。
 func (uc *UserUsecase) Register(ctx context.Context, username, password, nickname, phone, email, clientIP string) (string, error) {
 	username = strings.TrimSpace(username)
 	nickname = strings.TrimSpace(nickname)
@@ -345,7 +345,11 @@ func (uc *UserUsecase) Register(ctx context.Context, username, password, nicknam
 	if err := validatePhone(phone); err != nil {
 		return "", err
 	}
-	username = strings.ToLower(username)
+	// 用户名**原样存储，不转小写** —— 大小写是区分的，
+	// Alice 和 alice 是两个不同的账号。
+	//
+	// 数据库列的 collation 是 utf8mb4_bin（二进制），本身大小写敏感，
+	// 唯一索引也就按原样仲裁 —— 这里不能转小写，转了就前功尽弃。
 
 	// 注册限频放在参数校验之后、取锁之前。
 	//
@@ -414,7 +418,8 @@ func (uc *UserUsecase) Login(ctx context.Context, username, password, clientIP s
 	if password == "" {
 		return nil, "", ErrUserInvalidArgument
 	}
-	username = strings.ToLower(username)
+	// 用户名原样查（不转小写）—— 跟 Register 的存储方式一致，
+	// 大小写是区分的，Alice 和 alice 是两个账号。
 
 	if uc.lim != nil {
 		if err := uc.lim.Allow(ctx, username, clientIP); err != nil {
@@ -776,8 +781,7 @@ func (uc *UserUsecase) GetUserByUsername(ctx context.Context, username string) (
 	if err := validateUsername(username); err != nil {
 		return nil, err
 	}
-	// username 存库时已小写化（见 Register），查询侧同样小写化才能对上。
-	username = strings.ToLower(username)
+	// username 原样查（不转小写）—— 跟 Register 的存储方式一致。
 
 	u, err := uc.repo.FindByUsername(ctx, username)
 	if err != nil {
@@ -815,8 +819,7 @@ func (uc *UserUsecase) CheckUsernameAvailable(ctx context.Context, username, cli
 		}
 	}
 
-	// username 存库时已小写化（见 Register），查询侧同样小写化才能对上。
-	username = strings.ToLower(username)
+	// username 原样查（不转小写）—— 跟 Register 的存储方式一致。
 
 	existing, err := uc.repo.FindByUsername(ctx, username)
 	if err != nil {

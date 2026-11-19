@@ -36,9 +36,9 @@ func TestCheckUsernameAvailable_Taken(t *testing.T) {
 	}
 }
 
-// TestCheckUsernameAvailable_IgnoresCase username 存库时已小写化，
-// 查询侧同样小写化才能对上 —— 大写形式也算被占用。
-func TestCheckUsernameAvailable_IgnoresCase(t *testing.T) {
+// TestCheckUsernameAvailable_IsCaseSensitive 用户名**区分大小写** ——
+// 已有 alice 时，ALICE 是另一个名字，仍然可用。
+func TestCheckUsernameAvailable_IsCaseSensitive(t *testing.T) {
 	repo := newFakeUserRepo()
 	uc := NewUserUsecase(repo, nil, nil, nil, nil, nil, nil, StorageOptions{}, nil)
 	seedUser(t, repo, "alice", "secret123")
@@ -47,8 +47,8 @@ func TestCheckUsernameAvailable_IgnoresCase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckUsernameAvailable: %v", err)
 	}
-	if available {
-		t.Errorf("available = true, want false")
+	if !available {
+		t.Errorf("available = false, want true —— 大小写应该区分")
 	}
 }
 
