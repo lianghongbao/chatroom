@@ -43,6 +43,10 @@ auth:
   skip_operations:
     - /api.user.v1.User/Register
     - /api.user.v1.User/Login
+    # 用户名占用探测 —— 注册页「失焦就校验重复」用。
+    # 注册时还没登录，必须跳过 JWT 鉴权。
+    # 它复用注册限频桶，不额外放行。
+    - /api.user.v1.User/CheckUsernameAvailable
 
 # 限流（Redis + Lua 令牌桶）。
 #
@@ -68,6 +72,13 @@ rate_limits:
   register:
     capacity: 10
     rate: 0.0833
+    ttl: 300s
+  # 用户名校验桶（按 IP）。注册页的输入防抖 + 失焦会连发好几次校验，
+  # 所以这个桶比注册桶宽松得多 —— 跟注册共用一个桶的话，
+  # 用户还没提交注册就被自己的校验请求限流了。
+  check_username:
+    capacity: 60
+    rate: 2
     ttl: 300s
 
 observability:

@@ -31,6 +31,12 @@ message RateLimits {
   RateLimit login_fail = 1;
   // 注册桶 —— 单 IP 的注册速率。
   RateLimit register = 2;
+  // 用户名校验桶 —— 单 IP 的「查用户名是否被占用」速率。
+  //
+  // **跟注册桶分开**：注册页的输入防抖 + 失焦会连发好几次校验，
+  // 共用一个桶的话用户还没提交注册就被自己的校验请求限流了。
+  // 这个桶宽松得多，但仍然挡得住批量枚举用户名。
+  RateLimit check_username = 3;
 }
 
 // Storage 对象存储配置。

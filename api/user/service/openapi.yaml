@@ -48,6 +48,43 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/api.user.v1.ChangePasswordReply'
+    /api/user/check/username:
+        get:
+            tags:
+                - User
+            description: |-
+                CheckUsernameAvailable 查用户名是否可注册。
+
+                 注册页「用户名失焦就校验重复」用的探测端点。**只回一个布尔**，
+                 不回任何用户资料 —— 注册页只需要知道「有没有人占用」，
+                 顺带把昵称头像送回去等于白送一份用户画像。
+
+                 跟 GetUserByUsername 的区别：那个是「找这个人」（加好友），
+                 会返回完整资料；这个是「这个名字能不能用」，语义相反，
+                 也不能靠 404 表达「被占用」—— 前端拿布尔判断，不用解析错误码。
+
+                 路由是 /api/user/check/username —— **必须两段**。
+                 GetUserByID 的 /api/user/{id} 通配符只吃单段路径，且注册在前先匹配；
+                 写成 /api/user/check_username（单段）会被通配符吃掉，
+                 实际打到 GetUserByID，operation 也变成 GetUserByID。
+                 跟 GetUserByUsername 的 /api/user/lookup/username 一个道理。
+
+                 鉴权：注册时还没登录，这个端点在 auth.skip_operations 白名单里。
+                 限频：复用注册限频桶 —— 否则它就是一条绕过注册限频的枚举通道。
+            operationId: User_CheckUsernameAvailable
+            parameters:
+                - name: username
+                  in: query
+                  description: 用户名。不区分大小写 —— username 存库时已小写化，查询侧同样小写化。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.user.v1.CheckUsernameAvailableReply'
     /api/user/conversation_member_profiles:
         post:
             tags:
@@ -325,6 +362,23 @@ components:
                          只拉黑 access token 的话，refresh token 还在，攻击者（或另一台设备）
                          还能用它换出新 access token。
                          不传就只能撤销 access token（老客户端兼容路径）。
+        api.user.v1.CheckUsernameAvailableReply:
+            type: object
+            properties:
+                available:
+                    type: boolean
+                    description: |-
+                        true = 没人用过，可以注册。
+
+                         false = 已被占用。注意这是**快照**，不是承诺 ——
+                         到真正提交注册时可能被别人抢走，那时后端会以
+                         USER_ALREADY_EXISTS 拒绝，前端照样要处理这个错误。
+
+                         **用 optional 而不是裸 bool**：HTTP 响应走标准 encoding/json codec，
+                         裸 bool 的 tag 是 `json:"available,omitempty"` —— false 会被整个省略，
+                         前端拿到的是 undefined 而不是 false。optional 让字段变成指针，
+                         序列化时一定会出现在 JSON 里。
+            description: CheckUsernameAvailableReply 用户名是否可用。
         api.user.v1.GetConversationMemberProfilesReply:
             type: object
             properties:

@@ -18,6 +18,7 @@ var _ = new(context.Context)
 const _ = http.SupportPackageIsVersion3
 
 const OperationUserChangePassword = "/api.user.v1.User/ChangePassword"
+const OperationUserCheckUsernameAvailable = "/api.user.v1.User/CheckUsernameAvailable"
 const OperationUserGetConversationMemberProfiles = "/api.user.v1.User/GetConversationMemberProfiles"
 const OperationUserGetFriendProfiles = "/api.user.v1.User/GetFriendProfiles"
 const OperationUserGetUploadToken = "/api.user.v1.User/GetUploadToken"
@@ -35,6 +36,25 @@ const OperationUserUpdateUser = "/api.user.v1.User/UpdateUser"
 type UserHTTPServer interface {
 	// ChangePassword 改密。旧错 / 用户不存在折叠为同一错误（防撞库枚举），改完强制登出当前会话。
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordReply, error)
+	// CheckUsernameAvailable CheckUsernameAvailable 查用户名是否可注册。
+	//
+	// 注册页「用户名失焦就校验重复」用的探测端点。**只回一个布尔**，
+	// 不回任何用户资料 —— 注册页只需要知道「有没有人占用」，
+	// 顺带把昵称头像送回去等于白送一份用户画像。
+	//
+	// 跟 GetUserByUsername 的区别：那个是「找这个人」（加好友），
+	// 会返回完整资料；这个是「这个名字能不能用」，语义相反，
+	// 也不能靠 404 表达「被占用」—— 前端拿布尔判断，不用解析错误码。
+	//
+	// 路由是 /api/user/check/username —— **必须两段**。
+	// GetUserByID 的 /api/user/{id} 通配符只吃单段路径，且注册在前先匹配；
+	// 写成 /api/user/check_username（单段）会被通配符吃掉，
+	// 实际打到 GetUserByID，operation 也变成 GetUserByID。
+	// 跟 GetUserByUsername 的 /api/user/lookup/username 一个道理。
+	//
+	// 鉴权：注册时还没登录，这个端点在 auth.skip_operations 白名单里。
+	// 限频：复用注册限频桶 —— 否则它就是一条绕过注册限频的枚举通道。
+	CheckUsernameAvailable(context.Context, *CheckUsernameAvailableRequest) (*CheckUsernameAvailableReply, error)
 	// GetConversationMemberProfiles GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation 服务补全会话成员列表。
 	//
 	// 跟 GetFriendProfiles 的区别：会话成员未必是好友（群聊可以是陌生人拉进来的），
@@ -108,6 +128,7 @@ func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
 	r.Handle("GET", "/api/user/{id}", _User_GetUserByID0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/batch", _User_GetUsersByIDs0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/user/lookup/username", _User_GetUserByUsername0_HTTP_Handler(srv))
+	r.Handle("GET", "/api/user/check/username", _User_CheckUsernameAvailable0_HTTP_Handler(srv))
 	r.Handle("GET", "/api/user/lookup/phone", _User_GetUserByPhone0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/friend_profiles", _User_GetFriendProfiles0_HTTP_Handler(srv))
 	r.Handle("POST", "/api/user/conversation_member_profiles", _User_GetConversationMemberProfiles0_HTTP_Handler(srv))
@@ -325,6 +346,25 @@ func _User_GetUserByUsername0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Con
 	}
 }
 
+func _User_CheckUsernameAvailable0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in CheckUsernameAvailableRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserCheckUsernameAvailable)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.CheckUsernameAvailable(ctx, req.(*CheckUsernameAvailableRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*CheckUsernameAvailableReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 func _User_GetUserByPhone0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
 	return func(ctx http.Context) error {
 		var in GetUserByPhoneRequest
@@ -385,6 +425,25 @@ func _User_GetConversationMemberProfiles0_HTTP_Handler(srv UserHTTPServer) func(
 type UserHTTPClient interface {
 	// ChangePassword 改密。旧错 / 用户不存在折叠为同一错误（防撞库枚举），改完强制登出当前会话。
 	ChangePassword(ctx context.Context, req *ChangePasswordRequest, opts ...http.CallOption) (rsp *ChangePasswordReply, err error)
+	// CheckUsernameAvailable CheckUsernameAvailable 查用户名是否可注册。
+	//
+	// 注册页「用户名失焦就校验重复」用的探测端点。**只回一个布尔**，
+	// 不回任何用户资料 —— 注册页只需要知道「有没有人占用」，
+	// 顺带把昵称头像送回去等于白送一份用户画像。
+	//
+	// 跟 GetUserByUsername 的区别：那个是「找这个人」（加好友），
+	// 会返回完整资料；这个是「这个名字能不能用」，语义相反，
+	// 也不能靠 404 表达「被占用」—— 前端拿布尔判断，不用解析错误码。
+	//
+	// 路由是 /api/user/check/username —— **必须两段**。
+	// GetUserByID 的 /api/user/{id} 通配符只吃单段路径，且注册在前先匹配；
+	// 写成 /api/user/check_username（单段）会被通配符吃掉，
+	// 实际打到 GetUserByID，operation 也变成 GetUserByID。
+	// 跟 GetUserByUsername 的 /api/user/lookup/username 一个道理。
+	//
+	// 鉴权：注册时还没登录，这个端点在 auth.skip_operations 白名单里。
+	// 限频：复用注册限频桶 —— 否则它就是一条绕过注册限频的枚举通道。
+	CheckUsernameAvailable(ctx context.Context, req *CheckUsernameAvailableRequest, opts ...http.CallOption) (rsp *CheckUsernameAvailableReply, err error)
 	// GetConversationMemberProfiles GetConversationMemberProfiles 批量拉「会话成员可见」的公开资料，供 conversation 服务补全会话成员列表。
 	//
 	// 跟 GetFriendProfiles 的区别：会话成员未必是好友（群聊可以是陌生人拉进来的），
@@ -465,6 +524,40 @@ func (c *UserHTTPClientImpl) ChangePassword(ctx context.Context, in *ChangePassw
 		http.PathTemplate(pattern),
 	}, opts...)
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// CheckUsernameAvailable CheckUsernameAvailable 查用户名是否可注册。
+//
+// 注册页「用户名失焦就校验重复」用的探测端点。**只回一个布尔**，
+// 不回任何用户资料 —— 注册页只需要知道「有没有人占用」，
+// 顺带把昵称头像送回去等于白送一份用户画像。
+//
+// 跟 GetUserByUsername 的区别：那个是「找这个人」（加好友），
+// 会返回完整资料；这个是「这个名字能不能用」，语义相反，
+// 也不能靠 404 表达「被占用」—— 前端拿布尔判断，不用解析错误码。
+//
+// 路由是 /api/user/check/username —— **必须两段**。
+// GetUserByID 的 /api/user/{id} 通配符只吃单段路径，且注册在前先匹配；
+// 写成 /api/user/check_username（单段）会被通配符吃掉，
+// 实际打到 GetUserByID，operation 也变成 GetUserByID。
+// 跟 GetUserByUsername 的 /api/user/lookup/username 一个道理。
+//
+// 鉴权：注册时还没登录，这个端点在 auth.skip_operations 白名单里。
+// 限频：复用注册限频桶 —— 否则它就是一条绕过注册限频的枚举通道。
+func (c *UserHTTPClientImpl) CheckUsernameAvailable(ctx context.Context, in *CheckUsernameAvailableRequest, opts ...http.CallOption) (*CheckUsernameAvailableReply, error) {
+	var out CheckUsernameAvailableReply
+	pattern := "/api/user/check/username"
+	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	opts = append([]http.CallOption{
+		http.Accept("application/protojson"),
+		http.Operation(OperationUserCheckUsernameAvailable),
+		http.PathTemplate(pattern),
+	}, opts...)
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

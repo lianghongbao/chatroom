@@ -261,6 +261,21 @@ func (s *UserService) GetUserByUsername(ctx context.Context, req *pb.GetUserByUs
 	return convertUserReply(u), nil
 }
 
+// CheckUsernameAvailable 查用户名是否可注册。req 是待查的用户名。
+//
+// 注册页「失焦就校验重复」用。只回布尔，不回用户资料 ——
+// 注册页不需要知道这个人是谁，只需要知道名字有没有被占。
+func (s *UserService) CheckUsernameAvailable(ctx context.Context, req *pb.CheckUsernameAvailableRequest) (*pb.CheckUsernameAvailableReply, error) {
+	if req == nil {
+		return nil, biz.ErrUserInvalidArgument
+	}
+	available, err := s.uc.CheckUsernameAvailable(ctx, req.GetUsername(), biz.ClientIPFromContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CheckUsernameAvailableReply{Available: &available}, nil
+}
+
 // GetUserByPhone 按手机号精确查公开资料。req 是按手机号查询的请求。
 // 加好友时用户常常只记得手机号。不做可见性判定，但清空邮箱/电话。
 func (s *UserService) GetUserByPhone(ctx context.Context, req *pb.GetUserByPhoneRequest) (*pb.UserInfo, error) {

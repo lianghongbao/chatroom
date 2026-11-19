@@ -136,7 +136,13 @@ type RateLimits struct {
 	// 登录失败计数桶 —— 连续失败到这个数就锁。
 	LoginFail *RateLimit `protobuf:"bytes,1,opt,name=login_fail,json=loginFail,proto3" json:"login_fail,omitempty"`
 	// 注册桶 —— 单 IP 的注册速率。
-	Register      *RateLimit `protobuf:"bytes,2,opt,name=register,proto3" json:"register,omitempty"`
+	Register *RateLimit `protobuf:"bytes,2,opt,name=register,proto3" json:"register,omitempty"`
+	// 用户名校验桶 —— 单 IP 的「查用户名是否被占用」速率。
+	//
+	// **跟注册桶分开**：注册页的输入防抖 + 失焦会连发好几次校验，
+	// 共用一个桶的话用户还没提交注册就被自己的校验请求限流了。
+	// 这个桶宽松得多，但仍然挡得住批量枚举用户名。
+	CheckUsername *RateLimit `protobuf:"bytes,3,opt,name=check_username,json=checkUsername,proto3" json:"check_username,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -181,6 +187,13 @@ func (x *RateLimits) GetLoginFail() *RateLimit {
 func (x *RateLimits) GetRegister() *RateLimit {
 	if x != nil {
 		return x.Register
+	}
+	return nil
+}
+
+func (x *RateLimits) GetCheckUsername() *RateLimit {
+	if x != nil {
+		return x.CheckUsername
 	}
 	return nil
 }
@@ -1150,12 +1163,13 @@ const file_user_service_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
 	"rate_limit\x18\a \x01(\v2\x1d.chatroom.user.conf.RateLimitR\trateLimit\x12?\n" +
 	"\vrate_limits\x18\b \x01(\v2\x1e.chatroom.user.conf.RateLimitsR\n" +
-	"rateLimits\"\x85\x01\n" +
+	"rateLimits\"\xcb\x01\n" +
 	"\n" +
 	"RateLimits\x12<\n" +
 	"\n" +
 	"login_fail\x18\x01 \x01(\v2\x1d.chatroom.user.conf.RateLimitR\tloginFail\x129\n" +
-	"\bregister\x18\x02 \x01(\v2\x1d.chatroom.user.conf.RateLimitR\bregister\"\xd8\x02\n" +
+	"\bregister\x18\x02 \x01(\v2\x1d.chatroom.user.conf.RateLimitR\bregister\x12D\n" +
+	"\x0echeck_username\x18\x03 \x01(\v2\x1d.chatroom.user.conf.RateLimitR\rcheckUsername\"\xd8\x02\n" +
 	"\aStorage\x12\x1a\n" +
 	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12\x16\n" +
 	"\x06bucket\x18\x02 \x01(\tR\x06bucket\x12\x16\n" +
@@ -1274,27 +1288,28 @@ var file_user_service_internal_conf_conf_proto_depIdxs = []int32{
 	1,  // 7: chatroom.user.conf.Bootstrap.rate_limits:type_name -> chatroom.user.conf.RateLimits
 	7,  // 8: chatroom.user.conf.RateLimits.login_fail:type_name -> chatroom.user.conf.RateLimit
 	7,  // 9: chatroom.user.conf.RateLimits.register:type_name -> chatroom.user.conf.RateLimit
-	9,  // 10: chatroom.user.conf.Registry.nacos:type_name -> chatroom.user.conf.Registry.Nacos
-	10, // 11: chatroom.user.conf.Server.http:type_name -> chatroom.user.conf.Server.HTTP
-	11, // 12: chatroom.user.conf.Server.grpc:type_name -> chatroom.user.conf.Server.GRPC
-	12, // 13: chatroom.user.conf.Data.database:type_name -> chatroom.user.conf.Data.Database
-	13, // 14: chatroom.user.conf.Data.redis:type_name -> chatroom.user.conf.Data.Redis
-	14, // 15: chatroom.user.conf.Auth.token_ttl:type_name -> google.protobuf.Duration
-	14, // 16: chatroom.user.conf.Auth.login_lock_ttl:type_name -> google.protobuf.Duration
-	14, // 17: chatroom.user.conf.Auth.access_ttl:type_name -> google.protobuf.Duration
-	14, // 18: chatroom.user.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
-	14, // 19: chatroom.user.conf.RateLimit.ttl:type_name -> google.protobuf.Duration
-	14, // 20: chatroom.user.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	14, // 21: chatroom.user.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	14, // 22: chatroom.user.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
-	14, // 23: chatroom.user.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
-	14, // 24: chatroom.user.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
-	14, // 25: chatroom.user.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
-	26, // [26:26] is the sub-list for method output_type
-	26, // [26:26] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	7,  // 10: chatroom.user.conf.RateLimits.check_username:type_name -> chatroom.user.conf.RateLimit
+	9,  // 11: chatroom.user.conf.Registry.nacos:type_name -> chatroom.user.conf.Registry.Nacos
+	10, // 12: chatroom.user.conf.Server.http:type_name -> chatroom.user.conf.Server.HTTP
+	11, // 13: chatroom.user.conf.Server.grpc:type_name -> chatroom.user.conf.Server.GRPC
+	12, // 14: chatroom.user.conf.Data.database:type_name -> chatroom.user.conf.Data.Database
+	13, // 15: chatroom.user.conf.Data.redis:type_name -> chatroom.user.conf.Data.Redis
+	14, // 16: chatroom.user.conf.Auth.token_ttl:type_name -> google.protobuf.Duration
+	14, // 17: chatroom.user.conf.Auth.login_lock_ttl:type_name -> google.protobuf.Duration
+	14, // 18: chatroom.user.conf.Auth.access_ttl:type_name -> google.protobuf.Duration
+	14, // 19: chatroom.user.conf.Auth.refresh_ttl:type_name -> google.protobuf.Duration
+	14, // 20: chatroom.user.conf.RateLimit.ttl:type_name -> google.protobuf.Duration
+	14, // 21: chatroom.user.conf.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	14, // 22: chatroom.user.conf.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	14, // 23: chatroom.user.conf.Data.Database.conn_max_lifetime:type_name -> google.protobuf.Duration
+	14, // 24: chatroom.user.conf.Data.Database.conn_max_idle_time:type_name -> google.protobuf.Duration
+	14, // 25: chatroom.user.conf.Data.Redis.read_timeout:type_name -> google.protobuf.Duration
+	14, // 26: chatroom.user.conf.Data.Redis.write_timeout:type_name -> google.protobuf.Duration
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_user_service_internal_conf_conf_proto_init() }

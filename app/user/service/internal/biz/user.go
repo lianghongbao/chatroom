@@ -226,6 +226,13 @@ type RegisterLimiter interface {
 	// Allow 在 Register 入口调用，超配额返回 ErrUserRateLimited。
 	// clientIP 是调用方 IP。
 	Allow(ctx context.Context, clientIP string) error
+	// AllowCheck 在 CheckUsernameAvailable 入口调用，超配额返回 ErrUserRateLimited。
+	// clientIP 是调用方 IP。
+	//
+	// **跟 Allow 分开是必须的**：注册页「输入防抖 + 失焦」会连发好几次校验，
+	// 跟注册共用一个桶的话，用户还没提交注册就被自己的校验请求耗光配额，
+	// 最后注册本身被 429 拒掉。两个桶的容量/速率可以分别配。
+	AllowCheck(ctx context.Context, clientIP string) error
 }
 
 // Release Acquire 的释放闭包，必须幂等；用闭包强制 caller defer 调用。
@@ -780,6 +787,45 @@ func (uc *UserUsecase) GetUserByUsername(ctx context.Context, username string) (
 	u.Email = ""
 	u.Phone = ""
 	return u, nil
+}
+
+// CheckUsernameAvailable 查用户名是否可注册。返回 true 表示没人占用。
+//
+// username 是待查的用户名。
+//
+// 语义跟 GetUserByUsername 相反：那个是「找这个人」，这个是「这个名字能不能用」。
+// 查不到人不是错误 —— 返回 available=true 即可。
+//
+// 限频复用注册桶（regLim）：这个端点公开可达（注册时还没登录），
+// 不限频就是一条绕过注册限频的批量枚举通道。
+func (uc *UserUsecase) CheckUsernameAvailable(ctx context.Context, username, clientIP string) (bool, error) {
+	username = strings.TrimSpace(username)
+	if err := validateUsername(username); err != nil {
+		return false, err
+	}
+
+	// 限频放在参数校验之后 —— 参数非法不该消耗配额，
+	// 否则恶意空请求能把正常用户的额度耗光。跟 Register 同一位置逻辑。
+	//
+	// 用独立的桶（AllowCheck）而不是注册桶：注册页会连发好几次校验，
+	// 共用一个桶的话用户还没提交注册就被自己的校验请求限流了。
+	if uc.regLim != nil {
+		if err := uc.regLim.AllowCheck(ctx, clientIP); err != nil {
+			return false, err
+		}
+	}
+
+	// username 存库时已小写化（见 Register），查询侧同样小写化才能对上。
+	username = strings.ToLower(username)
+
+	existing, err := uc.repo.FindByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return true, nil
+		}
+		return false, err
+	}
+	return existing == nil, nil
 }
 
 // GetUserByPhone 按手机号精确查公开资料。

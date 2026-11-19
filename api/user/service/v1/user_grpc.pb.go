@@ -30,6 +30,7 @@ const (
 	User_GetUserByID_FullMethodName                   = "/api.user.v1.User/GetUserByID"
 	User_GetUsersByIDs_FullMethodName                 = "/api.user.v1.User/GetUsersByIDs"
 	User_GetUserByUsername_FullMethodName             = "/api.user.v1.User/GetUserByUsername"
+	User_CheckUsernameAvailable_FullMethodName        = "/api.user.v1.User/CheckUsernameAvailable"
 	User_GetUserByPhone_FullMethodName                = "/api.user.v1.User/GetUserByPhone"
 	User_GetFriendProfiles_FullMethodName             = "/api.user.v1.User/GetFriendProfiles"
 	User_GetConversationMemberProfiles_FullMethodName = "/api.user.v1.User/GetConversationMemberProfiles"
@@ -84,6 +85,25 @@ type UserClient interface {
 	// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
 	// （通配符只吃单段路径，且注册在前先匹配）。
 	GetUserByUsername(ctx context.Context, in *GetUserByUsernameRequest, opts ...grpc.CallOption) (*UserInfo, error)
+	// CheckUsernameAvailable 查用户名是否可注册。
+	//
+	// 注册页「用户名失焦就校验重复」用的探测端点。**只回一个布尔**，
+	// 不回任何用户资料 —— 注册页只需要知道「有没有人占用」，
+	// 顺带把昵称头像送回去等于白送一份用户画像。
+	//
+	// 跟 GetUserByUsername 的区别：那个是「找这个人」（加好友），
+	// 会返回完整资料；这个是「这个名字能不能用」，语义相反，
+	// 也不能靠 404 表达「被占用」—— 前端拿布尔判断，不用解析错误码。
+	//
+	// 路由是 /api/user/check/username —— **必须两段**。
+	// GetUserByID 的 /api/user/{id} 通配符只吃单段路径，且注册在前先匹配；
+	// 写成 /api/user/check_username（单段）会被通配符吃掉，
+	// 实际打到 GetUserByID，operation 也变成 GetUserByID。
+	// 跟 GetUserByUsername 的 /api/user/lookup/username 一个道理。
+	//
+	// 鉴权：注册时还没登录，这个端点在 auth.skip_operations 白名单里。
+	// 限频：复用注册限频桶 —— 否则它就是一条绕过注册限频的枚举通道。
+	CheckUsernameAvailable(ctx context.Context, in *CheckUsernameAvailableRequest, opts ...grpc.CallOption) (*CheckUsernameAvailableReply, error)
 	// GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
 	//
 	// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
@@ -223,6 +243,16 @@ func (c *userClient) GetUserByUsername(ctx context.Context, in *GetUserByUsernam
 	return out, nil
 }
 
+func (c *userClient) CheckUsernameAvailable(ctx context.Context, in *CheckUsernameAvailableRequest, opts ...grpc.CallOption) (*CheckUsernameAvailableReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckUsernameAvailableReply)
+	err := c.cc.Invoke(ctx, User_CheckUsernameAvailable_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *userClient) GetUserByPhone(ctx context.Context, in *GetUserByPhoneRequest, opts ...grpc.CallOption) (*UserInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UserInfo)
@@ -302,6 +332,25 @@ type UserServer interface {
 	// 前者多一段路径，不会被 GetUserByID 的 /api/user/{id} 通配符吃掉
 	// （通配符只吃单段路径，且注册在前先匹配）。
 	GetUserByUsername(context.Context, *GetUserByUsernameRequest) (*UserInfo, error)
+	// CheckUsernameAvailable 查用户名是否可注册。
+	//
+	// 注册页「用户名失焦就校验重复」用的探测端点。**只回一个布尔**，
+	// 不回任何用户资料 —— 注册页只需要知道「有没有人占用」，
+	// 顺带把昵称头像送回去等于白送一份用户画像。
+	//
+	// 跟 GetUserByUsername 的区别：那个是「找这个人」（加好友），
+	// 会返回完整资料；这个是「这个名字能不能用」，语义相反，
+	// 也不能靠 404 表达「被占用」—— 前端拿布尔判断，不用解析错误码。
+	//
+	// 路由是 /api/user/check/username —— **必须两段**。
+	// GetUserByID 的 /api/user/{id} 通配符只吃单段路径，且注册在前先匹配；
+	// 写成 /api/user/check_username（单段）会被通配符吃掉，
+	// 实际打到 GetUserByID，operation 也变成 GetUserByID。
+	// 跟 GetUserByUsername 的 /api/user/lookup/username 一个道理。
+	//
+	// 鉴权：注册时还没登录，这个端点在 auth.skip_operations 白名单里。
+	// 限频：复用注册限频桶 —— 否则它就是一条绕过注册限频的枚举通道。
+	CheckUsernameAvailable(context.Context, *CheckUsernameAvailableRequest) (*CheckUsernameAvailableReply, error)
 	// GetUserByPhone 按手机号精确查公开资料。加好友时用户常常只记得手机号。
 	//
 	// 语义跟 GetUserByUsername 一致：不做「对陌生人可见」判定，手机号全局唯一
@@ -363,6 +412,9 @@ func (UnimplementedUserServer) GetUsersByIDs(context.Context, *GetUsersByIDsRequ
 }
 func (UnimplementedUserServer) GetUserByUsername(context.Context, *GetUserByUsernameRequest) (*UserInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserByUsername not implemented")
+}
+func (UnimplementedUserServer) CheckUsernameAvailable(context.Context, *CheckUsernameAvailableRequest) (*CheckUsernameAvailableReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckUsernameAvailable not implemented")
 }
 func (UnimplementedUserServer) GetUserByPhone(context.Context, *GetUserByPhoneRequest) (*UserInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserByPhone not implemented")
@@ -592,6 +644,24 @@ func _User_GetUserByUsername_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _User_CheckUsernameAvailable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckUsernameAvailableRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).CheckUsernameAvailable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_CheckUsernameAvailable_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).CheckUsernameAvailable(ctx, req.(*CheckUsernameAvailableRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _User_GetUserByPhone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetUserByPhoneRequest)
 	if err := dec(in); err != nil {
@@ -696,6 +766,10 @@ var User_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserByUsername",
 			Handler:    _User_GetUserByUsername_Handler,
+		},
+		{
+			MethodName: "CheckUsernameAvailable",
+			Handler:    _User_CheckUsernameAvailable_Handler,
 		},
 		{
 			MethodName: "GetUserByPhone",
