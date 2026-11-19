@@ -4,7 +4,7 @@
 ws-gateway）各 build 一个镜像推到 ACR，再部署到 ECS 的 self-hosted runner。
 
 MySQL / Redis 是独立部署的服务，本流水线**不碰**那两个容器 ——
-底座的生命周期独立，不随业务代码发布重启。
+数据存储的生命周期独立，不随业务代码发布重启。
 
 ## 架构
 
@@ -57,8 +57,10 @@ nacos → user → friend → conversation → message → ws-gateway
 | `ACR_NAMESPACE` | 仓库 namespace，例 `lhb-ns/lhb-hub` |
 | `IMAGE_PREFIX` | 本地镜像名前缀，compose 里是 `${IMAGE_PREFIX}/chatroom-<服务>`，默认 `chatroom` |
 | `DEPLOY_DIR` | ECS 上部署目录（包含 `docker-compose.yml` + `deploy.sh` + `.env`） |
-| `RUNNER_LABELS` | self-hosted runner 标签，逗号分隔 |
 | `CONCURRENCY_GROUP` | 部署并发组名，例 `deploy-chatroom` |
+
+> runner 的标签在注册 runner 时配（`runs-on` 用的是
+> `self-hosted, docker, aliyun`），不是 CI 的 Var。
 
 > local-life-api 的 `BASE_GOLANG_TAG` / `BASE_ALPINE_TAG` 在这里**不需要** ——
 > chatroom 的 Dockerfile 直接写死 `FROM golang:1.26` / `FROM debian:stable-slim`，
