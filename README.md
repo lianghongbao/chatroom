@@ -291,7 +291,7 @@ make stop-all      # 停掉
 | `NACOS_SERVERS` | `127.0.0.1:8848` | 配置中心 + 注册中心 |
 | `NACOS_NAMESPACE` | `3dbbf765-...` | 命名空间 id |
 | `NACOS_USERNAME` / `NACOS_PASSWORD` | `nacos` / `123456` | nacos 账号 |
-| `DB_SOURCE` | `root:123456@tcp(127.0.0.1:3306)/test?...` | MySQL DSN |
+| `DB_SOURCE` | `root:123456@tcp(127.0.0.1:3306)/chat?...` | MySQL DSN |
 | `REDIS_ADDR` | `127.0.0.1:6379` | Redis |
 | `AUTH_JWT_SECRET` | dev 占位 | JWT 签名密钥 |
 | `AUTH_INTERNAL_SECRET` | dev 占位 | 服务间内部调用凭证，**五个服务必须一致** |

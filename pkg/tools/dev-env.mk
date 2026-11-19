@@ -9,7 +9,7 @@ NACOS_GROUP ?= DEFAULT_GROUP
 NACOS_USERNAME ?= nacos
 NACOS_PASSWORD ?= 123456
 REDIS_ADDR ?= 127.0.0.1:6379
-DB_SOURCE ?= root:123456@tcp(127.0.0.1:3306)/test?parseTime=true&loc=Local&charset=utf8mb4
+DB_SOURCE ?= root:123456@tcp(127.0.0.1:3306)/chat?parseTime=true&loc=Local&charset=utf8mb4
 # 集成测试用的 root DSN（无库名）。测试自己建临时库、跑完 DROP。
 TEST_ROOT_DSN ?= root:123456@tcp(127.0.0.1:3306)/?parseTime=True&loc=Local
 AUTH_JWT_SECRET ?= chatroom-dev-jwt-secret-please-change-in-production-32bytes
