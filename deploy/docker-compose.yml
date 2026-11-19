@@ -1,0 +1,220 @@
+# ============================================================
+# chatroom 生产部署
+# ============================================================
+# MySQL / Redis 走共享底座（deploy/infra/），本文件只跑业务容器 + nacos。
+#
+# 共享底座先起：
+#   cd deploy/infra && ./deploy.sh up
+#
+# 所有凭证从 deploy/.env 读取（需 .gitignore）
+# 首次使用：cp deploy/.env.example deploy/.env 并填真实值
+#
+# 启动顺序（有依赖，不能随便改）：
+#   nacos → user → friend → conversation → message → ws-gateway
+#
+# 为什么有顺序：conversation 要经 nacos discovery 调 user 补全会话成员资料，
+# message 要调 conversation 的成员身份/未读数端点，ws-gateway 要调
+# conversation 的成员列表算广播目标。先起被调方 —— 下游启动瞬间
+# discovery 查不到上游就会报连接错误。
+#
+# compose 的 depends_on 只保证「容器起来了」，不保证「nacos 上注册好了」。
+# 所以每个业务服务的 healthcheck 用 /readyz（探依赖），
+# 下游等上游 readyz 通了再起。
+
+name: chatroom
+
+x-service-common: &service-common
+  restart: unless-stopped
+  stop_grace_period: 30s
+  networks:
+    - shared-infra-net
+  environment: &service-env
+    TZ: Asia/Shanghai
+    # ---- 共享底座 ----
+    # MySQL —— 共享实例上的 chatroom 库。容器名只在 shared-infra-net 网络里可解析。
+    DB_SOURCE: root:${MYSQL_ROOT_PASSWORD}@tcp(shared-mysql:3306)/chatroom?parseTime=true&loc=Local&charset=utf8mb4
+    # Redis —— 共享实例，靠 key 前缀跟 local-life-api 隔离（chatroom: 前缀）
+    REDIS_ADDR: shared-redis:6379
+    REDIS_PASSWORD: ${REDIS_PASSWORD}
+    # ---- nacos ----
+    NACOS_SERVERS: ${NACOS_SERVERS}
+    NACOS_NAMESPACE: ${NACOS_NAMESPACE}
+    NACOS_GROUP: ${NACOS_GROUP}
+    NACOS_USERNAME: ${NACOS_USERNAME}
+    NACOS_PASSWORD: ${NACOS_PASSWORD}
+    # ---- 鉴权 ----
+    # JWT_SECRET 五个服务必须一致；INTERNAL_SECRET 是服务间内部调用凭证，
+    # 也必须一致 —— 不一致的话内部端点一律 403。
+    AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+    AUTH_INTERNAL_SECRET: ${AUTH_INTERNAL_SECRET}
+
+services:
+  # ============================================================
+  # nacos —— 注册中心 + 配置中心
+  # ============================================================
+  # 单机模式（standalone）用内嵌 derby 存元数据，不依赖 MySQL。
+  nacos:
+    # 默认从 ACR 拉。ACR 里没镜像时，改用 Docker Hub 的官方镜像：
+    #   ACR_REGISTRY_HOST=nacos
+    #   ACR_NAMESPACE=nacos-server
+    #   NACOS_IMAGE_TAG=v3.2.4
+    image: ${ACR_REGISTRY_HOST}/${ACR_NAMESPACE}:${NACOS_IMAGE_TAG:-nacos-3.2.4}
+    container_name: chatroom-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "true"
+      NACOS_AUTH_IDENTITY_KEY: serverIdentity
+      NACOS_AUTH_IDENTITY_VALUE: security
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+      # 业务配置从 nacos 配置中心读（dataId 走各服务的 bootstrap.yaml）
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+      TZ: Asia/Shanghai
+    ports:
+      # 宿主端口可改 —— 宿主上已经有 nacos 跑着时（比如开发机上原生起的），
+      # 改 NACOS_HOST_PORT / NACOS_GRPC_HOST_PORT 避开端口冲突。
+      # 容器内端口固定 8848，业务服务按容器名 chatroom-nacos:8848 连，不受影响。
+      - "${NACOS_HOST_PORT:-8848}:8848"
+      - "${NACOS_GRPC_HOST_PORT:-9848}:9848"
+      - "${NACOS_GRPC2_HOST_PORT:-9849}:9849"
+    volumes:
+      - nacos-data:/home/nacos/data
+      - nacos-logs:/home/nacos/logs
+    networks:
+      - shared-infra-net
+    healthcheck:
+      # nacos 3.x 的就绪端点。
+      # 注意：/nacos/v3/console/health/readiness 在 3.x 里不存在（返 404），
+      # 管理类路径（/nacos/v3/admin/...）全部要鉴权、拿不到 200。
+      # 这个路径不需要鉴权，且 nacos 没就绪时不会返 200。
+      test: ["CMD-SHELL", "curl -sf http://localhost:8848/nacos/v1/ns/operator/metrics | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ============================================================
+  # 业务服务
+  # ============================================================
+  user:
+    <<: *service-common
+    image: ${IMAGE_PREFIX:-chatroom}/chatroom-user:${IMAGE_TAG:-server-latest}
+    container_name: chatroom-user
+    environment:
+      <<: *service-env
+      NACOS_SERVICE_NAME: chatroom-user
+    ports:
+      - "8000:8000"    # HTTP
+      - "9000:9000"    # gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 2 http://localhost:8000/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      nacos:
+        condition: service_healthy
+
+  friend:
+    <<: *service-common
+    image: ${IMAGE_PREFIX:-chatroom}/chatroom-friend:${IMAGE_TAG:-server-latest}
+    container_name: chatroom-friend
+    environment:
+      <<: *service-env
+      NACOS_SERVICE_NAME: chatroom-friend
+    ports:
+      - "8001:8001"    # HTTP
+      - "9001:9001"    # gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 2 http://localhost:8001/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      nacos:
+        condition: service_healthy
+      user:
+        condition: service_healthy
+
+  conversation:
+    <<: *service-common
+    image: ${IMAGE_PREFIX:-chatroom}/chatroom-conversation:${IMAGE_TAG:-server-latest}
+    container_name: chatroom-conversation
+    environment:
+      <<: *service-env
+      NACOS_SERVICE_NAME: chatroom-conversation
+    ports:
+      - "8002:8002"    # HTTP
+      - "9002:9002"    # gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 2 http://localhost:8002/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      nacos:
+        condition: service_healthy
+      user:
+        condition: service_healthy
+
+  message:
+    <<: *service-common
+    image: ${IMAGE_PREFIX:-chatroom}/chatroom-message:${IMAGE_TAG:-server-latest}
+    container_name: chatroom-message
+    environment:
+      <<: *service-env
+      NACOS_SERVICE_NAME: chatroom-message
+    ports:
+      - "8003:8003"    # HTTP
+      - "9003:9003"    # gRPC
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 2 http://localhost:8003/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      nacos:
+        condition: service_healthy
+      conversation:
+        condition: service_healthy
+
+  # ws-gateway 只起 HTTP server（WS 端点 /ws），不提供 gRPC 服务。
+  ws-gateway:
+    <<: *service-common
+    image: ${IMAGE_PREFIX:-chatroom}/chatroom-ws-gateway:${IMAGE_TAG:-server-latest}
+    container_name: chatroom-ws-gateway
+    environment:
+      <<: *service-env
+      NACOS_SERVICE_NAME: chatroom-ws-gateway
+      GATEWAY_HTTP_ADDR: 0.0.0.0:8004
+    ports:
+      - "8004:8004"    # HTTP + WS
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -m 2 http://localhost:8004/readyz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      nacos:
+        condition: service_healthy
+      conversation:
+        condition: service_healthy
+      message:
+        condition: service_healthy
+
+networks:
+  # 共享底座的网络。external —— 由 deploy/infra 创建，不在本 compose 的生命周期内。
+  shared-infra-net:
+    external: true
+    name: shared-infra-net
+
+volumes:
+  nacos-data:
+  nacos-logs:

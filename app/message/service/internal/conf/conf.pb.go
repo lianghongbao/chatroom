@@ -924,11 +924,13 @@ func (x *Data_Database) GetConnMaxIdleTime() *durationpb.Duration {
 }
 
 type Data_Redis struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
-	Addr          string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
-	ReadTimeout   *durationpb.Duration   `protobuf:"bytes,3,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
-	WriteTimeout  *durationpb.Duration   `protobuf:"bytes,4,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Network      string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
+	Addr         string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
+	ReadTimeout  *durationpb.Duration   `protobuf:"bytes,3,opt,name=read_timeout,json=readTimeout,proto3" json:"read_timeout,omitempty"`
+	WriteTimeout *durationpb.Duration   `protobuf:"bytes,4,opt,name=write_timeout,json=writeTimeout,proto3" json:"write_timeout,omitempty"`
+	// 密码。共享底座的 Redis 设了 requirepass，留空则不带认证。
+	Password      string `protobuf:"bytes,5,opt,name=password,proto3" json:"password,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -991,6 +993,13 @@ func (x *Data_Redis) GetWriteTimeout() *durationpb.Duration {
 	return nil
 }
 
+func (x *Data_Redis) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
 var File_message_service_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_message_service_internal_conf_conf_proto_rawDesc = "" +
@@ -1039,7 +1048,7 @@ const file_message_service_internal_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x123\n" +
-	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\x88\x05\n" +
+	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\"\xa4\x05\n" +
 	"\x04Data\x12@\n" +
 	"\bdatabase\x18\x01 \x01(\v2$.chatroom.message.conf.Data.DatabaseR\bdatabase\x127\n" +
 	"\x05redis\x18\x02 \x01(\v2!.chatroom.message.conf.Data.RedisR\x05redis\x1a\xce\x02\n" +
@@ -1051,12 +1060,13 @@ const file_message_service_internal_conf_conf_proto_rawDesc = "" +
 	"\x0emax_open_conns\x18\x05 \x01(\x05R\fmaxOpenConns\x12$\n" +
 	"\x0emax_idle_conns\x18\x06 \x01(\x05R\fmaxIdleConns\x12E\n" +
 	"\x11conn_max_lifetime\x18\a \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxLifetime\x12F\n" +
-	"\x12conn_max_idle_time\x18\b \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxIdleTime\x1a\xb3\x01\n" +
+	"\x12conn_max_idle_time\x18\b \x01(\v2\x19.google.protobuf.DurationR\x0fconnMaxIdleTime\x1a\xcf\x01\n" +
 	"\x05Redis\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12<\n" +
 	"\fread_timeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\vreadTimeout\x12>\n" +
-	"\rwrite_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\"\xaf\x03\n" +
+	"\rwrite_timeout\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\fwriteTimeout\x12\x1a\n" +
+	"\bpassword\x18\x05 \x01(\tR\bpassword\"\xaf\x03\n" +
 	"\x04Auth\x12\x1d\n" +
 	"\n" +
 	"jwt_secret\x18\x01 \x01(\tR\tjwtSecret\x126\n" +
