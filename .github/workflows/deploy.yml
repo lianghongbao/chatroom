@@ -60,7 +60,12 @@ jobs:
           SERVICE="${{ matrix.service }}"
           IMAGE_NAME="chatroom-${SERVICE}"
 
-          IMAGE="${REGISTRY}:${IMAGE_NAME}-${{ github.sha::7 }}"
+          # sha 前 7 位。不能用 Actions 表达式做字符串切片（报
+          # "Unexpected symbol"）。GITHUB_SHA 是 shell 环境变量，
+          # 用 shell 的 ${VAR::n} 切。
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          IMAGE="${REGISTRY}:${IMAGE_NAME}-${SHORT_SHA}"
           LATEST="${REGISTRY}:${IMAGE_NAME}-latest"
 
           # 清老 cache metadata,防止遗留 --mount=type=cache 元数据报错
