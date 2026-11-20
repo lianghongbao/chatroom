@@ -112,19 +112,23 @@ cmd_up() {
 	docker compose -p "$PROJECT" up -d nacos
 
 	# 3. 等 nacos 健康（healthcheck 打 /nacos/v1/ns/operator/metrics）
-	echo "⏳ 等待 nacos 健康..."
+	#
+	# 600 次 × 3 秒 = 30 分钟。nacos 3.x 是 Spring Boot 应用，JVM 启动
+	# 很慢 —— 实测 2 核 4G 的机器上要 9 分多钟才开始监听端口。
+	# 之前等 60 秒太短，nacos 还在起就被判超时了。
+	echo "⏳ 等待 nacos 健康（最多 30 分钟，nacos 启动慢）..."
 	local ok=0
-	for _ in $(seq 1 30); do
+	for _ in $(seq 1 600); do
 		local status
 		status=$(docker inspect -f '{{.State.Health.Status}}' "$NACOS_CONTAINER" 2>/dev/null || echo "starting")
 		if [ "$status" = "healthy" ]; then
 			ok=1
 			break
 		fi
-		sleep 2
+		sleep 3
 	done
 	if [ "$ok" != "1" ]; then
-		echo "❌ nacos 未通过健康检查 —— docker logs $NACOS_CONTAINER 排查" >&2
+		echo "❌ nacos 30 分钟未通过健康检查 —— docker logs $NACOS_CONTAINER 排查" >&2
 		exit 1
 	fi
 	echo "✅ nacos 健康"
