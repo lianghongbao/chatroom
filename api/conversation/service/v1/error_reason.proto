@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package api.conversation.v1;
+
+option go_package = "chatroom/api/conversation/service/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.conversation.v1";
+option objc_class_prefix = "APIConversationV1";
+
+// 错误原因。biz 层折叠为对应 kratos error。
+// 命名沿用 api.user.v1 / api.friend.v1 的风格：<DOMAIN>_<CAUSE>。
+enum ErrorReason {
+  CONVERSATION_UNSPECIFIED = 0;
+
+  // 通用
+  // 会话不存在，或对调用方不可见（折叠成同一个原因，避免探测会话是否存在）。
+  CONVERSATION_NOT_FOUND = 1;
+  // 参数非法（成员为空 / 成员数为 0 / 重复成员 / 字段超长等）。
+  CONVERSATION_INVALID_ARGUMENT = 2;
+
+  // 业务特有
+  // 调用方不是该会话成员。ListMembers 用它明确告知「你不是成员」；
+  // 会话详情/列表走另一套语义 —— 存在与否都折叠成 CONVERSATION_NOT_FOUND。
+  CONVERSATION_NOT_MEMBER = 3;
+  // 已经是该会话成员（重复添加）。批量加成员对已在会里的 uid 幂等跳过（added_count 不计）。
+  CONVERSATION_ALREADY_MEMBER = 4;
+  // 已是群主，不能移除自己（群主需先转让或解散）。
+  CONVERSATION_OWNER_CANNOT_LEAVE = 5;
+  // 只有群主能做的操作（改群名 / 踢人 / 转让 / 解散）。
+  CONVERSATION_NOT_OWNER = 6;
+  // 群聊成员数已达上限。
+  CONVERSATION_MEMBER_LIMIT = 7;
+  // 群聊至少要有 1 个成员（踢人 / 退群后不能为空）。
+  CONVERSATION_EMPTY = 8;
+  // 单聊不支持成员增删 —— 单聊固定两人。
+  CONVERSATION_NOT_GROUP = 9;
+  // 要加入的成员里有不存在的用户。
+  CONVERSATION_USER_NOT_FOUND = 10;
+  // 未读数更新冲突：并发更新同一成员的未读数，重试若干次仍未成功。
+  CONVERSATION_UNREAD_CONFLICT = 11;
+
+  // 群头像相关
+  // 对象存储没配 —— 签发直传凭证时返回。
+  CONVERSATION_STORAGE_NOT_CONFIGURED = 12;
+  // 群头像文件后缀不在白名单内。
+  CONVERSATION_UPLOAD_EXT_NOT_ALLOWED = 13;
+  // 群头像地址不是本系统签发的（host / 目录前缀 / 后缀对不上）。
+  CONVERSATION_UPLOAD_URL_INVALID = 14;
+  // OSS 上没有这个对象 —— 客户端还没传完就提交了地址。
+  CONVERSATION_UPLOAD_OBJECT_NOT_FOUND = 15;
+  // 对象大小或类型跟上传策略不符。
+  CONVERSATION_UPLOAD_OBJECT_MISMATCH = 16;
+}

@@ -1,0 +1,63 @@
+# configs/config.yaml
+#
+# chatroom-ws-gateway 进程配置。WebSocket 网关（PRD §3.5）。
+#
+# 与其它进程共用 nacos/Redis/JWT secret,差别:
+#   - server 端口 8004(跟 user/friend/conversation/message 错开)
+#   - service_name 默认 chatroom-ws-gateway
+#
+# 网关**无状态**:不落库,只维护连接 + 转发(PRD §四)。
+#
+# 只有一个 HTTP server —— 网关不提供 proto 服务,只挂 WS 端点 /ws。
+# gRPC server 不起:网关跟其它服务之间的调用是它作为客户端发出去的
+# (转发消息到 message 服务、查会话成员),不需要被别人调用。
+
+server:
+  http:
+    # 监听地址。多实例部署时用 GATEWAY_HTTP_ADDR 给每个实例一个不同端口
+    # （比如 8004 / 8005）—— 同一台机器上跑两个网关实例时端口必须错开。
+    addr: "${GATEWAY_HTTP_ADDR:0.0.0.0:8004}"
+    # WS 长连接不能被 HTTP server 的读写超时掐断。
+    # 超时只作用于普通 HTTP 请求,WS 升级后走 hijack,不受这个影响 ——
+    # 但留个大值更安全(健康检查之类不会被误伤)。
+    timeout: 300s
+  grpc:
+    addr: 0.0.0.0:9004
+    timeout: 30s
+
+data:
+  database:
+    driver: mysql
+    source: "${DB_SOURCE}"
+    debug: false
+    # 网关不落库,但仍需要 data 层拿 Redis 客户端。
+    auto_migrate: false
+  redis:
+    addr: "${REDIS_ADDR}"
+    # Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
+    password: "${REDIS_PASSWORD:}"
+    # 数据库编号。同一 Redis 实例靠它跟别的应用隔离。
+    db: "${REDIS_DB:2}"
+    read_timeout: 0.2s
+    write_timeout: 0.2s
+
+auth:
+  # 握手鉴权用这个密钥校验 ?token= 里的 JWT。
+  jwt_secret: "${AUTH_JWT_SECRET}"
+  token_ttl: 3600s
+  access_ttl: 900s
+  refresh_ttl: 604800s
+  token_issuer: chatroom
+  login_max_fail: 5
+  login_lock_ttl: 900s
+  # 服务间内部调用凭证。查会话成员列表时用 X-Internal-Token 头携带。
+  #
+  # 留空的后果:网关算不出广播目标 —— 消息发得出去但推不出去。
+  internal_secret: "${AUTH_INTERNAL_SECRET:}"
+  skip_operations: []
+
+observability:
+  metrics_addr: ""
+  tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'
+  service_name: "${NACOS_SERVICE_NAME:chatroom-ws-gateway}"
+  unauth_sample_rate: 0.1

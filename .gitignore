@@ -1,0 +1,64 @@
+# Reference https://github.com/github/gitignore/blob/master/Go.gitignore
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# OS General
+Thumbs.db
+.DS_Store
+
+# project
+*.cert
+*.key
+*.log
+bin/
+
+# 契约生成用的 protoc 插件缓存（api/gen.sh / app/gen-conf.sh）
+.cache/
+
+# Nacos 的 servlet 临时目录（Tomcat 容器跑出来的，仓库根下会冒出 work/Tomcat*）
+work/
+
+# 本地跑起来的访问日志
+logs/
+
+# 恢复过程的临时目录
+.recover/
+
+# Go 工作区（整仓一个 module，不需要 go.work）
+go.work
+go.work.sum
+
+# 本地环境覆盖（生产凭证走 env 注入，不进版本库）
+.env
+.env.local
+*.env.local
+# Docker Compose 凭证文件（deploy/.env / deploy/mysql/.env / deploy/redis/.env）
+deploy/.env
+deploy/mysql/.env
+deploy/redis/.env
+
+# 覆盖率报告
+coverage.out
+coverage.html
+
+# Develop tools
+.vscode/
+.idea/
+*.swp

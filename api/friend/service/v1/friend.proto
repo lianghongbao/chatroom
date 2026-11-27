@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package api.friend.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "chatroom/api/friend/service/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.friend.v1";
+option objc_class_prefix = "APIFriendV1";
+
+// FriendService 好友服务。
+// 跨服务：通过 nacos 调 user.GetUserByID 拉取好友公开资料。
+service Friend {
+    // ApplyFriend 发起好友申请。
+    // 幂等：自申请 / 已好友 / 重复申请 / 反向 PENDING 合并 / 覆盖 REJECTED。
+    rpc ApplyFriend (ApplyFriendRequest) returns (ApplyFriendReply) {
+        option (google.api.http) = {
+            post: "/api/friend/apply"
+            body: "*"
+        };
+    }
+
+    // AcceptFriend 同意好友申请。仅 target 可调用。
+    rpc AcceptFriend (AcceptFriendRequest) returns (AcceptFriendReply) {
+        option (google.api.http) = {
+            post: "/api/friend/accept"
+            body: "*"
+        };
+    }
+
+    // RejectFriend 拒绝好友申请。语义同 AcceptFriend 的鉴权。
+    rpc RejectFriend (RejectFriendRequest) returns (RejectFriendReply) {
+        option (google.api.http) = {
+            post: "/api/friend/reject"
+            body: "*"
+        };
+    }
+
+    // RemoveFriend 删除好友关系。任意一方可调用。
+    rpc RemoveFriend (RemoveFriendRequest) returns (RemoveFriendReply) {
+        option (google.api.http) = {
+            post: "/api/friend/remove"
+            body: "*"
+        };
+    }
+
+    // ListFriends 列出当前用户的所有好友（status = ACCEPTED）。分页 cursor-based，按 friends.id 升序。
+    rpc ListFriends (ListFriendsRequest) returns (ListFriendsReply) {
+        option (google.api.http) = {
+            get: "/api/friend/list"
+        };
+    }
+
+    // ListPendingRequests 列出作为「目标方」收到的 PENDING 申请。
+    // friend_id 在此指向申请发起方 (friends.user_id)。分页语义同 ListFriendsRequest。
+    rpc ListPendingRequests (ListPendingRequestsRequest) returns (ListPendingRequestsReply) {
+        option (google.api.http) = {
+            get: "/api/friend/pending"
+        };
+    }
+
+    // CountPending 返回作为目标方收到的 PENDING 申请总数。
+    rpc CountPending (CountPendingRequest) returns (CountPendingReply) {
+        option (google.api.http) = {
+            get: "/api/friend/pending/count"
+        };
+    }
+}
+
+// FriendStatus 好友关系状态。
+enum FriendStatus {
+    FRIEND_STATUS_UNSPECIFIED = 0; // 未指定
+    FRIEND_STATUS_PENDING     = 1;
+    FRIEND_STATUS_ACCEPTED    = 2;
+    FRIEND_STATUS_REJECTED    = 3;
+}
+
+// FriendInfo 单条好友关系。
+// friend_id 是「对方」的 uid。昵称/头像等资料由 service 层调 user.GetUserByID
+// 填充，不可达时降级为空。
+message FriendInfo {
+    // 关系记录 ID。
+    uint64 id = 1;
+    // 对方用户 uid。
+    string friend_id = 2;
+    // 对方昵称。
+    string nickname = 3;
+    // 对方头像 URL。
+    string avatar = 4;
+    // 对方注册时间（Unix 秒）。
+    int64 created_at = 5;
+    // 关系建立时间（Unix 秒, status 转 ACCEPTED 的时间）。
+    int64 created_at_friend = 6;
+    // 申请附言（最多 200 字符）。
+    string message = 7;
+}
+
+// ApplyFriendRequest 发起好友申请。
+message ApplyFriendRequest {
+    // 目标用户 uid。空串视为非法。
+    string target_id = 1;
+    // 申请附言（可选）。> 200 字符视为非法。
+    string message = 2;
+}
+
+message ApplyFriendReply {
+    // 新建 / 更新后的关系记录 ID。
+    uint64 request_id = 1;
+    // 当前关系状态。
+    FriendStatus status = 2;
+}
+
+// AcceptFriendRequest 同意好友申请。
+message AcceptFriendRequest {
+    // 申请记录 ID。
+    uint64 request_id = 1;
+}
+
+message AcceptFriendReply {
+    FriendInfo friend = 1;
+}
+
+// RejectFriendRequest 拒绝好友申请。
+message RejectFriendRequest {
+    uint64 request_id = 1;
+}
+
+message RejectFriendReply {
+}
+
+// RemoveFriendRequest 删除好友。
+message RemoveFriendRequest {
+    // 对方用户 uid（不是关系记录 ID）。
+    string friend_id = 1;
+}
+
+message RemoveFriendReply {
+}
+
+// ListFriendsRequest 列好友。
+message ListFriendsRequest {
+    // 游标：上一次响应的 next_cursor；首次留空。
+    uint64 cursor = 1;
+    // 单页大小。1..200 合法, 超出由 service 层折叠到 50 默认。
+    int32 page_size = 2;
+}
+
+message ListFriendsReply {
+    repeated FriendInfo friends = 1;
+    // 下一页游标。空表示已到末页。
+    uint64 next_cursor = 2;
+}
+
+// ListPendingRequestsRequest 列收件箱。分页字段语义同 ListFriendsRequest。
+message ListPendingRequestsRequest {
+    // 游标：上一次响应的 next_cursor；首次留空。
+    uint64 cursor = 1;
+    // 单页大小。1..200 合法, 超出由 service 层折叠到 50 默认。
+    int32 page_size = 2;
+}
+
+message ListPendingRequestsReply {
+    repeated FriendInfo requests = 1;
+    uint64 next_cursor = 2;
+}
+
+message CountPendingRequest {
+}
+
+message CountPendingReply {
+    uint64 count = 1;
+}

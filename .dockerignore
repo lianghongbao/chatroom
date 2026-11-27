@@ -1,0 +1,43 @@
+# 构建上下文是仓库根目录（服务依赖同仓的 pkg/ 和 api/ 契约包）。
+# 这里排除掉跟镜像构建无关的东西 —— 尤其是各服务的 bin/ 产物，
+# 不排除的话每次构建都要把它们传给 docker daemon。
+
+# 各服务的编译产物
+*/bin/
+bin/
+
+# 本地依赖目录（模块已经 vendored 进 go.sum，不进镜像）
+*/vendor/
+
+# 本地凭证 —— 必须排除。
+# Dockerfile 里是 COPY . /src，整个上下文都进 builder stage；
+# 不排除的话 OSS AK/SK、数据库密码、JWT 密钥会进构建上下文和
+# builder 层缓存。运行镜像是第二个 FROM 阶段，只 COPY 二进制和
+# 配置，凭证进不了最终镜像，但构建缓存里会留着。
+.env
+.env.local
+*.env.local
+deploy/.env
+deploy/mysql/.env
+deploy/redis/.env
+
+# git
+.git/
+.gitignore
+.gitattributes
+
+# 开发工具的配置
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 日志和证书
+*.log
+*.cert
+*.key
+
+# 文档
+*.md
+!*/deploy/k8s/*.md

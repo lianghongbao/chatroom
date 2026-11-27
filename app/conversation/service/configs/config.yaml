@@ -1,0 +1,85 @@
+# configs/config.yaml
+#
+# chatroom-conversation 进程配置。与 user / friend 进程共用 nacos/DB/Redis,差别:
+#   - server 端口 8002/9002(避免和 user(8000/9000)、friend(8001/9001)进程同时本地启动时冲突)
+#   - service_name 默认 chatroom-conversation
+#
+# 三层职责和 user / friend 进程一致。
+#
+# 跨服务调用：本进程通过 nacos discovery 解析 "chatroom-user" 端点(在
+# app/conversation/service/internal/data/remote_user.go 写死),不依赖 user 进程的端口 —— nacos 自动负载均衡。
+# user 进程端口变更不会影响 conversation 进程,反之亦然。
+
+server:
+  http:
+    addr: 0.0.0.0:8002
+    timeout: 30s
+  grpc:
+    addr: 0.0.0.0:9002
+    timeout: 30s
+
+data:
+  database:
+    driver: mysql
+    source: "${DB_SOURCE}"
+    debug: false
+    # 表结构由 ent 增量迁移管：启动时比对现状，只发必要的 ALTER TABLE
+    # （加列 / 改列宽 / 补索引）。改 ent schema 后重启服务即自动对齐。
+    # 注意：ent 不删列 —— 废弃的列要手工 DROP。
+    auto_migrate: true
+    # 连接池。连接额度是所有服务共享的，不是每个服务各有一份。
+    max_open_conns: 10
+    max_idle_conns: 5
+    conn_max_lifetime: 1800s
+    conn_max_idle_time: 300s
+  redis:
+    addr: "${REDIS_ADDR}"
+    # Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
+    password: "${REDIS_PASSWORD:}"
+    # 数据库编号。同一 Redis 实例靠它跟别的应用隔离。
+    db: "${REDIS_DB:2}"
+    read_timeout: 0.2s
+    write_timeout: 0.2s
+
+auth:
+  jwt_secret: "${AUTH_JWT_SECRET}"
+  token_ttl: 3600s
+  access_ttl: 900s
+  refresh_ttl: 604800s
+  token_issuer: chatroom
+  login_max_fail: 5
+  login_lock_ttl: 900s
+  # 服务间内部调用凭证。调 user 的 GetConversationMemberProfiles 时用
+  # X-Internal-Token 头携带。留空则该调用降级（会话成员昵称/头像为空，不影响主流程）。
+  internal_secret: "${AUTH_INTERNAL_SECRET:}"
+  # conversation 域没有 Register/Login,但保留 user 域端点便于 SSO 替换时一处搞定。
+  skip_operations:
+    - /api.user.v1.User/Register
+    - /api.user.v1.User/Login
+
+observability:
+  metrics_addr: ""
+  tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'
+  service_name: "${NACOS_SERVICE_NAME:chatroom-conversation}"
+  unauth_sample_rate: 0.1
+
+storage:
+  endpoint: "${OSS_ENDPOINT:}"
+  bucket: "${OSS_BUCKET:}"
+  region: "${OSS_REGION:}"
+  role_arn: "${OSS_ROLE_ARN:}"
+  # 长期 RAM AK/SK，只用于调 STS AssumeRole，不出服务端。
+  access_key_id: "${OSS_ACCESS_KEY_ID:}"
+  access_key_secret: "${OSS_ACCESS_KEY_SECRET:}"
+  # 客户端直传目标。留空回退到 https://<bucket>.<endpoint>。
+  upload_host: "${OSS_UPLOAD_HOST:}"
+  # 公开访问前缀（CDN 域名）。留空表示不做公开访问。
+  url_prefix: "${OSS_URL_PREFIX:}"
+  # 群头像允许的后缀白名单。留空 = 不允许任何后缀（fail closed）。
+  avatar_allowed_exts:
+    - jpg
+    - jpeg
+    - png
+    - webp
+  # 群头像最大字节数。5MB。
+  avatar_max_size: 5242880

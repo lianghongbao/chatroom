@@ -1,0 +1,154 @@
+syntax = "proto3";
+package chatroom.conversation.conf;
+
+option go_package = "chatroom/app/conversation/service/internal/conf;conf";
+
+import "google/protobuf/duration.proto";
+
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  Auth auth = 3;
+  // 可观测性配置。空 endpoint 表示不启动对应能力。
+  Observability observability = 4;
+
+  Registry registry = 5;
+
+  // 对象存储配置。群头像直传用。整段留空表示关闭群头像上传。
+  Storage storage = 6;
+}
+
+// 阿里云 OSS。群头像直传凭证的签发与校验都要用。
+//
+// 字段语义跟 user 服务的 storage 段一致 —— 两边共用 pkg/oss 的 Uploader，
+// 只是目录前缀不同（个人头像 avatar/<uid>/，群头像 group_avatar/<会话ID>/）。
+message Storage {
+  // 阿里云 OSS 服务端点，如 oss-cn-guangzhou.aliyuncs.com。
+  string endpoint = 1;
+  // 存储空间名。
+  string bucket = 2;
+  // 地域，如 cn-guangzhou。用于 V4 签名派生和拼 host。
+  string region = 3;
+  // STS 角色 ARN，如 acs:ram::123456789:role/chatroom-oss-sts-role。
+  string role_arn = 4;
+  // 长期 RAM AK。只用于调 STS AssumeRole，不出服务端。不进版本库。
+  string access_key_id = 5;
+  // 长期 RAM SK。只用于调 STS AssumeRole，不出服务端。不进版本库。
+  string access_key_secret = 6;
+  // 客户端直传目标。留空回退到 https://<bucket>.<endpoint>。
+  string upload_host = 7;
+  // 公开访问前缀（CDN 域名）。留空表示不做公开访问。
+  string url_prefix = 8;
+  // 群头像允许的后缀白名单。留空表示不允许任何后缀。
+  repeated string avatar_allowed_exts = 9;
+  // 群头像最大字节数。0 表示不限。
+  int64 avatar_max_size = 10;
+}
+
+message Registry {
+    message Nacos {
+      repeated string server_addresses = 1;
+      int32          port = 2;
+      string         namespace_id = 3;
+      string         group = 4;
+      string         username          = 5;
+      string         password          = 6;
+      string         service_name      = 7;   // 注册到 Nacos 的服务名
+      string         cluster_name      = 8;
+      // 业务配置的 dataId。留空则回退到 <service_name>.yaml。
+      // 属引导信息（决定「从哪个 nacos 读哪条配置」），不能由 nacos 自己决定。
+      string         data_id           = 9;
+    }
+    Nacos nacos = 1;
+}
+
+message Server {
+  message HTTP {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}
+
+message Data {
+  message Database {
+    // database/sql 注册的驱动名，如 "mysql"。
+    string driver = 1;
+    // 驱动对应的 DSN。凭证不要提交进版本库。
+    string source = 2;
+    // 打印每条 SQL。仅开发环境开启。
+    bool debug = 3;
+    // 按 ent schema 增量对齐表结构（启动时只发必要的 ALTER TABLE）。
+    // 不删列 —— 废弃的列手工 DROP。
+    bool auto_migrate = 4;
+    // 单进程最大连接数。<= 0 用 pkg/dbpool 的默认值（10）。
+    int32 max_open_conns = 5;
+    // 空闲连接数。<= 0 用默认值（5）。
+    int32 max_idle_conns = 6;
+    // 连接最长存活时间。<= 0 用默认值（30m）。
+    google.protobuf.Duration conn_max_lifetime = 7;
+    // 空闲连接最长保留时间。<= 0 用默认值（5m）。
+    google.protobuf.Duration conn_max_idle_time = 8;
+  }
+  message Redis {
+    string network = 1;
+    string addr = 2;
+    google.protobuf.Duration read_timeout = 3;
+    google.protobuf.Duration write_timeout = 4;
+    // 密码。Redis 设了 requirepass，留空则不带认证。
+    string password = 5;
+    // 数据库编号。同一 Redis 实例靠它与别的应用隔离。
+    int32 db = 6;
+  }
+  Database database = 1;
+  Redis redis = 2;
+}
+
+message Auth {
+  // HS256 签名密钥。不进版本库，走 env / secret manager 注入。轮换靠重发 token。
+  string jwt_secret = 1;
+  // Token 寿命，默认 1h。第 3 段起作为 access_ttl 的 fallback，优先用 access_ttl。
+  google.protobuf.Duration token_ttl = 2;
+  // 跳过 JWT 鉴权的 Operation（如 Register/Login）。支持前缀匹配。
+  // 保持最小集合 —— 每一条都是安全审计项。
+  repeated string skip_operations = 3;
+  // 触发登录锁定的连续失败次数，默认 5。
+  int32 login_max_fail = 4;
+  // 登录锁定时长，默认 15m。
+  google.protobuf.Duration login_lock_ttl = 5;
+  // access token 寿命，默认 15m；未设置时回退到 token_ttl。
+  google.protobuf.Duration access_ttl = 6;
+  // refresh token 寿命，默认 168h (7d)。
+  google.protobuf.Duration refresh_ttl = 7;
+  // JWT 签发方。校验时要求 iss 匹配，防止多服务共用密钥时 token 串用。默认 "chatroom"。
+  string token_issuer = 8;
+  // 服务间内部调用凭证，走 X-Internal-Token 头。留空表示禁用内部接口（端点一律 403）。
+  // 生产环境必须通过 Secret 注入。
+  string internal_secret = 9;
+}
+
+// 可观测性配置。两端点都为空时不启动对应 middleware。
+// metrics: Prometheus exporter HTTP 监听端点，如 ":9090"，同地址开 /metrics。
+// tracing: OTLP gRPC endpoint，如 "otel-collector:4317"。
+message Observability {
+  string metrics_addr = 1;
+  string tracing_endpoint = 2;
+  // 服务名，trace resource 的 service.name 标签。
+  string service_name = 3;
+  // 未鉴权请求（401）的 trace 采样率，0~1。
+  //
+  // 未鉴权流量可能很大（爬虫、撞库、token 泄露），全量记进 trace 会撑爆
+  // 存储并淹没真实链路。但全丢又看不到「鉴权失败率」这个信号 ——
+  // 所以按比例采样：大部分丢弃，留一点点用来发现异常。
+  // 0 = 全丢，1 = 全留。不设置时默认 0.1。
+  double unauth_sample_rate = 4;
+}
+
+

@@ -1,0 +1,535 @@
+syntax = "proto3";
+
+package api.conversation.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "chatroom/api/conversation/service/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.conversation.v1";
+option objc_class_prefix = "APIConversationV1";
+
+// ConversationService 会话服务。
+// 单聊（type=1）由成员集合唯一确定，重复创建复用同一会话；群聊（type=2）成员可增减，群主唯一。
+// 成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
+service Conversation {
+    // CreateConversation 创建会话。单聊幂等（同一对成员返同一会话），群聊总是新建。
+    rpc CreateConversation (CreateConversationRequest) returns (CreateConversationReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/create"
+            body: "*"
+        };
+    }
+
+    // ListConversations 列出当前用户的所有会话，按最后活动时间倒序。
+    // 分页：cursor-based，按 (updated_at DESC, id DESC) 排序。
+    rpc ListConversations (ListConversationsRequest) returns (ListConversationsReply) {
+        option (google.api.http) = {
+            get: "/api/conversation/list"
+        };
+    }
+
+    // GetConversation 会话详情。仅会话成员可见。
+    rpc GetConversation (GetConversationRequest) returns (GetConversationReply) {
+        option (google.api.http) = {
+            get: "/api/conversation/get"
+        };
+    }
+
+    // AddMembers 往群聊加成员。仅群主可调用。
+    rpc AddMembers (AddMembersRequest) returns (AddMembersReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/members/add"
+            body: "*"
+        };
+    }
+
+    // RemoveMember 踢人。仅群主可调用，且不能踢自己。
+    rpc RemoveMember (RemoveMemberRequest) returns (RemoveMemberReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/members/remove"
+            body: "*"
+        };
+    }
+
+    // LeaveConversation 主动退群。群主不能退（需先转让群主）。
+    rpc LeaveConversation (LeaveConversationRequest) returns (LeaveConversationReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/leave"
+            body: "*"
+        };
+    }
+
+    // UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+    //
+    // name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
+    rpc UpdateConversation (UpdateConversationRequest) returns (UpdateConversationReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/update"
+            body: "*"
+        };
+    }
+
+    // GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+    //
+    // 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+    // 客户端拿着临时凭证也写不进别的群目录。
+    //
+    // 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+    rpc GetGroupAvatarUploadToken (GetGroupAvatarUploadTokenRequest) returns (GetGroupAvatarUploadTokenReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/avatar/upload_token"
+            body: "*"
+        };
+    }
+
+    // TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
+    // 转让后才能退群。
+    rpc TransferOwner (TransferOwnerRequest) returns (TransferOwnerReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/owner/transfer"
+            body: "*"
+        };
+    }
+
+    // DissolveConversation 解散群聊。仅群主可调用，单聊不支持。
+    // 会话连同全部成员记录一起删除，不可恢复。
+    rpc DissolveConversation (DissolveConversationRequest) returns (DissolveConversationReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/dissolve"
+            body: "*"
+        };
+    }
+
+    // ListMembers 列出会话成员。仅会话成员可见。
+    rpc ListMembers (ListMembersRequest) returns (ListMembersReply) {
+        option (google.api.http) = {
+            get: "/api/conversation/members/list"
+        };
+    }
+
+    // GetMemberProfile 查会话里某个成员的公开资料。
+    //
+    // 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+    // 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+    // 同理也不暴露 email / phone。
+    //
+    // 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+    rpc GetMemberProfile (GetMemberProfileRequest) returns (GetMemberProfileReply) {
+        option (google.api.http) = {
+            get: "/api/conversation/members/profile"
+        };
+    }
+
+    // ── 仅供服务间调用 ──
+    // 走内部凭证 X-Internal-Token，不走用户 JWT。
+
+    // CheckMembership 查某个 uid 是不是会话成员。
+    // 会话不存在和「不是成员」都返 is_member=false。
+    rpc CheckMembership (CheckMembershipRequest) returns (CheckMembershipReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/membership/check"
+            body: "*"
+        };
+    }
+
+    // UpdateUnread 更新会话级未读数。
+    // delta 正增负减，归零后不再往下减。只影响 conversation_id + user_id 指定的那个成员。
+    rpc UpdateUnread (UpdateUnreadRequest) returns (UpdateUnreadReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/unread/update"
+            body: "*"
+        };
+    }
+
+    // UpdateUnreadBatch 批量更新一个会话里多个成员的未读数。
+    // 消息服务发消息后的未读 fan-out 用它，避免 N 次跨进程调用。
+    rpc UpdateUnreadBatch (UpdateUnreadBatchRequest) returns (UpdateUnreadBatchReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/unread/batch_update"
+            body: "*"
+        };
+    }
+
+    // GetUnread 查某个成员的会话级未读数。
+    rpc GetUnread (GetUnreadRequest) returns (GetUnreadReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/unread/get"
+            body: "*"
+        };
+    }
+
+    // ClearUnread 把某个成员的会话级未读数清零。
+    // 单独一个端点而非 GetUnread + UpdateUnread(-n)：两步之间有窗口，并发消息会让未读数清不干净。
+    rpc ClearUnread (ClearUnreadRequest) returns (ClearUnreadReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/unread/clear"
+            body: "*"
+        };
+    }
+
+    // ListUnread 查某个 uid 在所有会话的未读数。
+    rpc ListUnread (ListUnreadRequest) returns (ListUnreadReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/unread/list"
+            body: "*"
+        };
+    }
+
+    // ListConversationMembers 列出会话的全部成员（不校验调用方身份，只认内部凭证）。
+    // ws-gateway 用它算广播目标。跟 ListMembers 的区别：那个要求调用方是成员。
+    rpc ListConversationMembers (ListConversationMembersRequest) returns (ListConversationMembersReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/members/all"
+            body: "*"
+        };
+    }
+
+    // ListUserConversations 列某个用户参与的所有会话 id（不校验调用方身份，只认内部凭证）。
+    // ws-gateway 用它找「用户的同伴在哪些会话里」以便上线通知。跟 ListConversations 的区别：那个要用户 JWT 且返回详情。
+    rpc ListUserConversations (ListUserConversationsRequest) returns (ListUserConversationsReply) {
+        option (google.api.http) = {
+            post: "/api/conversation/user_conversations"
+            body: "*"
+        };
+    }
+}
+
+// ConversationType 会话类型。
+enum ConversationType {
+    CONVERSATION_TYPE_UNSPECIFIED = 0;
+    // 单聊：固定两个成员。
+    CONVERSATION_TYPE_SINGLE = 1;
+    // 群聊：成员可增减。
+    CONVERSATION_TYPE_GROUP = 2;
+}
+
+// ConversationInfo 会话概要。
+message ConversationInfo {
+    // 会话 ID。
+    uint64 id = 1;
+    // 会话类型。
+    ConversationType type = 2;
+    // 会话名。群聊为群名；单聊为空（前端用对方昵称展示）。
+    string name = 3;
+    // 群主 uid。单聊为 0。
+    string owner_id = 4;
+    // 成员数。
+    uint32 member_count = 5;
+    // 成员 uid 列表。
+    repeated string member_ids = 6;
+    // 成员昵称，顺序与 member_ids 对齐。
+    // 长度恒等于 member_ids，资料没拉到时该位置为空字符串占位，前端可按下标直接对应。
+    repeated string member_nicknames = 7;
+    // 成员头像，顺序与 member_ids 对齐。语义同 member_nicknames。
+    repeated string member_avatars = 8;
+    // 会话最后一条消息摘要。message 服务（P4）上线前为空。
+    string last_message = 9;
+    // 最后一条消息时间（Unix 秒）。message 服务上线前为 0。
+    int64 last_message_at = 10;
+    // 会话最后活动时间（Unix 秒），成员变动或改名时更新。
+    int64 updated_at = 11;
+    // 会话创建时间（Unix 秒）。
+    int64 created_at = 12;
+    // 群头像地址。单聊为空串。
+    //
+    // 公开访问地址（CDN 域名 + object key），前端直接塞给 <img src>。
+    // 群聊没设头像时也是空串 —— 前端回退到群名首字母占位。
+    string avatar = 13;
+}
+
+// CreateConversationRequest 创建会话。
+message CreateConversationRequest {
+    // 会话类型。缺省按成员数推断：2 人 = 单聊，> 2 人 = 群聊。
+    ConversationType type = 1;
+    // 成员 uid 列表，至少 2 人。不含调用方也可以，服务端会并入。
+    repeated string member_ids = 2;
+    // 群聊名。单聊忽略该字段。≤ 128 字符。
+    string name = 3;
+}
+
+message CreateConversationReply {
+    ConversationInfo conversation = 1;
+    // 是否复用了已存在的单聊。true 表示这次没有新建。
+    bool reused = 2;
+}
+
+// ListConversationsRequest 列会话。分页字段语义见 ListFriendsRequest。
+message ListConversationsRequest {
+    // 游标：上一次响应的 next_cursor；首次留空。
+    uint64 cursor = 1;
+    // 单页大小。1..200 合法，超出折叠到 50 默认。
+    int32 page_size = 2;
+}
+
+message ListConversationsReply {
+    repeated ConversationInfo conversations = 1;
+    // 下一页游标。空表示已到末页。
+    uint64 next_cursor = 2;
+}
+
+// GetConversationRequest 会话详情。
+message GetConversationRequest {
+    // 会话 ID。0 视为非法。
+    uint64 id = 1;
+}
+
+message GetConversationReply {
+    ConversationInfo conversation = 1;
+}
+
+// AddMembersRequest 往群聊加人。
+message AddMembersRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 要加入的成员 uid 列表。至少 1 人。
+    repeated string member_ids = 2;
+}
+
+message AddMembersReply {
+    // 加入后的成员数。
+    uint32 member_count = 1;
+    // 实际新加入的人数（已在会里的不计入）。
+    uint32 added_count = 2;
+}
+
+// RemoveMemberRequest 踢人。
+message RemoveMemberRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 要踢的成员 uid。
+    string member_id = 2;
+}
+
+message RemoveMemberReply {
+    // 踢人后的成员数。
+    uint32 member_count = 1;
+}
+
+// LeaveConversationRequest 退群。
+message LeaveConversationRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+}
+
+message LeaveConversationReply {
+}
+
+// UpdateConversationRequest 改群名 / 群头像。
+message UpdateConversationRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 新群名。≤ 128 字符，不能为空。
+    //
+    // 留空表示不改群名 —— 改头像时不想连带改名字就传空串。
+    string name = 2;
+    // 新群头像地址。留空表示不改头像。
+    //
+    // 地址必须是用 GetGroupAvatarUploadToken 签发的凭证上传出来的，
+    // 服务端会校验 host / 目录前缀 / 后缀，以及对象是否真的存在。
+    string avatar = 3;
+}
+
+message UpdateConversationReply {
+    ConversationInfo conversation = 1;
+}
+
+// GetGroupAvatarUploadTokenRequest 签发群头像直传凭证的请求。
+message GetGroupAvatarUploadTokenRequest {
+    // 会话 ID。必须是群聊，且调用者是群主。
+    uint64 conversation_id = 1;
+    // 文件后缀，不带点，如 "png"。必须在白名单内。
+    string ext = 2;
+}
+
+// GetGroupAvatarUploadTokenReply 群头像直传凭证 —— OSS PostObject 表单。
+message GetGroupAvatarUploadTokenReply {
+    // OSS 上传地址，客户端 POST 到这里。
+    //
+    // 例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+    // PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+    string host = 1;
+    // 表单字段。客户端原样塞进 FormData 提交。
+    //
+    // 包含 key / policy / x-oss-signature-version / x-oss-credential /
+    // x-oss-date / x-oss-security-token / x-oss-signature /
+    // success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+    //
+    // file 域不放这里 —— 文件本身由客户端从本地读。
+    map<string, string> fields = 2;
+    // object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+    string file_key = 3;
+    // 上传后可访问的地址。客户端上传完把它塞进 UpdateConversation 的 avatar。
+    string public_url = 4;
+    // 过期时间，Unix 秒。
+    int64 expire_at = 5;
+    // 允许的最大字节数，0 表示不限。
+    int64 max_size = 6;
+}
+
+// TransferOwnerRequest 转让群主。
+message TransferOwnerRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 新群主 uid。必须是当前群成员。
+    string new_owner_id = 2;
+}
+
+message TransferOwnerReply {
+    // 转让后的会话。owner_id 是新群主。
+    ConversationInfo conversation = 1;
+}
+
+// DissolveConversationRequest 解散群聊。
+message DissolveConversationRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+}
+
+message DissolveConversationReply {
+}
+
+// ListMembersRequest 列会话成员。
+message ListMembersRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+}
+
+message ListMembersReply {
+    // 成员 uid 列表，升序。
+    repeated string member_ids = 1;
+    // 成员昵称，顺序与 member_ids 对齐。长度恒等于 member_ids，缺资料时为空串占位。
+    repeated string member_nicknames = 2;
+    // 成员头像，顺序与 member_ids 对齐。语义同 member_nicknames。
+    repeated string member_avatars = 3;
+}
+
+// GetMemberProfileRequest 查会话成员的公开资料。
+message GetMemberProfileRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 要查的成员 uid。必须是该会话的成员。
+    string user_id = 2;
+}
+
+// GetMemberProfileReply 成员的公开资料。
+message GetMemberProfileReply {
+    // 成员 uid。
+    string id = 1;
+    // 用户名。
+    string username = 2;
+    // 昵称。
+    string nickname = 3;
+    // 头像地址。
+    string avatar = 4;
+    // 加入时间，Unix 秒。
+    int64 created_at = 5;
+}
+
+// ── 服务间内部接口的 DTO ──
+
+// CheckMembershipRequest 查成员身份。
+message CheckMembershipRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 要查的 uid。
+    string user_id = 2;
+}
+
+message CheckMembershipReply {
+    // 该 uid 是不是会话成员。会话不存在时也是 false。
+    bool is_member = 1;
+}
+
+// UpdateUnreadRequest 更新未读数。
+message UpdateUnreadRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 成员 uid。
+    string user_id = 2;
+    // 增量。正数增加，负数减少。
+    int32 delta = 3;
+}
+
+// UpdateUnreadBatchRequest 批量给一个会话里的多个成员加未读数。
+//
+// 消息服务发一条消息要给除发送方外的所有成员加未读 —— 逐个调
+// UpdateUnread 是 N 次跨进程调用（500 人的群 = 500 次往返）。
+// 这个端点把整个 fan-out 压成一次。
+message UpdateUnreadBatchRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 要加未读的成员 uid 列表。
+    repeated string user_ids = 2;
+    // 增量。正数增加，负数减少。
+    int32 delta = 3;
+}
+
+message UpdateUnreadBatchReply {
+    // 成功更新的成员数。
+    uint32 updated = 1;
+}
+
+message UpdateUnreadReply {
+    // 更新后的未读数。
+    uint32 unread_count = 1;
+}
+
+// GetUnreadRequest 查未读数。
+message GetUnreadRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 成员 uid。
+    string user_id = 2;
+}
+
+message GetUnreadReply {
+    // 未读数。
+    uint32 unread_count = 1;
+}
+
+// ClearUnreadRequest 清零未读数。
+message ClearUnreadRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+    // 成员 uid。
+    string user_id = 2;
+}
+
+message ClearUnreadReply {
+    // 清零后的未读数（正常是 0）。
+    uint32 unread_count = 1;
+}
+
+// ListUnreadRequest 查所有会话的未读数。
+message ListUnreadRequest {
+    // 成员 uid。
+    string user_id = 1;
+}
+
+message ListUnreadReply {
+    // 各会话的未读数，key 是 conversation_id。
+    map<uint64, uint32> per_conversation = 1;
+}
+
+// ListConversationMembersRequest 列会话全部成员。
+message ListConversationMembersRequest {
+    // 会话 ID。
+    uint64 conversation_id = 1;
+}
+
+message ListConversationMembersReply {
+    // 成员 uid 列表，升序。
+    repeated string member_ids = 1;
+}
+
+// ListUserConversationsRequest 列某用户参与的所有会话。
+message ListUserConversationsRequest {
+    // 用户 uid。
+    string user_id = 1;
+}
+
+message ListUserConversationsReply {
+    // 会话 id 列表，升序。
+    repeated uint64 conversation_ids = 1;
+}

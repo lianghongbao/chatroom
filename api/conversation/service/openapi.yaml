@@ -1,0 +1,866 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: Conversation API
+    description: |-
+        ConversationService 会话服务。
+         单聊（type=1）由成员集合唯一确定，重复创建复用同一会话；群聊（type=2）成员可增减，群主唯一。
+         成员昵称/头像由 service 层调 user 内部端点批量拉取，不可达时降级为空。
+    version: 0.0.1
+paths:
+    /api/conversation/avatar/upload_token:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                GetGroupAvatarUploadToken 签发群头像直传凭证。仅群主可调用，单聊不支持。
+
+                 凭证把 object key 前缀锁死在 group_avatar/<会话ID>/ ——
+                 客户端拿着临时凭证也写不进别的群目录。
+
+                 流程：签凭证 → 客户端直传 OSS → 把 public_url 塞进 UpdateConversation 的 avatar。
+            operationId: Conversation_GetGroupAvatarUploadToken
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.GetGroupAvatarUploadTokenRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.GetGroupAvatarUploadTokenReply'
+    /api/conversation/create:
+        post:
+            tags:
+                - Conversation
+            description: CreateConversation 创建会话。单聊幂等（同一对成员返同一会话），群聊总是新建。
+            operationId: Conversation_CreateConversation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.CreateConversationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.CreateConversationReply'
+    /api/conversation/dissolve:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                DissolveConversation 解散群聊。仅群主可调用，单聊不支持。
+                 会话连同全部成员记录一起删除，不可恢复。
+            operationId: Conversation_DissolveConversation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.DissolveConversationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.DissolveConversationReply'
+    /api/conversation/get:
+        get:
+            tags:
+                - Conversation
+            description: GetConversation 会话详情。仅会话成员可见。
+            operationId: Conversation_GetConversation
+            parameters:
+                - name: id
+                  in: query
+                  description: 会话 ID。0 视为非法。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.GetConversationReply'
+    /api/conversation/leave:
+        post:
+            tags:
+                - Conversation
+            description: LeaveConversation 主动退群。群主不能退（需先转让群主）。
+            operationId: Conversation_LeaveConversation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.LeaveConversationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.LeaveConversationReply'
+    /api/conversation/list:
+        get:
+            tags:
+                - Conversation
+            description: |-
+                ListConversations 列出当前用户的所有会话，按最后活动时间倒序。
+                 分页：cursor-based，按 (updated_at DESC, id DESC) 排序。
+            operationId: Conversation_ListConversations
+            parameters:
+                - name: cursor
+                  in: query
+                  description: 游标：上一次响应的 next_cursor；首次留空。
+                  schema:
+                    type: string
+                - name: pageSize
+                  in: query
+                  description: 单页大小。1..200 合法，超出折叠到 50 默认。
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.ListConversationsReply'
+    /api/conversation/members/add:
+        post:
+            tags:
+                - Conversation
+            description: AddMembers 往群聊加成员。仅群主可调用。
+            operationId: Conversation_AddMembers
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.AddMembersRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.AddMembersReply'
+    /api/conversation/members/all:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                ListConversationMembers 列出会话的全部成员（不校验调用方身份，只认内部凭证）。
+                 ws-gateway 用它算广播目标。跟 ListMembers 的区别：那个要求调用方是成员。
+            operationId: Conversation_ListConversationMembers
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.ListConversationMembersRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.ListConversationMembersReply'
+    /api/conversation/members/list:
+        get:
+            tags:
+                - Conversation
+            description: ListMembers 列出会话成员。仅会话成员可见。
+            operationId: Conversation_ListMembers
+            parameters:
+                - name: conversationId
+                  in: query
+                  description: 会话 ID。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.ListMembersReply'
+    /api/conversation/members/profile:
+        get:
+            tags:
+                - Conversation
+            description: |-
+                GetMemberProfile 查会话里某个成员的公开资料。
+
+                 跟 user 服务的 GetUserByID 区别：**跳过 is_visible_to_stranger 判定** ——
+                 同在一个会话里就已经互相可见昵称头像了，再要求对方「对陌生人可见」是自相矛盾。
+                 同理也不暴露 email / phone。
+
+                 仅会话成员可查；不是成员返 NOT_FOUND（不泄露会话是否存在）。
+            operationId: Conversation_GetMemberProfile
+            parameters:
+                - name: conversationId
+                  in: query
+                  description: 会话 ID。
+                  schema:
+                    type: string
+                - name: userId
+                  in: query
+                  description: 要查的成员 uid。必须是该会话的成员。
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.GetMemberProfileReply'
+    /api/conversation/members/remove:
+        post:
+            tags:
+                - Conversation
+            description: RemoveMember 踢人。仅群主可调用，且不能踢自己。
+            operationId: Conversation_RemoveMember
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.RemoveMemberRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.RemoveMemberReply'
+    /api/conversation/membership/check:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                CheckMembership 查某个 uid 是不是会话成员。
+                 会话不存在和「不是成员」都返 is_member=false。
+            operationId: Conversation_CheckMembership
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.CheckMembershipRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.CheckMembershipReply'
+    /api/conversation/owner/transfer:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                TransferOwner 转让群主。仅当前群主可调用，新群主必须是群成员。
+                 转让后才能退群。
+            operationId: Conversation_TransferOwner
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.TransferOwnerRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.TransferOwnerReply'
+    /api/conversation/unread/batch_update:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                UpdateUnreadBatch 批量更新一个会话里多个成员的未读数。
+                 消息服务发消息后的未读 fan-out 用它，避免 N 次跨进程调用。
+            operationId: Conversation_UpdateUnreadBatch
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.UpdateUnreadBatchRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.UpdateUnreadBatchReply'
+    /api/conversation/unread/clear:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                ClearUnread 把某个成员的会话级未读数清零。
+                 单独一个端点而非 GetUnread + UpdateUnread(-n)：两步之间有窗口，并发消息会让未读数清不干净。
+            operationId: Conversation_ClearUnread
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.ClearUnreadRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.ClearUnreadReply'
+    /api/conversation/unread/get:
+        post:
+            tags:
+                - Conversation
+            description: GetUnread 查某个成员的会话级未读数。
+            operationId: Conversation_GetUnread
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.GetUnreadRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.GetUnreadReply'
+    /api/conversation/unread/list:
+        post:
+            tags:
+                - Conversation
+            description: ListUnread 查某个 uid 在所有会话的未读数。
+            operationId: Conversation_ListUnread
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.ListUnreadRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.ListUnreadReply'
+    /api/conversation/unread/update:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                UpdateUnread 更新会话级未读数。
+                 delta 正增负减，归零后不再往下减。只影响 conversation_id + user_id 指定的那个成员。
+            operationId: Conversation_UpdateUnread
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.UpdateUnreadRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.UpdateUnreadReply'
+    /api/conversation/update:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                UpdateConversation 改群名 / 群头像。仅群主可调用，单聊不支持。
+
+                 name 和 avatar 都留空 = 无操作，返 INVALID_ARGUMENT。
+            operationId: Conversation_UpdateConversation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.UpdateConversationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.UpdateConversationReply'
+    /api/conversation/user_conversations:
+        post:
+            tags:
+                - Conversation
+            description: |-
+                ListUserConversations 列某个用户参与的所有会话 id（不校验调用方身份，只认内部凭证）。
+                 ws-gateway 用它找「用户的同伴在哪些会话里」以便上线通知。跟 ListConversations 的区别：那个要用户 JWT 且返回详情。
+            operationId: Conversation_ListUserConversations
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/api.conversation.v1.ListUserConversationsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/api.conversation.v1.ListUserConversationsReply'
+components:
+    schemas:
+        api.conversation.v1.AddMembersReply:
+            type: object
+            properties:
+                memberCount:
+                    type: integer
+                    description: 加入后的成员数。
+                    format: uint32
+                addedCount:
+                    type: integer
+                    description: 实际新加入的人数（已在会里的不计入）。
+                    format: uint32
+        api.conversation.v1.AddMembersRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                memberIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 要加入的成员 uid 列表。至少 1 人。
+            description: AddMembersRequest 往群聊加人。
+        api.conversation.v1.CheckMembershipReply:
+            type: object
+            properties:
+                isMember:
+                    type: boolean
+                    description: 该 uid 是不是会话成员。会话不存在时也是 false。
+        api.conversation.v1.CheckMembershipRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                userId:
+                    type: string
+                    description: 要查的 uid。
+            description: CheckMembershipRequest 查成员身份。
+        api.conversation.v1.ClearUnreadReply:
+            type: object
+            properties:
+                unreadCount:
+                    type: integer
+                    description: 清零后的未读数（正常是 0）。
+                    format: uint32
+        api.conversation.v1.ClearUnreadRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                userId:
+                    type: string
+                    description: 成员 uid。
+            description: ClearUnreadRequest 清零未读数。
+        api.conversation.v1.ConversationInfo:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 会话 ID。
+                type:
+                    type: integer
+                    description: 会话类型。
+                    format: enum
+                name:
+                    type: string
+                    description: 会话名。群聊为群名；单聊为空（前端用对方昵称展示）。
+                ownerId:
+                    type: string
+                    description: 群主 uid。单聊为 0。
+                memberCount:
+                    type: integer
+                    description: 成员数。
+                    format: uint32
+                memberIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员 uid 列表。
+                memberNicknames:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        成员昵称，顺序与 member_ids 对齐。
+                         长度恒等于 member_ids，资料没拉到时该位置为空字符串占位，前端可按下标直接对应。
+                memberAvatars:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员头像，顺序与 member_ids 对齐。语义同 member_nicknames。
+                lastMessage:
+                    type: string
+                    description: 会话最后一条消息摘要。message 服务（P4）上线前为空。
+                lastMessageAt:
+                    type: string
+                    description: 最后一条消息时间（Unix 秒）。message 服务上线前为 0。
+                updatedAt:
+                    type: string
+                    description: 会话最后活动时间（Unix 秒），成员变动或改名时更新。
+                createdAt:
+                    type: string
+                    description: 会话创建时间（Unix 秒）。
+                avatar:
+                    type: string
+                    description: |-
+                        群头像地址。单聊为空串。
+
+                         公开访问地址（CDN 域名 + object key），前端直接塞给 <img src>。
+                         群聊没设头像时也是空串 —— 前端回退到群名首字母占位。
+            description: ConversationInfo 会话概要。
+        api.conversation.v1.CreateConversationReply:
+            type: object
+            properties:
+                conversation:
+                    $ref: '#/components/schemas/api.conversation.v1.ConversationInfo'
+                reused:
+                    type: boolean
+                    description: 是否复用了已存在的单聊。true 表示这次没有新建。
+        api.conversation.v1.CreateConversationRequest:
+            type: object
+            properties:
+                type:
+                    type: integer
+                    description: 会话类型。缺省按成员数推断：2 人 = 单聊，> 2 人 = 群聊。
+                    format: enum
+                memberIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员 uid 列表，至少 2 人。不含调用方也可以，服务端会并入。
+                name:
+                    type: string
+                    description: 群聊名。单聊忽略该字段。≤ 128 字符。
+            description: CreateConversationRequest 创建会话。
+        api.conversation.v1.DissolveConversationReply:
+            type: object
+            properties: {}
+        api.conversation.v1.DissolveConversationRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+            description: DissolveConversationRequest 解散群聊。
+        api.conversation.v1.GetConversationReply:
+            type: object
+            properties:
+                conversation:
+                    $ref: '#/components/schemas/api.conversation.v1.ConversationInfo'
+        api.conversation.v1.GetGroupAvatarUploadTokenReply:
+            type: object
+            properties:
+                host:
+                    type: string
+                    description: |-
+                        OSS 上传地址，客户端 POST 到这里。
+
+                         例 "https://chatroomoss.oss-cn-guangzhou.aliyuncs.com"。
+                         PostObject 的 URL 只有 bucket 域名，object key 走表单域传。
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: |-
+                        表单字段。客户端原样塞进 FormData 提交。
+
+                         包含 key / policy / x-oss-signature-version / x-oss-credential /
+                         x-oss-date / x-oss-security-token / x-oss-signature /
+                         success_action_status 这几个域 —— **别改值**，改了就签名对不上。
+
+                         file 域不放这里 —— 文件本身由客户端从本地读。
+                fileKey:
+                    type: string
+                    description: object key，fields 里也有，这里单独给一份方便客户端拼完整 URL。
+                publicUrl:
+                    type: string
+                    description: 上传后可访问的地址。客户端上传完把它塞进 UpdateConversation 的 avatar。
+                expireAt:
+                    type: string
+                    description: 过期时间，Unix 秒。
+                maxSize:
+                    type: string
+                    description: 允许的最大字节数，0 表示不限。
+            description: GetGroupAvatarUploadTokenReply 群头像直传凭证 —— OSS PostObject 表单。
+        api.conversation.v1.GetGroupAvatarUploadTokenRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。必须是群聊，且调用者是群主。
+                ext:
+                    type: string
+                    description: 文件后缀，不带点，如 "png"。必须在白名单内。
+            description: GetGroupAvatarUploadTokenRequest 签发群头像直传凭证的请求。
+        api.conversation.v1.GetMemberProfileReply:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 成员 uid。
+                username:
+                    type: string
+                    description: 用户名。
+                nickname:
+                    type: string
+                    description: 昵称。
+                avatar:
+                    type: string
+                    description: 头像地址。
+                createdAt:
+                    type: string
+                    description: 加入时间，Unix 秒。
+            description: GetMemberProfileReply 成员的公开资料。
+        api.conversation.v1.GetUnreadReply:
+            type: object
+            properties:
+                unreadCount:
+                    type: integer
+                    description: 未读数。
+                    format: uint32
+        api.conversation.v1.GetUnreadRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                userId:
+                    type: string
+                    description: 成员 uid。
+            description: GetUnreadRequest 查未读数。
+        api.conversation.v1.LeaveConversationReply:
+            type: object
+            properties: {}
+        api.conversation.v1.LeaveConversationRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+            description: LeaveConversationRequest 退群。
+        api.conversation.v1.ListConversationMembersReply:
+            type: object
+            properties:
+                memberIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员 uid 列表，升序。
+        api.conversation.v1.ListConversationMembersRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+            description: ListConversationMembersRequest 列会话全部成员。
+        api.conversation.v1.ListConversationsReply:
+            type: object
+            properties:
+                conversations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/api.conversation.v1.ConversationInfo'
+                nextCursor:
+                    type: string
+                    description: 下一页游标。空表示已到末页。
+        api.conversation.v1.ListMembersReply:
+            type: object
+            properties:
+                memberIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员 uid 列表，升序。
+                memberNicknames:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员昵称，顺序与 member_ids 对齐。长度恒等于 member_ids，缺资料时为空串占位。
+                memberAvatars:
+                    type: array
+                    items:
+                        type: string
+                    description: 成员头像，顺序与 member_ids 对齐。语义同 member_nicknames。
+        api.conversation.v1.ListUnreadReply:
+            type: object
+            properties:
+                perConversation:
+                    type: object
+                    additionalProperties:
+                        type: integer
+                        format: uint32
+                    description: 各会话的未读数，key 是 conversation_id。
+        api.conversation.v1.ListUnreadRequest:
+            type: object
+            properties:
+                userId:
+                    type: string
+                    description: 成员 uid。
+            description: ListUnreadRequest 查所有会话的未读数。
+        api.conversation.v1.ListUserConversationsReply:
+            type: object
+            properties:
+                conversationIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 会话 id 列表，升序。
+        api.conversation.v1.ListUserConversationsRequest:
+            type: object
+            properties:
+                userId:
+                    type: string
+                    description: 用户 uid。
+            description: ListUserConversationsRequest 列某用户参与的所有会话。
+        api.conversation.v1.RemoveMemberReply:
+            type: object
+            properties:
+                memberCount:
+                    type: integer
+                    description: 踢人后的成员数。
+                    format: uint32
+        api.conversation.v1.RemoveMemberRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                memberId:
+                    type: string
+                    description: 要踢的成员 uid。
+            description: RemoveMemberRequest 踢人。
+        api.conversation.v1.TransferOwnerReply:
+            type: object
+            properties:
+                conversation:
+                    allOf:
+                        - $ref: '#/components/schemas/api.conversation.v1.ConversationInfo'
+                    description: 转让后的会话。owner_id 是新群主。
+        api.conversation.v1.TransferOwnerRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                newOwnerId:
+                    type: string
+                    description: 新群主 uid。必须是当前群成员。
+            description: TransferOwnerRequest 转让群主。
+        api.conversation.v1.UpdateConversationReply:
+            type: object
+            properties:
+                conversation:
+                    $ref: '#/components/schemas/api.conversation.v1.ConversationInfo'
+        api.conversation.v1.UpdateConversationRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                name:
+                    type: string
+                    description: |-
+                        新群名。≤ 128 字符，不能为空。
+
+                         留空表示不改群名 —— 改头像时不想连带改名字就传空串。
+                avatar:
+                    type: string
+                    description: |-
+                        新群头像地址。留空表示不改头像。
+
+                         地址必须是用 GetGroupAvatarUploadToken 签发的凭证上传出来的，
+                         服务端会校验 host / 目录前缀 / 后缀，以及对象是否真的存在。
+            description: UpdateConversationRequest 改群名 / 群头像。
+        api.conversation.v1.UpdateUnreadBatchReply:
+            type: object
+            properties:
+                updated:
+                    type: integer
+                    description: 成功更新的成员数。
+                    format: uint32
+        api.conversation.v1.UpdateUnreadBatchRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                userIds:
+                    type: array
+                    items:
+                        type: string
+                    description: 要加未读的成员 uid 列表。
+                delta:
+                    type: integer
+                    description: 增量。正数增加，负数减少。
+                    format: int32
+            description: |-
+                UpdateUnreadBatchRequest 批量给一个会话里的多个成员加未读数。
+
+                 消息服务发一条消息要给除发送方外的所有成员加未读 —— 逐个调
+                 UpdateUnread 是 N 次跨进程调用（500 人的群 = 500 次往返）。
+                 这个端点把整个 fan-out 压成一次。
+        api.conversation.v1.UpdateUnreadReply:
+            type: object
+            properties:
+                unreadCount:
+                    type: integer
+                    description: 更新后的未读数。
+                    format: uint32
+        api.conversation.v1.UpdateUnreadRequest:
+            type: object
+            properties:
+                conversationId:
+                    type: string
+                    description: 会话 ID。
+                userId:
+                    type: string
+                    description: 成员 uid。
+                delta:
+                    type: integer
+                    description: 增量。正数增加，负数减少。
+                    format: int32
+            description: UpdateUnreadRequest 更新未读数。
+tags:
+    - name: Conversation

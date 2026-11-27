@@ -1,0 +1,119 @@
+# chatroom-user 进程配置。三层：基础设施连接（env 注入，无默认值）、
+# 业务默认值（全环境共用，nacos 可覆盖）、运行时参数（最终来自 nacos）。
+#
+# env 约定：DB_* 数据库 / REDIS_* Redis / NACOS_* 注册与配置中心 /
+#           AUTH_* 鉴权 / OTEL_* 可观测性。
+
+server:
+  http:
+    addr: 0.0.0.0:8000
+    timeout: 30s
+  grpc:
+    addr: 0.0.0.0:9000
+    timeout: 30s
+
+data:
+  database:
+    driver: mysql
+    source: "${DB_SOURCE}"
+    debug: false
+    # 表结构以 ent schema 为准，启动时增量对齐（只 ALTER，不删列）
+    auto_migrate: true
+    # 连接池。连接额度是所有服务共享的，不是每个服务各有一份。
+    max_open_conns: 10
+    max_idle_conns: 5
+    conn_max_lifetime: 1800s
+    conn_max_idle_time: 300s
+  redis:
+    addr: "${REDIS_ADDR}"
+    # Redis 设了 requirepass —— 密码走 env 注入，不进版本库。
+    password: "${REDIS_PASSWORD:}"
+    # 数据库编号。同一 Redis 实例靠它跟别的应用隔离。
+    db: "${REDIS_DB:2}"
+    read_timeout: 0.2s
+    write_timeout: 0.2s
+
+auth:
+  jwt_secret: "${AUTH_JWT_SECRET}"
+  token_ttl: 3600s
+  access_ttl: 900s
+  refresh_ttl: 604800s
+  token_issuer: chatroom
+  login_max_fail: 5
+  login_lock_ttl: 900s
+  # 服务间内部调用凭证，走 X-Internal-Token 头
+  # 留空则内部端点一律 403（fail closed）
+  internal_secret: "${AUTH_INTERNAL_SECRET:}"
+  skip_operations:
+    - /api.user.v1.User/Register
+    - /api.user.v1.User/Login
+    # 用户名占用探测 —— 注册页「失焦就校验重复」用。
+    # 注册时还没登录，必须跳过 JWT 鉴权。
+    # 它复用注册限频桶，不额外放行。
+    - /api.user.v1.User/CheckUsernameAvailable
+
+# 限流（Redis + Lua 令牌桶）。
+#
+# capacity 桶容量 —— 一次最多能拿走多少个令牌（突发量上限）。
+# rate 每秒补几个令牌 —— 长期平均速率，这才是真正的闸门。
+# ttl 桶的空闲回收时间 —— 没人用的桶多久消失。
+#
+# rate_limit 是通用默认值；rate_limits 里各场景可以覆盖。
+# 不写就用代码里的默认值。
+rate_limit:
+  capacity: 5
+  rate: 1
+  ttl: 60s
+
+rate_limits:
+  # 登录失败计数桶。容量 = 允许的连续失败次数（与 auth.login_max_fail 对齐）。
+  # 速率决定锁多久之后能再试：5 次 / 900s ≈ 每 3 分钟回充 1 次。
+  login_fail:
+    capacity: 5
+    rate: 0.0056
+    ttl: 900s
+  # 注册桶（按 IP）。稳态 5 个/分钟，突发 10 个。
+  register:
+    capacity: 10
+    rate: 0.0833
+    ttl: 300s
+  # 用户名校验桶（按 IP）。注册页的输入防抖 + 失焦会连发好几次校验，
+  # 所以这个桶比注册桶宽松得多 —— 跟注册共用一个桶的话，
+  # 用户还没提交注册就被自己的校验请求限流了。
+  check_username:
+    capacity: 60
+    rate: 2
+    ttl: 300s
+
+observability:
+  metrics_addr: ""
+  tracing_endpoint: '${OTEL_EXPORTER_OTLP_ENDPOINT:""}'
+  service_name: "${NACOS_SERVICE_NAME:chatroom-user}"
+  # 未鉴权请求（401）的 trace 采样率，0~1。不设 = 0.1。
+  # 未鉴权流量可能很大，全量记进 trace 会撑爆存储并淹没真实链路；
+  # 全丢又看不到鉴权失败率的信号，所以按比例采样。
+  unauth_sample_rate: 0.1
+
+# 对象存储（阿里云 OSS）—— 头像直传。
+# 没配全（缺 bucket / region / role_arn / AK / SK）时头像上传自动关闭，
+# 服务的其他功能不受影响。
+storage:
+  endpoint: "${OSS_ENDPOINT:}"
+  bucket: "${OSS_BUCKET:}"
+  region: "${OSS_REGION:}"
+  role_arn: "${OSS_ROLE_ARN:}"
+  # 长期 RAM AK/SK，只用于调 STS AssumeRole，不出服务端。
+  access_key_id: "${OSS_ACCESS_KEY_ID:}"
+  access_key_secret: "${OSS_ACCESS_KEY_SECRET:}"
+  # 客户端直传目标。留空回退到 https://<bucket>.<endpoint>。
+  upload_host: "${OSS_UPLOAD_HOST:}"
+  # 公开访问前缀（CDN 域名）。留空表示不做公开访问。
+  url_prefix: "${OSS_URL_PREFIX:}"
+  # 头像允许的后缀白名单。留空 = 不允许任何后缀（fail closed）。
+  avatar_allowed_exts:
+    - jpg
+    - jpeg
+    - png
+    - webp
+  # 头像最大字节数。5MB。
+  avatar_max_size: 5242880

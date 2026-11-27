@@ -1,0 +1,29 @@
+# configs/bootstrap.yaml
+#
+# 启动引导配置 —— 只回答一个问题：**连哪个 nacos、从 nacos 哪个 dataId 取业务配置**。
+#
+# 为什么单独一个文件：
+#   配置中心里存的业务配置本身依赖"连哪个 nacos"这个信息，两者放同一个文件
+#   就是循环依赖 —— nacos 里的旧 registry 段会盖掉本地刚改的地址，导致
+#   "改了 nacos 地址不生效"。拆开后，bootstrap 只在本地/环境变量里，
+#   nacos 上那份（config.yaml）永远不含 registry 段。
+#
+# 加载顺序（见 cmd/server/main.go）：
+#   1. 读 bootstrap.yaml + env      -> 拿到 nacos 地址 / namespace / group / dataId
+#   2. 用它构造 nacos config client
+#   3. 读 config.yaml + nacos(同一条 dataId) + env 合并成最终配置
+#      优先级从低到高：file < nacos < env
+
+registry:
+  nacos:
+    server_addresses:
+      - "${NACOS_SERVERS}"
+    namespace_id: "${NACOS_NAMESPACE:3dbbf765-11cf-4622-817f-d890cd670ba0}"
+    group: "${NACOS_GROUP:DEFAULT_GROUP}"
+    # 注册到 nacos 的服务名。别的服务按这个名字发现本服务。
+    service_name: "${NACOS_SERVICE_NAME:chatroom-friend}"
+    cluster_name: ""
+    # 从 nacos 配置中心取业务配置的 dataId。留空则用 <service_name>.yaml。
+    data_id: ""
+    username: "${NACOS_USERNAME}"
+    password: "${NACOS_PASSWORD}"
